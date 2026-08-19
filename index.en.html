@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DroidSeal · Local-first Android Release Security Pipeline</title>
+<meta name="description" content="DroidSeal: a local-first, verifiable 14-step Android release security pipeline covering audit, align, sign, verify and report." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0B0E14;
+    --bg-2:#0F131C;
+    --card:rgba(22,22,22,0.72);
+    --card-solid:#161616;
+    --border:#262626;
+    --border-soft:rgba(255,255,255,0.07);
+    --cyan:#00E5FF;
+    --cyan-dim:rgba(0,229,255,0.45);
+    --text:#FAFAFA;
+    --muted:#9A9AA2;
+    --muted-2:#6B6B73;
+    --maxw:1140px;
+    --r:14px;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --lift:0 2px 6px rgba(0,0,0,0.35),0 14px 28px -12px rgba(0,0,0,0.55),0 30px 60px -22px rgba(0,0,0,0.5);
+    --lift-cyan:0 6px 16px -8px rgba(0,0,0,0.5),0 18px 40px -14px rgba(0,0,0,0.55),0 0 30px -6px rgba(0,229,255,0.30);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.6;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+    cursor:none;
+  }
+  @media (pointer:coarse){ body{cursor:auto} #cursor-dot,#cursor-ring{display:none!important} }
+  a{color:inherit;text-decoration:none}
+  img{max-width:100%;display:block}
+
+  /* ---------- background layers ---------- */
+  #bg{position:fixed;inset:0;z-index:1;pointer-events:none}
+  .aurora{
+    position:fixed;inset:-20% -20% -20% -20%;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(40% 35% at 22% 18%, rgba(0,229,255,0.16), transparent 60%),
+      radial-gradient(45% 40% at 82% 12%, rgba(80,120,255,0.12), transparent 60%),
+      radial-gradient(50% 45% at 60% 90%, rgba(0,229,255,0.10), transparent 60%),
+      radial-gradient(35% 30% at 12% 80%, rgba(120,80,255,0.10), transparent 60%);
+    will-change:transform;
+    transition:transform .12s linear;
+  }
+  .aurora::after{
+    content:"";position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);
+    background-size:46px 46px;
+    mask-image:radial-gradient(circle at 50% 40%, #000 0%, transparent 75%);
+    -webkit-mask-image:radial-gradient(circle at 50% 40%, #000 0%, transparent 75%);
+  }
+  .grain{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+
+  /* ---------- custom cursor ---------- */
+  #cursor-dot,#cursor-ring{position:fixed;top:0;left:0;z-index:9999;pointer-events:none;border-radius:50%;will-change:transform}
+  #cursor-dot{width:7px;height:7px;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+  #cursor-ring{width:34px;height:34px;border:1.5px solid var(--cyan-dim);transition:width .2s ease,height .2s ease,border-color .2s ease,background .2s ease;margin:-17px 0 0 -17px}
+  #cursor-ring.hover{width:54px;height:54px;margin:-27px 0 0 -27px;border-color:var(--cyan);background:rgba(0,229,255,0.08)}
+  #cursor-ring.down{width:26px;height:26px;margin:-13px 0 0 -13px;border-color:#fff;background:rgba(255,255,255,0.12)}
+
+  /* ---------- progress bar ---------- */
+  .progress{position:fixed;top:0;left:0;height:2px;width:0;z-index:9998;background:linear-gradient(90deg,var(--cyan),#7aa2ff);box-shadow:0 0 12px var(--cyan)}
+
+  /* ---------- layout helpers ---------- */
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 clamp(40px,7vw,104px)}
+  section{position:relative;z-index:2}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);border:1px solid var(--border);padding:6px 12px;border-radius:999px;background:rgba(0,229,255,0.04)}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+  h2.title{font-size:clamp(26px,3.4vw,40px);font-weight:700;letter-spacing:-.02em;margin:18px 0 12px}
+  .lead{color:var(--muted);max-width:640px;font-size:16px}
+  .section-pad{padding-top:110px;padding-bottom:110px}
+
+  /* ---------- header ---------- */
+  header{position:fixed;top:0;left:0;right:0;z-index:50;transition:background .3s,backdrop-filter .3s,border-color .3s;border-bottom:1px solid transparent}
+  header.scrolled{background:rgba(11,14,20,0.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--border-soft)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.01em}
+  .brand .logo{width:auto;height:28px;display:block;object-fit:contain}
+  .nav-links{display:flex;gap:28px;font-size:14px;color:var(--muted)}
+  .nav-links a{transition:color .2s,transform .2s;position:relative}
+  .nav-links a:hover{color:var(--cyan);transform:translateY(-1px);text-shadow:0 0 14px rgba(0,229,255,0.55)}
+  .nav-links a::after{content:"";position:absolute;left:0;bottom:-6px;height:1px;width:0;background:var(--cyan);transition:width .25s}
+  .nav-links a:hover::after{width:100%}
+  .nav-actions{display:flex;align-items:center;gap:14px}
+  .nav-toggle{display:none;flex-direction:column;justify-content:center;gap:5px;width:42px;height:42px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border);cursor:none;transition:border-color .2s,box-shadow .25s}
+  .nav-toggle:hover{border-color:var(--cyan-dim);box-shadow:var(--lift-cyan)}
+  .nav-toggle span{display:block;width:18px;height:2px;background:var(--text);border-radius:2px;transition:transform .3s,opacity .3s}
+  .nav-toggle[aria-expanded="true"] span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+  .nav-toggle[aria-expanded="true"] span:nth-child(2){opacity:0}
+  .nav-toggle[aria-expanded="true"] span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+  .mobile-menu{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:2px;padding:10px 20px 16px;background:rgba(11,14,20,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);box-shadow:0 24px 60px rgba(0,0,0,0.55)}
+  .mobile-menu.open{display:flex}
+  .mobile-menu a{padding:13px 12px;color:var(--text);font-size:16px;border-radius:10px;transition:background .2s,color .2s,transform .2s;text-decoration:none}
+  .mobile-menu a:hover{background:rgba(0,229,255,0.1);color:#fff;transform:translateX(4px);box-shadow:inset 0 0 0 1px rgba(0,229,255,0.4),0 8px 20px -8px rgba(0,229,255,0.35)}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;padding:10px 18px;border-radius:10px;border:1px solid transparent;cursor:none;transition:transform .15s,box-shadow .25s,background .25s,border-color .25s;white-space:nowrap;box-shadow:0 4px 14px -4px rgba(0,0,0,0.45)}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 12px 26px -8px rgba(0,0,0,0.5),0 0 28px -6px rgba(0,229,255,0.5)}
+  .btn-primary{background:var(--cyan);color:#04222a;box-shadow:0 6px 18px -6px rgba(0,229,255,0.5)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 30px -8px rgba(0,0,0,0.45),0 0 32px -4px rgba(0,229,255,0.65)}
+  .btn-ghost{background:rgba(255,255,255,0.03);border-color:var(--border);color:var(--text);box-shadow:0 4px 14px -4px rgba(0,0,0,0.4)}
+  .btn-ghost:hover{border-color:var(--cyan);background:rgba(0,229,255,0.08);transform:translateY(-2px);box-shadow:0 12px 26px -8px rgba(0,0,0,0.5),0 0 30px -6px rgba(0,229,255,0.55)}
+  .btn svg{width:16px;height:16px}
+
+  /* ---------- hero ---------- */
+  .hero{padding-top:150px;padding-bottom:90px;text-align:center}
+  .hero h1{font-size:clamp(34px,5.4vw,62px);font-weight:800;letter-spacing:-.03em;line-height:1.08;margin:22px auto 18px;max-width:14ch}
+  .hero h1 .grad{background:linear-gradient(120deg,var(--cyan),#7aa2ff 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero .sub{max-width:620px;margin:0 auto;color:var(--muted);font-size:17px}
+  .hero-cta{display:flex;gap:14px;justify-content:center;margin:30px 0 8px;flex-wrap:wrap}
+
+  /* terminal */
+  .terminal{max-width:680px;margin:46px auto 0;text-align:left;background:#0c0f16;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,0.5);font-family:var(--mono);font-size:13.5px;transition:transform .3s,box-shadow .3s}
+  .terminal:hover{transform:translateY(-4px);box-shadow:0 38px 92px rgba(0,0,0,0.58),0 0 32px -8px rgba(0,229,255,0.22)}
+  .terminal .bar{display:flex;align-items:center;gap:7px;padding:11px 14px;background:#11151d;border-bottom:1px solid var(--border)}
+  .terminal .bar i{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .terminal .bar .r{background:#ff5f56}.terminal .bar .y{background:#ffbd2e}.terminal .bar .g{background:#27c93f}
+  .terminal .bar .name{margin-left:8px;color:var(--muted-2);font-size:12px}
+  .terminal .body{padding:18px 18px 20px;min-height:188px;white-space:pre-wrap;word-break:break-word;line-height:1.7}
+  .terminal .line{opacity:0;transform:translateY(4px);animation:ln .35s forwards}
+  @keyframes ln{to{opacity:1;transform:none}}
+  .terminal .c-prompt{color:var(--cyan)}
+  .terminal .c-cmd{color:#fff}
+  .terminal .c-ok{color:#27c93f}
+  .terminal .c-warn{color:#ffbd2e}
+  .terminal .c-dim{color:var(--muted-2)}
+  .terminal .c-cyan{color:var(--cyan)}
+  .caret{display:inline-block;width:8px;height:15px;background:var(--cyan);vertical-align:-2px;margin-left:2px;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* mode pills */
+  .pills{display:flex;gap:10px;justify-content:center;margin:22px 0 0;flex-wrap:wrap}
+  .pill{font-family:var(--mono);font-size:13px;padding:9px 16px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--muted);cursor:none;transition:all .2s;display:inline-flex;align-items:center;gap:8px;box-shadow:0 4px 14px -6px rgba(0,0,0,0.5)}
+  .pill .k{display:grid;place-items:center;width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,0.06);font-size:11px;color:var(--cyan)}
+  .pill:hover{color:var(--text);border-color:var(--cyan-dim);transform:translateY(-2px);box-shadow:var(--lift-cyan)}
+  .pill.active{background:rgba(0,229,255,0.1);border-color:var(--cyan);color:#fff;box-shadow:var(--lift-cyan)}
+
+  /* hero screenshot */
+  .hero-shot-wrap{margin:54px auto 0;max-width:1120px}
+  .hero-shot{width:100%;border-radius:8px;border:1.5px solid var(--cyan);
+    box-shadow:0 0 24px rgba(0,229,255,0.45),0 0 48px rgba(0,229,255,0.25),0 30px 80px rgba(0,0,0,0.55)}
+
+  /* ---------- pipeline grid ---------- */
+  .steps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(156px,1fr));gap:14px;margin-top:44px}
+  .step{position:relative;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 14px;overflow:hidden;transition:transform .25s,border-color .25s,box-shadow .25s;box-shadow:0 16px 38px -26px rgba(0,0,0,0.8)}
+  .step::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 50% -10%,rgba(0,229,255,0.10),transparent 60%);opacity:0;transition:opacity .3s}
+  .step:hover{transform:translateY(-8px);border-color:var(--cyan);box-shadow:var(--lift),var(--lift-cyan)}
+  .step:hover::before{opacity:1}
+  .step .num{font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:.08em}
+  .step h3{font-size:14.5px;margin:7px 0 5px;font-weight:600;line-height:1.3}
+  .step p{color:var(--muted);font-size:12px;line-height:1.45}
+
+  /* ---------- modes ---------- */
+  .modes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:44px}
+  .mode{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px;transition:transform .25s,border-color .25s,box-shadow .25s;box-shadow:0 18px 44px -28px rgba(0,0,0,0.85)}
+  .mode:hover{transform:translateY(-8px);border-color:var(--cyan);box-shadow:var(--lift),var(--lift-cyan)}
+  .mode .ico{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;background:rgba(0,229,255,0.1);border:1px solid var(--cyan-dim);margin-bottom:16px}
+  .mode .ico svg{width:22px;height:22px;stroke:var(--cyan)}
+  .mode h3{font-size:19px;margin-bottom:8px}
+  .mode .tag{font-family:var(--mono);font-size:12px;color:var(--cyan);margin-bottom:10px;display:block}
+  .mode p{color:var(--muted);font-size:14.5px}
+
+  /* ---------- capabilities ---------- */
+  .cap-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:44px}
+  .cap{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:24px;transition:transform .25s,border-color .25s,box-shadow .25s;box-shadow:0 18px 44px -28px rgba(0,0,0,0.85)}
+  .cap:hover{transform:translateY(-8px);border-color:var(--cyan);box-shadow:var(--lift),var(--lift-cyan)}
+  .cap .ico{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,0.04);border:1px solid var(--border);margin-bottom:14px}
+  .cap .ico svg{width:20px;height:20px;stroke:var(--cyan)}
+  .cap h3{font-size:16px;margin-bottom:6px}
+  .cap p{color:var(--muted);font-size:14px}
+
+  /* ---------- security ---------- */
+  .sec-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:40px;align-items:center;margin-top:44px}
+  .sec-list{display:flex;flex-direction:column;gap:14px}
+  .sec-item{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;transition:transform .25s,border-color .25s,box-shadow .25s;box-shadow:0 16px 38px -26px rgba(0,0,0,0.8)}
+  .sec-item:hover{transform:translateY(-4px);border-color:var(--cyan);box-shadow:var(--lift),var(--lift-cyan)}
+  .sec-item .ck{flex:none;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:rgba(0,229,255,0.1);border:1px solid var(--cyan-dim)}
+  .sec-item .ck svg{width:16px;height:16px;stroke:var(--cyan)}
+  .sec-item h4{font-size:15px;margin-bottom:3px}
+  .sec-item p{color:var(--muted);font-size:13.5px}
+  .sec-visual{aspect-ratio:1/1;border-radius:18px;border:1px solid var(--border);background:radial-gradient(circle at 50% 40%,rgba(0,229,255,0.12),transparent 60%),#0c0f16;display:grid;place-items:center;position:relative;overflow:hidden}
+  .sec-visual .ring{position:absolute;border:1px solid var(--cyan-dim);border-radius:50%}
+  .sec-visual .ring.r1{width:60%;height:60%;animation:spin 18s linear infinite}
+  .sec-visual .ring.r2{width:80%;height:80%;border-style:dashed;animation:spin 28s linear infinite reverse}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .sec-visual .core{width:96px;height:96px;border-radius:24px;display:grid;place-items:center;background:linear-gradient(135deg,rgba(0,229,255,0.22),rgba(120,80,255,0.14));border:1px solid var(--cyan-dim);box-shadow:0 0 50px rgba(0,229,255,0.3)}
+  .sec-visual .core svg{width:46px;height:46px;stroke:#fff}
+
+  /* ---------- final cta ---------- */
+  .cta-box{text-align:center;background:linear-gradient(180deg,rgba(0,229,255,0.06),rgba(0,229,255,0.01));border:1px solid var(--border);border-radius:22px;padding:64px 28px;position:relative;overflow:hidden;box-shadow:0 40px 90px -40px rgba(0,0,0,0.7),0 0 50px -28px rgba(0,229,255,0.25)}
+  .cta-box h2{font-size:clamp(26px,3.6vw,42px);font-weight:800;letter-spacing:-.02em}
+  .cta-box p{color:var(--muted);margin:14px 0 26px}
+  .copy-row{display:inline-flex;align-items:center;gap:0;background:#0c0f16;border:1px solid var(--border);border-radius:10px;overflow:hidden;font-family:var(--mono);font-size:13px;margin:6px 0 24px}
+  .copy-row code{padding:12px 16px;color:var(--cyan)}
+  .copy-row button{border:none;border-left:1px solid var(--border);background:rgba(0,229,255,0.06);color:var(--text);padding:12px 16px;cursor:none;font-family:var(--mono);font-size:13px;transition:background .2s}
+  .copy-row button:hover{background:rgba(0,229,255,0.18);transform:translateY(-2px);box-shadow:0 8px 20px -6px rgba(0,229,255,0.45)}
+  .ts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:40px}
+  .ts-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px}
+  .ts-item h3{font-size:15px;margin-bottom:6px;color:var(--text)}
+  .ts-item p{color:var(--muted);font-size:13.5px;line-height:1.6}
+  .ts-item code{color:var(--cyan);font-family:var(--mono);font-size:12.5px}
+  .ts-item a{color:var(--cyan);text-decoration:underline}
+  .cta-note{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:0 0 22px}
+  .cta-note code{color:var(--cyan);background:rgba(0,229,255,0.06);padding:2px 6px;border-radius:5px}
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--border);padding:48px 0 36px;margin-top:40px;position:relative;z-index:2}
+  .foot{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+  .foot .links{display:flex;gap:22px;color:var(--muted);font-size:14px}
+  .foot .links a{transition:color .2s,transform .2s}
+  .foot .links a:hover{color:var(--cyan);transform:translateY(-1px);text-shadow:0 0 12px rgba(0,229,255,0.5)}
+  .foot .copy{color:var(--muted-2);font-size:13px;font-family:var(--mono)}
+
+  /* ---------- reveal ---------- */
+  [data-reveal]{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+  [data-reveal].in{opacity:1;transform:none}
+  .tilt{transform-style:preserve-3d;transition:transform .1s ease-out}
+  @media (hover:none){ [data-reveal]{opacity:1;transform:none} }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:900px){
+    .modes-grid,.cap-grid{grid-template-columns:1fr 1fr}
+    .sec-grid{grid-template-columns:1fr}
+    .nav-links{display:none}
+    .nav-toggle{display:flex}
+    .copy-row{max-width:100%}
+    .copy-row code{overflow-x:auto;white-space:nowrap}
+  }
+  @media (max-width:600px){
+    .modes-grid,.cap-grid{grid-template-columns:1fr}
+    .hero{padding-top:120px;padding-bottom:60px}
+    .wrap{padding:0 20px}
+    .hero h1{font-size:clamp(28px,8vw,40px)}
+    .hero .sub{font-size:15px}
+    .hero-cta{flex-direction:column;align-items:stretch;width:100%}
+    .hero-cta .btn{width:100%;justify-content:center}
+    .copy-row{width:100%;font-size:12px}
+    .copy-row code{flex:1;overflow-x:auto;white-space:nowrap;padding:11px 12px}
+    .terminal{margin:34px auto 0}
+    .terminal .body{padding:14px;min-height:auto;font-size:12.5px}
+    .section-pad{padding:64px 0}
+    .title{font-size:clamp(22px,6vw,30px)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;scroll-behavior:auto}
+    [data-reveal]{opacity:1!important;transform:none!important}
+  }
+</style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <div class="aurora" id="aurora"></div>
+  <div class="grain"></div>
+  <div id="cursor-dot"></div>
+  <div id="cursor-ring"></div>
+  <div class="progress" id="progress"></div>
+
+  <header id="header">
+    <div class="wrap nav">
+      <a href="#top" class="brand" data-cursor>
+        <img class="logo" src="./logo.png" alt="DroidSeal" />
+      </a>
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="#pipeline">Pipeline</a>
+        <a href="#modes">Modes</a>
+        <a href="#capabilities">Capabilities</a>
+        <a href="#security">Security</a>
+      </nav>
+      <div class="nav-actions">
+        <a href="index.html" data-cursor style="font-size:13px;color:var(--cyan);border:1px solid var(--border);padding:5px 10px;border-radius:8px;text-decoration:none">中文</a>
+        <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" class="btn btn-primary magnetic" data-cursor>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .6l3.5 6.9 7.8 1.1-5.6 5.5 1.3 7.7L12 18.6 4.9 22.3l1.3-7.7L.6 9.1 8.5 8z"/></svg>
+          Star on GitHub
+        </a>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu" data-cursor>
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+    <div class="mobile-menu" id="mobileMenu">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#modes">Modes</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#security">Security</a>
+      <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero wrap">
+      <span class="eyebrow" data-reveal><span class="dot"></span>Android Release Seal · v0.2.0 Alpha</span>
+      <h1 data-reveal>Chat your way through <span class="grad">Android release hardening</span></h1>
+      <p class="sub" data-reveal>DroidSeal covers most of what you can do before commercial hardening — environment diagnostics, source &amp; APK audit, R8 obfuscation, zipalign, apksigner signing, and final verification. One command, end to end.</p>
+      <div class="hero-cta" data-reveal>
+        <a href="#cta" class="btn btn-primary magnetic" data-cursor>Get Started</a>
+        <a href="#pipeline" class="btn btn-ghost" data-cursor>View Pipeline</a>
+      </div>
+
+      <div class="terminal" data-reveal data-cursor>
+        <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="name">droidseal — zsh</span></div>
+        <div class="body" id="termBody"></div>
+      </div>
+
+      <div class="pills" data-reveal>
+        <button class="pill active" data-mode="guided" data-cursor><span class="k">1</span>Guided</button>
+        <button class="pill" data-mode="oneclick" data-cursor><span class="k">2</span>One-click</button>
+        <button class="pill" data-mode="doctor" data-cursor><span class="k">3</span>Doctor</button>
+      </div>
+
+      <div class="hero-shot-wrap" data-reveal>
+        <img class="hero-shot" src="./screenshot.png" alt="DroidSeal terminal screenshot" />
+      </div>
+    </section>
+
+    <!-- PIPELINE -->
+    <section class="section-pad wrap" id="pipeline">
+      <span class="eyebrow" data-reveal><span class="dot"></span>14-Step Pipeline</span>
+      <h2 class="title" data-reveal>A 14-step pipeline, end to end</h2>
+      <p class="lead" data-reveal>From APK to signed artifact, entirely on your machine. Every step produces an independent, auditable, rollback-safe artifact with sensible defaults.</p>
+      <div class="steps-grid">
+        <article class="step tilt" data-reveal data-cursor><div class="num">01</div><h3>Environment check</h3><p>Locates JDK / Android SDK tools and flags what the selected flow is missing.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">02</div><h3>Prepare workspace</h3><p>Validates input and copies the existing APK; never modifies in place.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">03</div><h3>Keystore</h3><p>Validates the existing alias up front, or creates one with keytool.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">04</div><h3>Source security audit</h3><p>Checks R8 / resources / Manifest / plaintext signing passwords and source heuristics.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">05</div><h3>Build release APK</h3><p>Runs the project's own Gradle Wrapper and copies the artifact.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">06</div><h3>APK security audit</h3><p>Parses ZIP / DEX / ELF / AXML / ARSC; aapt only as a fallback.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">07</div><h3>Local hardening</h3><p>Verifies R8, standard DEX, anti-debug and integrity coverage.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">08</div><h3>Release normalization</h3><p>Forces debuggable=false, verifies after modification, otherwise aborts and rolls back.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">09</div><h3>Web JS handling</h3><p>Optional Terser pass over assets/public and assets/www scripts.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">10</div><h3>Resource name obfuscation</h3><p>Optionally parses resources.arsc, preserving entries hit by getIdentifier.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">11</div><h3>ZIP alignment</h3><p>zipalign -p -f 4; auto-skips when a valid signature is preserved.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">12</div><h3>APK signing</h3><p>apksigner outputs a new signed APK.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">13</div><h3>Final verification</h3><p>Verifies alignment, signing scheme, certificate, and computes SHA-256.</p></article>
+        <article class="step tilt" data-reveal data-cursor><div class="num">14</div><h3>Report</h3><p>JSON / Markdown, SBOM, release gate and coverage matrix.</p></article>
+      </div>
+    </section>
+
+    <!-- MODES -->
+    <section class="section-pad wrap" id="modes">
+      <span class="eyebrow" data-reveal><span class="dot"></span>Three Entry Points</span>
+      <h2 class="title" data-reveal>Three entry points, one engine</h2>
+      <p class="lead" data-reveal>One engine, three paces — learn step by step, run it in one click, or diagnose the environment first.</p>
+      <div class="modes-grid">
+        <article class="mode tilt" data-reveal data-cursor>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/></svg></div>
+          <span class="tag">[1] GUIDED · /guided</span><h3>Guided</h3>
+          <p>Shows the purpose and impact before each step; run or skip it, and failures roll back to the APK from before the step.</p>
+        </article>
+        <article class="mode tilt" data-reveal data-cursor>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></div>
+          <span class="tag">[2] ONE-CLICK · /oneclick</span><h3>One-click</h3>
+          <p>Runs all 14 steps after you fill in the details; ordinary failures roll back and continue, while missing tools pause for download or repair.</p>
+        </article>
+        <article class="mode tilt" data-reveal data-cursor>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3a8 8 0 105.3 14.2M11 3v4M11 3h-4"/><circle cx="11" cy="14" r="2.5"/></svg></div>
+          <span class="tag">[3] DOCTOR · /doctor</span><h3>Doctor</h3>
+          <p>Locates JDK / Android SDK tools, lists what is missing with download hints; checks only, never modifies the package.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- CAPABILITIES -->
+    <section class="section-pad wrap" id="capabilities">
+      <span class="eyebrow" data-reveal><span class="dot"></span>Capabilities</span>
+      <h2 class="title" data-reveal>Capability grid</h2>
+      <p class="lead" data-reveal>Not a black box — a local-first, auditable, verifiable pre-release pipeline.</p>
+      <div class="cap-grid">
+        <article class="cap tilt" data-reveal data-cursor>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+          <h3>Local-first</h3><p>No model service calls; never uploads your APK, file paths, or signing credentials.</p>
+        </article>
+        <article class="cap tilt" data-reveal data-cursor>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 109-9"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/></svg></div>
+          <h3>Verifiable results</h3><p>Produces signature verification, SHA-256, and JSON / Markdown reports.</p>
+        </article>
+        <article class="cap tilt" data-reveal data-cursor>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg></div>
+          <h3>Rollback-safe</h3><p>Every step keeps an independent artifact; failures explain why and restore the last valid APK.</p>
+        </article>
+        <article class="cap tilt" data-reveal data-cursor>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+          <h3>Deep static audit</h3><p>Permissions / targetSdk / signing / deep links / hardcoded secrets / TLS heuristics.</p>
+        </article>
+        <article class="cap tilt" data-reveal data-cursor>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3>Secret redaction</h3><p>Plaintext passwords keep only path and line; values never reach reports or commands.</p>
+        </article>
+        <article class="cap tilt" data-reveal data-cursor>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 9h7M8 13h7M8 17h4"/></svg></div>
+          <h3>Evidence-first</h3><p>Reports distinguish confirmed / high / medium / low confidence and emit a CycloneDX SBOM.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- SECURITY -->
+    <section class="section-pad wrap" id="security">
+      <span class="eyebrow" data-reveal><span class="dot"></span>Security & Privacy</span>
+      <h2 class="title" data-reveal>Security & privacy, right by default</h2>
+      <div class="sec-grid">
+        <div class="sec-list">
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>Local-first execution</h4><p>APKs and signing credentials are handled only on your machine; no model service, no uploads.</p></div>
+          </div>
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>Clear boundaries</h4><p>By default no unpacking, hooks, anti-debug, or runtime tampering code is injected; such attacks are treated only as a threat model.</p></div>
+          </div>
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>Secrets never touch disk</h4><p>Plaintext passwords live only in memory, never in reports, command arguments, config files, or chat history.</p></div>
+          </div>
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>Evidence-first</h4><p>Reports clearly separate &quot;verified&quot; from &quot;advisory&quot; controls and never claim a server-side closed loop.</p></div>
+          </div>
+        </div>
+        <div class="sec-visual" data-reveal aria-hidden="true">
+          <div class="ring r1"></div>
+          <div class="ring r2"></div>
+          <div class="core"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FINAL CTA -->
+    <section class="section-pad wrap" id="cta">
+      <div class="cta-box" data-reveal>
+        <h2>Three ways to get started</h2>
+        <p>Open source · Apache-2.0 License · Local-first · Windows x64 / Linux x64 (Alpha v0.2.0)</p>
+        <div class="copy-row" data-cursor>
+          <code id="installCmd">npm install --global droidseal</code>
+          <button id="copyBtn">Copy</button>
+        </div>
+        <div class="copy-row" data-cursor>
+          <code id="installPipCmd">pip install droidseal</code>
+          <button id="copyPipBtn">Copy</button>
+        </div>
+        <div class="hero-cta" data-cursor>
+          <a href="https://github.com/noontiger/droidseal/releases/latest" target="_blank" rel="noopener" class="btn btn-primary magnetic">GitHub Releases · Windows zip / Linux tar.gz</a>
+          <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" class="btn btn-ghost">View GitHub</a>
+          <a href="#pipeline" class="btn btn-ghost">View Pipeline</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- INSTALL TROUBLESHOOT -->
+    <section class="section-pad wrap" id="troubleshoot">
+      <h2 class="title" data-reveal>Trouble installing?</h2>
+      <div class="ts-grid" data-reveal>
+        <div class="ts-item">
+          <h3>SmartScreen blocks the downloaded exe</h3>
+          <p>The droidseal.exe from GitHub Releases is not code-signed, so Windows may warn &quot;Windows protected your PC&quot;. Fix: right-click the exe → Properties → check &quot;Unblock&quot; → OK; or click &quot;More info → Run anyway&quot;; you can also run it directly in PowerShell.</p>
+        </div>
+        <div class="ts-item">
+          <h3>The TUI needs a terminal</h3>
+          <p>DroidSeal is a terminal program: double-clicking droidseal.exe shows &quot;interactive terminal required&quot; and exits. Open PowerShell or cmd, cd into the extracted folder and run <code>.\droidseal.exe</code>, or double-click the bundled <code>droidseal-gui.cmd</code> launcher.</p>
+        </div>
+        <div class="ts-item">
+          <h3>More info</h3>
+          <p>Full install, platform support, and usage are in the <a href="https://github.com/noontiger/droidseal#readme" target="_blank" rel="noopener">GitHub README</a> — Quick start and Platform &amp; status sections.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot">
+      <a href="#top" class="brand" data-cursor>
+        <img class="logo" src="./logo.png" alt="DroidSeal" />
+      </a>
+      <nav class="links" aria-label="Footer links">
+        <a href="#pipeline" data-cursor>Pipeline</a>
+        <a href="#modes" data-cursor>Modes</a>
+        <a href="#capabilities" data-cursor>Capabilities</a>
+        <a href="#security" data-cursor>Security</a>
+        <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" data-cursor>GitHub</a>
+      </nav>
+      <span class="copy">Apache-2.0 License · Alpha v0.2.0 · © 2026 DroidSeal</span>
+    </div>
+  </footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var isTouch = window.matchMedia('(pointer: coarse)').matches;
+
+  /* ============ custom cursor ============ */
+  if(!isTouch){
+    var dot = document.getElementById('cursor-dot');
+    var ring = document.getElementById('cursor-ring');
+    var mx = window.innerWidth/2, my = window.innerHeight/2, rx = mx, ry = my;
+    window.addEventListener('mousemove', function(e){ mx=e.clientX; my=e.clientY; dot.style.transform='translate('+mx+'px,'+my+'px) translate(-50%,-50%)'; });
+    (function cloop(){
+      rx += (mx-rx)*0.18; ry += (my-ry)*0.18;
+      ring.style.transform='translate('+rx+'px,'+ry+'px)';
+      requestAnimationFrame(cloop);
+    })();
+    function bindHover(){
+      document.querySelectorAll('a,button,[data-cursor],.step,.mode,.cap').forEach(function(el){
+        if(el.__ch) return; el.__ch=1;
+        el.addEventListener('mouseenter',function(){ ring.classList.add('hover'); });
+        el.addEventListener('mouseleave',function(){ ring.classList.remove('hover'); });
+      });
+    }
+    bindHover();
+    window.addEventListener('mousedown',function(){ ring.classList.add('down'); });
+    window.addEventListener('mouseup',function(){ ring.classList.remove('down'); });
+  }
+
+  /* ============ progress bar + header ============ */
+  var progress = document.getElementById('progress');
+  var header = document.getElementById('header');
+  function onScroll(){
+    var h = document.documentElement;
+    var sc = h.scrollTop, max = h.scrollHeight - h.clientHeight;
+    progress.style.width = (max>0 ? (sc/max*100):0) + '%';
+    header.classList.toggle('scrolled', sc>20);
+  }
+  window.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+  /* ============ reveal on scroll ============ */
+  if('IntersectionObserver' in window && !reduce){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } });
+    },{threshold:0.12});
+    document.querySelectorAll('[data-reveal]').forEach(function(el,i){ el.style.transitionDelay=(i%6*60)+'ms'; io.observe(el); });
+  } else {
+    document.querySelectorAll('[data-reveal]').forEach(function(el){ el.classList.add('in'); });
+  }
+
+  /* ============ 3D tilt + magnetic ============ */
+  if(!isTouch && !reduce){
+    document.querySelectorAll('.tilt').forEach(function(el){
+      el.addEventListener('mousemove', function(e){
+        var r = el.getBoundingClientRect();
+        var px = (e.clientX-r.left)/r.width-0.5, py=(e.clientY-r.top)/r.height-0.5;
+        el.style.transform='perspective(800px) rotateX('+(-py*7)+'deg) rotateY('+(px*7)+'deg) translateY(-4px)';
+      });
+      el.addEventListener('mouseleave', function(){ el.style.transform=''; });
+    });
+    document.querySelectorAll('.magnetic').forEach(function(el){
+      el.addEventListener('mousemove', function(e){
+        var r=el.getBoundingClientRect();
+        var px=e.clientX-(r.left+r.width/2), py=e.clientY-(r.top+r.height/2);
+        el.style.transform='translate('+(px*0.25)+'px,'+(py*0.35)+'px)';
+      });
+      el.addEventListener('mouseleave', function(){ el.style.transform=''; });
+    });
+  }
+
+  /* ============ terminal typing ============ */
+  var termBody = document.getElementById('termBody');
+  var MODES = {
+    guided: { cmd:'/guided', out:[
+      ['c-dim','→ Guided wizard · confirm each step, skippable'],
+      ['c-prompt','? [01] Environment check       run? y'],
+      ['c-ok','[01] Environment check ........ ok'],
+      ['c-prompt','? [02] Prepare workspace      run? y'],
+      ['c-ok','[02] Prepare workspace ....... ok'],
+      ['c-prompt','? [03] Keystore              run? y'],
+      ['c-ok','[03] Keystore ............... ok'],
+      ['c-prompt','? [04] Source security audit  run? y'],
+      ['c-ok','[04] Source security audit ... ok'],
+      ['c-warn','    ↳ hardcoded secret scan .... 2 redacted'],
+      ['c-cyan','› confirm each step, roll back anytime']
+    ]},
+    oneclick: { cmd:'/oneclick', out:[
+      ['c-dim','→ One-click wizard · 14 steps in a row'],
+      ['c-ok','[01] Environment check ........ ok'],
+      ['c-ok','[02] Prepare workspace ....... ok'],
+      ['c-ok','[03] Keystore ............... ok'],
+      ['c-ok','[04] Source security audit ... ok'],
+      ['c-warn','    ↳ hardcoded secret scan .... 2 redacted'],
+      ['c-ok','[05] Build release APK ....... ok'],
+      ['c-ok','[06] APK security audit ...... ok'],
+      ['c-ok','[07] Local hardening ......... ok'],
+      ['c-ok','[08] Release normalization ... ok'],
+      ['c-dim','[09] Web JS handling ....... skipped (optional)'],
+      ['c-dim','[10] Resource obfuscation .. skipped (optional)'],
+      ['c-ok','[11] ZIP alignment .......... ok'],
+      ['c-ok','[12] APK signing ............ ok'],
+      ['c-ok','[13] Final verification ..... ok'],
+      ['c-ok','[14] Report ................ ok'],
+      ['c-cyan','› SHA-256 · JSON / Markdown generated']
+    ]},
+    doctor: { cmd:'/doctor', out:[
+      ['c-dim','→ Doctor · check only, never modifies'],
+      ['c-ok','[✓] JDK 17 · keytool'],
+      ['c-ok','[✓] Android SDK located'],
+      ['c-warn','[!] zipalign · apksigner missing (Build Tools)'],
+      ['c-dim','    → sdkmanager installs them in one click'],
+      ['c-cyan','› missing tools listed, click "download and continue"']
+    ]}
+  };
+  var curMode = 'guided';
+  function typeTerminal(){
+    if(!termBody) return;
+    var m = MODES[curMode];
+    if(reduce){
+      termBody.innerHTML='';
+      var ph=document.createElement('div'); ph.className='line';
+      ph.innerHTML='<span class="c-prompt">› </span><span class="c-cmd">'+m.cmd+'</span>';
+      termBody.appendChild(ph);
+      m.out.forEach(function(item){ var d=document.createElement('div'); d.className='line';
+        d.innerHTML='<span class="'+item[0]+'">'+item[1]+'</span>'; termBody.appendChild(d); });
+      return;
+    }
+    termBody.innerHTML='';
+    var lines = [];
+    var prompt = document.createElement('div');
+    prompt.className='line';
+    prompt.innerHTML='<span class="c-prompt">› </span><span class="c-cmd"></span><span class="caret"></span>';
+    termBody.appendChild(prompt);
+    var cmdSpan = prompt.querySelector('.c-cmd');
+    var caret = prompt.querySelector('.caret');
+    var li=0, ci=0, oi=0, phase='cmd';
+    function step(){
+      if(phase==='cmd'){
+        if(ci<m.cmd.length){ cmdSpan.textContent=m.cmd.slice(0,++ci); setTimeout(step,28); return; }
+        phase='out'; caret.remove(); setTimeout(step,260); return;
+      }
+      if(phase==='out'){
+        if(oi<m.out.length){
+          var item=m.out[oi++];
+          var d=document.createElement('div'); d.className='line';
+          d.innerHTML='<span class="'+item[0]+'">'+item[1]+'</span>';
+          termBody.appendChild(d);
+          setTimeout(step, item[0]==='c-cyan'?420:150);
+          return;
+        }
+        if(!reduce){ phase='loop'; setTimeout(step,2600); return; }
+        return;
+      }
+      if(phase==='loop'){ termBody.innerHTML=''; ci=0; oi=0; phase='cmd';
+        prompt=document.createElement('div'); prompt.className='line';
+        prompt.innerHTML='<span class="c-prompt">› </span><span class="c-cmd"></span><span class="caret"></span>';
+        termBody.appendChild(prompt); cmdSpan=prompt.querySelector('.c-cmd'); caret=prompt.querySelector('.caret');
+        setTimeout(step,200); return;
+      }
+    }
+    step();
+  }
+  typeTerminal();
+  document.querySelectorAll('.pill').forEach(function(p){
+    p.addEventListener('click', function(){
+      document.querySelectorAll('.pill').forEach(function(x){x.classList.remove('active');});
+      p.classList.add('active'); curMode=p.getAttribute('data-mode'); typeTerminal();
+    });
+  });
+
+  /* ============ mobile menu ============ */
+  var navToggle=document.getElementById('navToggle');
+  var mobileMenu=document.getElementById('mobileMenu');
+  if(navToggle && mobileMenu){
+    navToggle.addEventListener('click', function(){
+      var open=mobileMenu.classList.toggle('open');
+      navToggle.setAttribute('aria-expanded', open?'true':'false');
+      navToggle.setAttribute('aria-label', open?'Close menu':'Open menu');
+    });
+    mobileMenu.querySelectorAll('a').forEach(function(a){
+      a.addEventListener('click', function(){
+        mobileMenu.classList.remove('open');
+        navToggle.setAttribute('aria-expanded','false');
+        navToggle.setAttribute('aria-label','Open menu');
+      });
+    });
+    window.addEventListener('resize', function(){
+      if(window.innerWidth>900 && mobileMenu.classList.contains('open')){
+        mobileMenu.classList.remove('open');
+        navToggle.setAttribute('aria-expanded','false');
+        navToggle.setAttribute('aria-label','Open menu');
+      }
+    });
+  }
+
+  /* ============ copy install ============ */
+  function bindCopy(btnId, cmdId){
+    var btn=document.getElementById(btnId);
+    if(!btn) return;
+    btn.addEventListener('click', function(){
+      var txt=document.getElementById(cmdId).textContent;
+      var done=function(){ btn.textContent='Copied'; setTimeout(function(){btn.textContent='Copy';},1600); };
+      if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(done); }
+      else { done(); }
+    });
+  }
+  bindCopy('copyBtn','installCmd');
+  bindCopy('copyPipBtn','installPipCmd');
+
+  /* ============ background canvas (particles + drag) ============ */
+  var canvas=document.getElementById('bg'); var ctx=canvas.getContext('2d');
+  var DPR=Math.min(window.devicePixelRatio||1,2), W=0,H=0;
+  function drawStatic(){
+    ctx.clearRect(0,0,W,H);
+    for(var i=0;i<pts.length;i++){ var p=pts[i]; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.283); ctx.fillStyle='rgba(0,229,255,0.45)'; ctx.fill(); }
+  }
+  function resize(){
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=canvas.width=Math.floor(window.innerWidth*DPR);
+    H=canvas.height=Math.floor(window.innerHeight*DPR);
+    canvas.style.width=window.innerWidth+'px'; canvas.style.height=window.innerHeight+'px';
+    initPts();
+    if(reduce) drawStatic();
+  }
+  var pts=[];
+  function initPts(){
+    var N = window.innerWidth<700?42:92;
+    pts=[];
+    for(var i=0;i<N;i++){
+      pts.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-0.5)*0.3*DPR,vy:(Math.random()-0.5)*0.3*DPR,r:(Math.random()*1.6+0.5)*DPR});
+    }
+  }
+  var mouse={x:-9999,y:-9999,down:false};
+  var trail=[];
+  window.addEventListener('mousemove', function(e){ mouse.x=e.clientX*DPR; mouse.y=e.clientY*DPR;
+    trail.push({x:mouse.x,y:mouse.y,big:mouse.down,life:1}); if(trail.length>46) trail.shift(); });
+  window.addEventListener('mousedown', function(){ mouse.down=true; });
+  window.addEventListener('mouseup', function(){ mouse.down=false; });
+
+  // drag-to-pan aurora
+  var aurora=document.getElementById('aurora');
+  var drag={x:0,y:0,tx:0,ty:0,lastX:0,lastY:0,active:false};
+  window.addEventListener('mousedown', function(e){ drag.active=true; drag.lastX=e.clientX; drag.lastY=e.clientY; });
+  window.addEventListener('mousemove', function(e){
+    if(!drag.active) return;
+    var dx=e.clientX-drag.lastX, dy=e.clientY-drag.lastY;
+    drag.lastX=e.clientX; drag.lastY=e.clientY;
+    drag.tx += dx; drag.ty += dy;
+    // clamp pan
+    drag.tx=Math.max(-200,Math.min(200,drag.tx));
+    drag.ty=Math.max(-160,Math.min(160,drag.ty));
+  });
+  window.addEventListener('mouseup', function(){ drag.active=false; drag.tx=0; drag.ty=0; });
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // particles
+    var i,j,d,dx,dy,R;
+    var baseR=130*DPR;
+    R = baseR*(mouse.down?2.4:1);
+    for(i=0;i<pts.length;i++){
+      var p=pts[i];
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>W)p.vx*=-1; if(p.y<0||p.y>H)p.vy*=-1;
+      dx=p.x-mouse.x; dy=p.y-mouse.y; d=Math.sqrt(dx*dx+dy*dy);
+      if(d<R && d>0.01){ var f=(R-d)/R*(mouse.down?2.0:0.8); p.x+=dx/d*f; p.y+=dy/d*f; }
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.283); ctx.fillStyle='rgba(0,229,255,0.55)'; ctx.fill();
+    }
+    // links
+    var maxD=130*DPR;
+    for(i=0;i<pts.length;i++){ for(j=i+1;j<pts.length;j++){
+      var a=pts[i],b=pts[j]; dx=a.x-b.x; dy=a.y-b.y; d=Math.sqrt(dx*dx+dy*dy);
+      if(d<maxD){ ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+        ctx.strokeStyle='rgba(0,229,255,'+(0.14*(1-d/maxD))+')'; ctx.lineWidth=DPR*0.6; ctx.stroke(); }
+    }}
+    // mouse glow
+    if(mouse.x>-9000){
+      var g=ctx.createRadialGradient(mouse.x,mouse.y,0,mouse.x,mouse.y,(mouse.down?90:46)*DPR);
+      g.addColorStop(0,'rgba(0,229,255,'+(mouse.down?0.28:0.14)+')'); g.addColorStop(1,'rgba(0,229,255,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(mouse.x,mouse.y,(mouse.down?90:46)*DPR,0,6.283); ctx.fill();
+      // link mouse to near particles
+      for(i=0;i<pts.length;i++){ var pp=pts[i]; dx=pp.x-mouse.x; dy=pp.y-mouse.y; d=Math.sqrt(dx*dx+dy*dy);
+        if(d<baseR*1.4){ ctx.beginPath(); ctx.moveTo(mouse.x,mouse.y); ctx.lineTo(pp.x,pp.y);
+          ctx.strokeStyle='rgba(0,229,255,'+(0.18*(1-d/(baseR*1.4)))+')'; ctx.lineWidth=DPR*0.7; ctx.stroke(); } }
+    }
+    // trail
+    for(i=trail.length-1;i>=0;i--){ var t=trail[i]; t.life-=0.035; if(t.life<=0){ trail.splice(i,1); continue; }
+      var rad=(t.big?30:14)*DPR*t.life;
+      var tg=ctx.createRadialGradient(t.x,t.y,0,t.x,t.y,rad);
+      tg.addColorStop(0,'rgba(0,229,255,'+(0.4*t.life*(t.big?1.3:1))+')'); tg.addColorStop(1,'rgba(0,229,255,0)');
+      ctx.fillStyle=tg; ctx.beginPath(); ctx.arc(t.x,t.y,rad,0,6.283); ctx.fill();
+    }
+    // aurora pan (ease)
+    drag.x += (drag.tx-drag.x)*0.08; drag.y += (drag.ty-drag.y)*0.08;
+    var px=(mouse.x<-9000)?0:(mouse.x/W-0.5)*-18*DPR, py=(mouse.y<-9000)?0:(mouse.y/H-0.5)*-18*DPR;
+    aurora.style.transform='translate('+(px+drag.x*0.32)+'px,'+(py+drag.y*0.32)+'px)';
+    if(!reduce) requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  if(!reduce){ draw(); }
+})();
+</script>
+</body>
+</html>
