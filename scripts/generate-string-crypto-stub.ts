@@ -1,0 +1,138 @@
+#!/usr/bin/env bun
+// 源码侧字符串加密桩生成器（长期路线 ①）。
+// 为每个敏感字符串生成密文常量，并生成 Kotlin 解密桩与接入指南。
+// 开发者把敏感字符串替换为解密调用后重新构建，DEX 字符串池只含密文。
+// 工具不事后改写 APK；密钥与密文都嵌入客户端，本能力只提高阅读门槛。
+//
+// 用法：
+//   bun scripts/generate-string-crypto-stub.ts \
+//     --string "apiKey=AIza..." --string "endpoint=https://..." \
+//     --output src/main/kotlin/io/example/secrets \
+//     [--key <hex>]
+import { generateKey, encryptString, keyFingerprint } from "../src/core/dex-string-crypto.ts"
+import { mkdir, writeFile } from "node:fs/promises"
+import path from "node:path"
+
+interface CliArgs {
+  keyHex?: string
+  strings: Map<string, string>
+  outputDir: string
+}
+
+function toHex(bytes: Uint8Array): string {
+  let out = ""
+  for (const b of bytes) out += b.toString(16).padStart(2, "0")
+  return out
+}
+
+function parseArgs(argv: string[]): CliArgs {
+  const args: CliArgs = { strings: new Map(), outputDir: "" }
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]!
+    if (arg === "--string") {
+      const pair = argv[++i]!
+      const eq = pair.indexOf("=")
+      if (eq <= 0) throw new Error(`--string 需要 name=value 形式，得到：${pair}`)
+      args.strings.set(pair.slice(0, eq), pair.slice(eq + 1))
+    } else if (arg === "--key") {
+      args.keyHex = argv[++i]!
+    } else if (arg === "--output") {
+      args.outputDir = argv[++i]!
+    }
+  }
+  if (args.outputDir === "") throw new Error("缺少 --output 输出目录")
+  if (args.strings.size === 0) throw new Error("至少提供一个 --string name=value")
+  return args
+}
+
+function kotlinEscaped(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("\n", "\\n")
+    .replaceAll("\r", "\\r")
+    .replaceAll("\t", "\\t")
+}
+
+function kotlinStub(keyHex: string, ciphers: Map<string, string>, fingerprint: string): string {
+  const constants = [...ciphers.entries()]
+    .map(([name, cipher]) => `    const val ${name.toUpperCase().replaceAll(/[^A-Z0-9_]/g, "_")}_CIPHER = "${cipher}"`)
+    .join("\n")
+  return `// 由 DroidSeal 生成——运行时字符串解密桩（长期路线 ①）。
+// 与 src/core/dex-string-crypto.ts 的 XOR+rotl 变换对应；密钥与密文均为十六进制。
+// 密钥指纹：${fingerprint}（仅用于关联，不泄露密钥内容）
+object StringCrypto {
+    private val KEY = hexToBytes("${keyHex}")
+
+    fun decrypt(hex: String): String {
+        val data = hexToBytes(hex)
+        val out = ByteArray(data.size)
+        for (i in data.indices) {
+            val r = (i % 7) + 1
+            val v = data[i].toInt() and 0xFF
+            val rot = ((v ushr r) or (v shl (8 - r))) and 0xFF
+            out[i] = (rot xor (KEY[i % KEY.size].toInt() and 0xFF)).toByte()
+        }
+        return String(out, Charsets.UTF_8)
+    }
+
+    private fun hexToBytes(hex: String): ByteArray {
+        val out = ByteArray(hex.length / 2)
+        for (i in out.indices) out[i] = hex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        return out
+    }
+}
+
+// 敏感字符串密文常量（构建期由 DroidSeal 生成，源码与 DEX 不含明文）。
+object StringCryptoSecrets {
+${constants}
+}
+`
+}
+
+function integrationGuide(keys: string[]): string {
+  const examples = keys
+    .slice(0, 3)
+    .map((k) => `- \`${k}\`：用 \`StringCrypto.decrypt(StringCryptoSecrets.${k.toUpperCase().replaceAll(/[^A-Z0-9_]/g, "_")}_CIPHER)\` 替换原来的明文字面量。`)
+    .join("\n")
+  return `# 字符串解密桩接入指南
+
+本目录由 DroidSeal 生成（长期路线 ①：DEX 字符串加密源码接入）。
+
+## 替换步骤
+
+${examples || "- 无"}
+
+## 安全说明
+
+- 密钥与密文都嵌入客户端，本能力只提高阅读门槛，不等于密码学级保密。
+- 请在源码侧替换后重新构建，再用 DroidSeal 的 DEX 审计确认字符串池中已无敏感明文。
+- 需要轮换时重新运行本脚本生成新密钥与密文，并同步更新解密桩。
+`
+}
+
+async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2))
+  const key = args.keyHex
+    ? Uint8Array.from(args.keyHex.match(/.{2}/g)!.map((h) => Number.parseInt(h, 16)))
+    : generateKey()
+  const keyHex = toHex(key)
+  const fingerprint = keyFingerprint(key)
+  const ciphers = new Map<string, string>()
+  for (const [name, value] of args.strings) {
+    ciphers.set(name, toHex(encryptString(value, key)))
+  }
+
+  await mkdir(args.outputDir, { recursive: true })
+  await writeFile(path.join(args.outputDir, "StringCrypto.kt"), kotlinStub(keyHex, ciphers, fingerprint), "utf8")
+  await writeFile(path.join(args.outputDir, "INTEGRATION.md"), integrationGuide([...args.strings.keys()]), "utf8")
+
+  console.log(`已生成：${args.outputDir}/StringCrypto.kt、${args.outputDir}/INTEGRATION.md`)
+  console.log(`密钥指纹：${fingerprint}（十六进制密钥 ${keyHex.length / 2} 字节）`)
+  for (const [name, cipher] of ciphers) console.log(`  ${name} -> ${cipher.slice(0, 16)}…(${cipher.length / 2} 字节密文)`)
+}
+
+main().catch((error) => {
+  console.error(`生成失败：${error instanceof Error ? error.message : String(error)}`)
+  process.exitCode = 1
+})
