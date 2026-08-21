@@ -219,6 +219,36 @@ async function moduleScriptNames(entries: RawZipEntry[], roots: string[]): Promi
     }
     for (const name of moduleScriptsFromHtml(root, decodeUtf8(bytes, index.name))) modules.add(name)
   }
+  // 动态 import chunk 发现(webpack 等打包产物的懒加载 chunk):解析模块脚本的
+  // import()/import ... from 引用,命中白名单目录的 chunk 一并纳入处理。
+  // 有界单遍 + MAX_SCRIPT_FILES 上限,解码容错(无效 UTF-8 脚本跳过,不中断),避免猜测。
+  const entryByName = new Map(entries.map((entry) => [entry.name, entry]))
+  const pending = [...modules]
+  const seen = new Set<string>()
+  const importRe = /import\s*\(\s*["']([^"']+)["']\s*\)|import\s*["']([^"']+)["']|import\s+[^"']*?\s+from\s*["']([^"']+)["']/g
+  for (const name of pending) {
+    if (seen.has(name) || modules.size >= MAX_SCRIPT_FILES) break
+    seen.add(name)
+    const entry = entryByName.get(name)
+    if (!entry || entry.uncompressedSize > MAX_SCRIPT_BYTES) continue
+    let text: string
+    try {
+      text = decodeUtf8(inflateEntry(entry), name)
+    } catch {
+      continue
+    }
+    for (const match of text.matchAll(importRe)) {
+      const spec = match[1] ?? match[2] ?? match[3]
+      if (!spec) continue
+      const root = roots.find((r) => name.startsWith(r))
+      if (!root) continue
+      const resolved = resolveScriptName(root, spec)
+      if (resolved?.endsWith(".js") && !modules.has(resolved)) {
+        modules.add(resolved)
+        pending.push(resolved)
+      }
+    }
+  }
   return modules
 }
 

@@ -42,6 +42,43 @@ export const CODE_HEURISTIC_RULES: readonly CodeHeuristicRule[] = [
     recommendation: "仅对可信内容启用 JS 桥并用 @JavascriptInterface 限定方法；关闭 setAllowUniversalAccessFromFileURLs 等宽松设置。",
     regex: /addJavascriptInterface|@JavascriptInterface|setAllowUniversalAccessFromFileURLs|setAllowFileAccessFromFileURLs/,
   },
+  // --- Category 6: credential-like formats in source ---
+  {
+    suffix: "SOURCE_CREDENTIAL_FORMAT_AWS",
+    severity: "low",
+    title: "源码疑似包含 AWS Access Key 格式字符串",
+    detail:
+      "为什么：检测到 AKIA 开头的 AWS Access Key 格式字符串。所以：真实密钥可被用于接管云资源。开发者需自行确认：是否为真实凭据、是否应移入服务端环境变量/密钥服务。",
+    recommendation: "将真实密钥移入服务端环境变量或密钥管理服务；在 Git 历史中轮换并清除疑似泄露的密钥。",
+    regex: /\bAKIA[0-9A-Z]{16}\b/,
+  },
+  {
+    suffix: "SOURCE_CREDENTIAL_FORMAT_GOOGLE",
+    severity: "low",
+    title: "源码疑似包含 Google API Key 格式字符串",
+    detail:
+      "为什么：检测到 AIza 开头的 Google API Key 格式字符串。所以：真实 API Key 可能被滥用计费或越权访问。开发者需自行确认：是否为真实凭据、是否应移入受控环境。",
+    recommendation: "将真实 API Key 移入服务端或密钥服务，并在 Google Cloud 控制台限制密钥用途与配额。",
+    regex: /\bAIza[0-9A-Za-z_-]{35}\b/,
+  },
+  {
+    suffix: "SOURCE_CREDENTIAL_FORMAT_GITHUB",
+    severity: "low",
+    title: "源码疑似包含 GitHub Token 格式字符串",
+    detail:
+      "为什么：检测到 ghp_ 开头的 GitHub Personal Access Token 格式字符串。所以：真实 Token 可被用于读写仓库。开发者需自行确认：是否为真实凭据、是否应立即轮换。",
+    recommendation: "立即在 GitHub 撤销并轮换疑似泄露的 Token；改用受限的部署密钥或环境变量注入。",
+    regex: /\bghp_[0-9A-Za-z]{36}\b/,
+  },
+  {
+    suffix: "SOURCE_PRIVATE_KEY_BLOCK",
+    severity: "medium",
+    title: "源码包含 PEM 私钥块",
+    detail:
+      "为什么：检测到 -----BEGIN ... PRIVATE KEY----- 块。所以：私钥出现在源码/仓库中可被用于伪造身份或解密数据。开发者需自行确认：该密钥是否应存在于仓库、是否需立即轮换。",
+    recommendation: "将私钥移出仓库与客户端；轮换已泄露的密钥并检查 Git 历史中的残留。",
+    regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/,
+  },
   {
     suffix: "WEBVIEW_JS_ENABLED",
     severity: "low",

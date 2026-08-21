@@ -931,12 +931,20 @@ async function scanDexFiles(
   const combined = new Set<string>()
   let truncated = false
   let failed = 0
+  let malformedDex = 0
   for (const name of dexFiles) {
     const bytes = await extractApkEntryBytes(apkPath, name).catch(() => undefined)
     if (!bytes || bytes.length > MAX_SCAN_ENTRY_BYTES) {
       if (bytes && bytes.length > MAX_SCAN_ENTRY_BYTES) truncated = true
       else failed += 1
       continue
+    }
+    // 只读 DEX 头结构校验(失败关闭子集):magic、header_size、file_size 与条目实际大小一致性
+    const isDex = bytes.length >= 40 && bytes[0] === 0x64 && bytes[1] === 0x65 && bytes[2] === 0x78 && bytes[3] === 0x0a
+    if (isDex) {
+      const fileSize = (bytes[32] ?? 0) | ((bytes[33] ?? 0) << 8) | ((bytes[34] ?? 0) << 16) | ((bytes[35] ?? 0) << 24)
+      const headerSize = (bytes[36] ?? 0) | ((bytes[37] ?? 0) << 8) | ((bytes[38] ?? 0) << 16) | ((bytes[39] ?? 0) << 24)
+      if (headerSize < 0x70 || (fileSize > 0 && fileSize > bytes.length)) malformedDex += 1
     }
     try {
       const result = extractDexStrings(bytes)
@@ -957,6 +965,16 @@ async function scanDexFiles(
         `从 DEX 类型描述符识别到以下第三方 SDK（启发式，不做漏洞比对）：${sdks.join("、")}。用于供应链梳理，请自行核对版本与隐私合规。`,
       recommendation: "维护第三方 SDK 清单，关注其权限/数据采集行为与已知漏洞公告，及时升级。",
       evidence: sdks.join(", "),
+    })
+  }
+  if (malformedDex > 0) {
+    findings.push({
+      severity: "medium",
+      code: "DEX_HEADER_MALFORMED",
+      title: "发现 DEX 头结构不一致的类文件",
+      detail:
+        `${malformedDex} 个 classes*.dex 的头部结构异常（magic/header_size/file_size 与条目实际大小不一致）。可能是被篡改、截断或非常规打包；字符串池扫描仍按失败关闭继续。`,
+      recommendation: "核对 APK 来源与 SHA-256；对可疑 DEX 单独复核。",
     })
   }
   if (truncated || failed > 0) {
