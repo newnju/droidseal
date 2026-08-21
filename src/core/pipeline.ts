@@ -503,6 +503,18 @@ export class Pipeline {
         stepId: "prepare",
       })
     }
+    if (this.config.inputKind === "apk" && /\.aab$/i.test(input)) {
+      throw new DroidSealError({
+        code: "AAB_INPUT_NOT_SUPPORTED",
+        message: "AAB 输入暂不支持",
+        explanation: "检测到 .aab（Android App Bundle）输入。当前流水线处理 APK；AAB 是发布包格式，需先转换为 APK 或直接构建 APK。",
+        suggestions: [
+          "用 bundletool 生成 APK：bundletool build-apks --bundle=app.aab --output=out.apks，再从 out.apks 解出 APK",
+          "或让 Gradle 直接产出 APK（assembleRelease）后重新运行",
+        ],
+        stepId: "prepare",
+      })
+    }
     if (this.config.inputKind === "project" && !info.isDirectory()) {
       throw new DroidSealError({
         code: "INPUT_NOT_PROJECT_DIRECTORY",
