@@ -1,11 +1,14 @@
 package com.droidseal.antidebug
 
+import android.content.ContentResolver
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Debug
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import java.io.FileInputStream
+import java.net.NetworkInterface
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.system.exitProcess
@@ -246,6 +249,34 @@ object DroidSealAntiDebug {
             val haystack = (Build.FINGERPRINT + " " + Build.HARDWARE + " " + Build.PRODUCT + " " + Build.MODEL)
                 .lowercase()
             emulatorMarkers.any { it in haystack }
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * VPN/代理检测信号（只报告，不阻断）：系统全局 HTTP 代理非空视为代理信号；
+     * 网络接口中出现 tun/ppp/tap 等 VPN 特征接口名视为 VPN 信号。读取失败返回 false。
+     */
+    fun checkVpnProxy(contentResolver: ContentResolver?): Boolean {
+        return try {
+            val hasProxy = contentResolver != null &&
+                !Settings.Global.getString(contentResolver, Settings.Global.HTTP_PROXY).isNullOrBlank()
+            val vpn = try {
+                val interfaces = NetworkInterface.getNetworkInterfaces() ?: return hasProxy
+                var found = false
+                while (interfaces.hasMoreElements()) {
+                    val name = interfaces.nextElement().name.lowercase()
+                    if (name.contains("tun") || name.contains("ppp") || name.contains("tap")) {
+                        found = true
+                        break
+                    }
+                }
+                found
+            } catch (t: Throwable) {
+                false
+            }
+            hasProxy || vpn
         } catch (t: Throwable) {
             false
         }

@@ -26,6 +26,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 新增发布预检脚本（`scripts/preflight.ts`）：一键运行 type-check / test / release-check 三项发布门禁并逐项汇总，全部通过方可继续发布流程。
 - 资源路径混淆深化：新增 Mode D 目录保留式路径混淆（`scrambleResourcePaths`——`res/drawable-hdpi/ic.png` → `res/a/a.png`，保留 res/ 结构与扩展名），资源混淆步骤新增 `pathMode: "flatten" | "scramble"` 选项。
 - 发布流水线 CI 集成：CI verify 任务改用发布预检脚本（`bun scripts/preflight.ts`——type-check / test / release-check 一键门禁，与本地完全一致）。
+- 反调试 stub 新增 `checkEmulator` 模拟器检测信号（Build.FINGERPRINT/HARDWARE/PRODUCT/MODEL 保守标记匹配，只报告不阻断）。
+- 供应链审计新增离线已知漏洞比对（`SUPPLYCHAIN_KNOWN_VULNERABILITY`）：检测到的 SDK 与内置精简快照（commons-text/commons-io/log4j-core/jackson-databind 等）比对，不联网、清单级提示。
 
 ### Fixed
 

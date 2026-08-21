@@ -93,6 +93,32 @@ if (report.suspicious) {
 }
 ```
 
+## 完整性自检（防重打包）
+
+`checkApkIntegrity` 与 `checkApkSignature` 提供防重打包信号：把构建期得到的 APK SHA-256 与签名证书指纹作为预期值传入，运行时不匹配即返回 false（未配置预期时返回 true，读取失败保守返回 false）。建议在 `Application.onCreate` 与 `guardOnActivityResumed` 节流周期内**定期复查**（复用两秒节流，避免频繁读文件）：
+
+```kotlin
+val integrityOk = DroidSealAntiDebug.checkApkIntegrity(
+    applicationInfo.sourceDir,
+    BuildConfig.DROIDSEAL_EXPECTED_APK_SHA256, // 构建期由发布流程注入
+)
+val signatureOk = DroidSealAntiDebug.checkApkSignature(
+    packageManager,
+    packageName,
+    BuildConfig.DROIDSEAL_EXPECTED_SIGNER_FINGERPRINTS,
+)
+```
+
+## 服务端协作上报
+
+stub 只产生信号，决策在服务端。建议把以下字段组合上报（格式自定，例如 JSON）：
+
+- `tracerPid`、`injectionArtifacts`、`javaDebuggerConnected`、`waitingForDebugger`（`inspect()` 快照）
+- `integrityOk`、`signatureOk`（防重打包）
+- `emulator`（`checkEmulator()`）、`vpnOrProxy`（`checkVpnProxy(resolver)`）
+
+服务端按风险等级决策（降级、限流、人工复核），不要只依赖客户端信号做唯一访问控制；信号可被绕过，需与授权/风控组合使用。
+
 ## 边界与限制
 
 - **可被绕过**：反调试是提高成本的纵深防御，不是不可逾越的屏障。定制内核、硬件取证、patch native 库都可能绕过。请把它与服务端授权、完整性/风控信号组合使用。
