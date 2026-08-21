@@ -1,5 +1,6 @@
 package com.droidseal.antidebug
 
+import android.content.pm.PackageManager
 import android.os.Debug
 import android.os.SystemClock
 import android.util.Log
@@ -201,6 +202,35 @@ object DroidSealAntiDebug {
         } catch (t: Throwable) {
             false
         }
+    }
+
+    /**
+     * APK 签名指纹自检（防重打包组合）：读取 [packageManager] 的签名信息，计算各
+     * 签名证书的 SHA-256 指纹并与构建期预期的 [expectedSha256Fingerprints] 集合比对
+     * （支持多指纹轮换）。未配置预期指纹时返回 true（不阻断）；读取失败返回 false
+     * （保守视为可疑）。本方法只返回信号，由宿主决定处置。
+     */
+    fun checkApkSignature(
+        packageManager: PackageManager,
+        packageName: String,
+        expectedSha256Fingerprints: Set<String>?,
+    ): Boolean {
+        if (expectedSha256Fingerprints.isNullOrEmpty()) return true
+        return try {
+            val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            val signers = info.signingInfo?.apkContentsSigners
+                ?: info.signingInfo?.signingCertificateHistory
+                ?: emptyArray()
+            val actual = signers.map { signer -> sha256Hex(signer.toByteArray()) }
+            actual.any { it in expectedSha256Fingerprints }
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    private fun sha256Hex(bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+        return digest.joinToString("") { "%02x".format(it) }
     }
 
     private external fun nativeTracerPid(): Int
