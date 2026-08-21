@@ -1243,6 +1243,18 @@ export function App() {
                 {language() === "en" ? "中文" : "English"}
               </text>
             </box>
+            <box
+              border
+              borderColor={theme.borderActive}
+              paddingLeft={1}
+              paddingRight={1}
+              marginTop={0}
+              onMouseUp={() => setDraft((current) => ({ ...current, keepIntermediates: !(current.keepIntermediates ?? false) }))}
+            >
+              <text fg={theme.accentStrong} selectable={false}>
+                {draft().keepIntermediates ? "测试与学习" : "精简模式"}
+              </text>
+            </box>
           </box>
         </Show>
       </box>
