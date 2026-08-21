@@ -133,7 +133,7 @@ for (const [name, version] of Object.entries({
 })) {
   if (packageJson.devDependencies?.[name] !== version) findings.push(`构建依赖必须精确锁定：${name}@${version}`)
 }
-if (packageJson.overrides?.["brace-expansion"] !== "2.1.3") findings.push("brace-expansion 安全覆盖必须锁定为 2.1.3")
+if (packageJson.overrides?.["brace-expansion"] !== "^2.1.4") findings.push("brace-expansion 安全覆盖必须锁定为 ^2.1.4（修复 GHSA-rgw5-rvv9-x895）")
 if (repositoryUrl !== "git+https://github.com/noontiger/droidseal.git") {
   findings.push("package.json repository 必须指向官方 droidseal 仓库")
 }
