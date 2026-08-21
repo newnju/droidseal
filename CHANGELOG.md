@@ -8,6 +8,13 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ## [1.0.1] - 2026-08-21
 
+### Added
+
+- Native 加固检查深化：`.so` 未剥离符号表（`SO_UNSTRIPPED_SYMBOLS`）、含调试信息（`SO_DEBUG_INFO_PRESENT`）、疑似包含凭据格式字符串（`SO_CREDENTIAL_FORMAT`，AKIA/AIza/ghp_/私钥块）。
+- 资源名混淆新增颜色值保守混淆（Mode C）：`#RRGGBB` 颜色值改写为 `#AARRGGBB`（alpha=FF，视觉不变），Res_value 引用保持有效。
+- 报告修复包扩展：新增 R8/ProGuard 规则最小化建议（`templates/proguard-rules.suggestion.md`）与 Manifest 权限/导出组件最小化清单（`templates/manifest-permissions.suggestion.md`）。
+- 报告修复包新增 DEX 字符串安全化计划（`templates/dex-string-security.plan.md`）：敏感字符串分类、服务端化与源码侧解密桩接入指引（参考 `dex-string-crypto` 原语）。
+
 ### Fixed
 
 - 修复传递依赖已知漏洞：`brace-expansion` 升级至 `^2.1.4`（GHSA-rgw5-rvv9-x895，无界中间数组 DoS）、`@babel/core` 升级至 `^7.29.1`（GHSA-4x5r-pxfx-6jf8，sourceMappingURL 注释任意文件读）；`bun audit` 现报告无已知漏洞，release-check 的依赖覆盖断言同步更新。
