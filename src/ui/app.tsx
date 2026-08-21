@@ -1237,10 +1237,10 @@ export function App() {
               paddingLeft={1}
               paddingRight={1}
               marginTop={0}
-              onMouseUp={() => setLanguage((current) => (current === "en" ? "zh" : current === "zh" ? "ja" : "en"))}
+              onMouseUp={() => setLanguage((current) => (current === "en" ? "zh" : "en"))}
             >
               <text fg={theme.accentStrong} selectable={false}>
-                {language() === "en" ? "中文" : language() === "zh" ? "日本語" : "English"}
+                {language() === "en" ? "中文" : "English"}
               </text>
             </box>
           </box>
