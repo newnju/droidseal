@@ -1,6 +1,7 @@
 package com.droidseal.antidebug
 
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Debug
 import android.os.SystemClock
 import android.util.Log
@@ -231,6 +232,23 @@ object DroidSealAntiDebug {
     private fun sha256Hex(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
         return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    /** 模拟器特征标记（保守子集，降低真机误报）。 */
+    private val emulatorMarkers = listOf("goldfish", "ranchu", "genymotion", "sdk_gphone", "vbox")
+
+    /**
+     * 模拟器检测信号（只报告，不阻断）：拼接 Build.FINGERPRINT / HARDWARE /
+     * PRODUCT / MODEL 后匹配常见模拟器内核/厂商标记。读取失败返回 false。
+     */
+    fun checkEmulator(): Boolean {
+        return try {
+            val haystack = (Build.FINGERPRINT + " " + Build.HARDWARE + " " + Build.PRODUCT + " " + Build.MODEL)
+                .lowercase()
+            emulatorMarkers.any { it in haystack }
+        } catch (t: Throwable) {
+            false
+        }
     }
 
     private external fun nativeTracerPid(): Int
