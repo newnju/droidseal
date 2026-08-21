@@ -1,5 +1,6 @@
 import path from "node:path"
 import { mkdir, writeFile } from "node:fs/promises"
+import { EDITION } from "../brand.ts"
 import { writeRemediationBundle } from "./remediation.ts"
 import { writeReleaseEvidence, type ReleaseEvidenceResult } from "./release-evidence.ts"
 import {
@@ -359,6 +360,7 @@ export async function writeReports(
   const json = {
     schemaVersion: 7,
     product: "DroidSeal",
+    edition: EDITION,
     generatedAt,
     runId: context.runId,
     config: publicConfig(config),
