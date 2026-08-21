@@ -166,6 +166,18 @@ export function analyzeSigningMaterials(inputs: readonly SigningMaterialInput[])
     })
   }
 
+  if (keystores.length > 0) {
+    findings.push({
+      severity: "low",
+      confidence: "confirmed",
+      code: "SIGNING_KEYSTORE_HARDWARE_RECOMMENDED",
+      title: "建议发布签名使用硬件背书密钥",
+      detail: "检测到文件型 JKS/PKCS12 签名库。文件型密钥可被复制、备份或传输泄露，私钥一旦泄露即可伪造具有相同发布身份的更新包。",
+      recommendation:
+        "生产发布优先使用硬件背书密钥（Android Keystore / HSM / CI 密钥服务托管），配合密钥轮换与访问审计；文件型密钥需离线备份并严格限制访问范围。",
+    })
+  }
+
   if ((keystores.length > 0 || properties.length > 0 || documents.length > 0) && sorted.every((input) => input.gitExposure === "unknown")) {
     findings.push({
       severity: "info",

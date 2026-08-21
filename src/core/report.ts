@@ -25,6 +25,7 @@ import type {
 export interface ReportPaths {
   json: string
   markdown: string
+  junit: string
   remediationDirectory?: string
   remediationPlan?: string
   releaseEvidenceDirectory: string
@@ -83,6 +84,12 @@ function toolchainForReport(toolchain: Toolchain | undefined): Record<string, un
     requiredFor: tool.requiredFor,
     detail: tool.detail,
   })
+  const knownGoodVersions = {
+    "JDK": "21（Adoptium Temurin，DroidSeal 管理安装）",
+    "Android Build Tools": "30+（aapt / zipalign / apksigner）",
+    "apksigner": "30.0.0+（支持 v1–v4 签名方案）",
+    "Gradle Wrapper": "由目标项目提供（需匹配 AGP 版本）",
+  }
   return {
     java: serialize(toolchain.java),
     keytool: serialize(toolchain.keytool),
@@ -92,6 +99,7 @@ function toolchainForReport(toolchain: Toolchain | undefined): Record<string, un
     gradleWrapper: serialize(toolchain.gradleWrapper),
     androidSdkRoot: toolchain.androidSdkRoot,
     buildToolsVersion: toolchain.buildToolsVersion,
+    knownGoodVersions,
   }
 }
 
@@ -241,6 +249,33 @@ function releaseReasonsMarkdown(reasons: readonly ReleaseDecisionReason[]): stri
     .join("\n")
 }
 
+function escapeXml(value: string): string {
+  return value.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c] ?? c)
+}
+
+/** CI 集成的 JUnit XML:block/review 级 finding 映射为失败用例,其余为通过用例。 */
+function findingsJunitXml(findings: readonly Finding[], decision: ReleaseDecision): string {
+  const failureCodes = new Set(
+    [...(decision.blockingReasons ?? []), ...(decision.reviewReasons ?? [])]
+      .map((reason) => reason.findingCode)
+      .filter((code): code is string => Boolean(code)),
+  )
+  const cases = findings.map((finding) => {
+    if (failureCodes.has(finding.code)) {
+      return `    <testcase name="${escapeXml(finding.code)}" classname="droidseal"><failure message="${escapeXml(finding.title)}">${escapeXml(finding.detail)}</failure></testcase>`
+    }
+    return `    <testcase name="${escapeXml(finding.code)}" classname="droidseal"/>`
+  })
+  const failures = findings.filter((finding) => failureCodes.has(finding.code)).length
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="droidseal" tests="${findings.length}" failures="${failures}">
+  <testsuite name="droidseal-release-gate" tests="${findings.length}" failures="${failures}">
+${cases.join("\n")}
+  </testsuite>
+</testsuites>
+`
+}
+
 function releaseDecisionMarkdown(decision: ReleaseDecision): string {
   const labels: Record<ReleaseDecisionStatus, string> = {
     pass: "通过",
@@ -311,6 +346,7 @@ export async function writeReports(
   await mkdir(context.reportDirectory, { recursive: true })
   const jsonPath = path.join(context.reportDirectory, "droidseal-report.json")
   const markdownPath = path.join(context.reportDirectory, "droidseal-report.md")
+  const junitPath = path.join(context.reportDirectory, "droidseal-junit.xml")
   const generatedAt = new Date().toISOString()
   const releaseEvidence = await writeReleaseEvidence(config, context, generatedAt)
   const supplyChain = await writeSupplyChainArtifacts(config, context, generatedAt)
@@ -421,10 +457,12 @@ ${defensiveGuide()}
   await Promise.all([
     writeFile(jsonPath, `${JSON.stringify(json, null, 2)}\n`, "utf8"),
     writeFile(markdownPath, markdown, "utf8"),
+    writeFile(junitPath, findingsJunitXml(sortedFindings, releaseDecision), "utf8"),
   ])
   return {
     json: jsonPath,
     markdown: markdownPath,
+    junit: junitPath,
     releaseEvidenceDirectory: releaseEvidence.directory,
     releaseEvidenceManifest: releaseEvidence.manifestPath,
     sbom: supplyChain.sbomPath,

@@ -1576,6 +1576,14 @@ export class Pipeline {
         "env:DROIDSEAL_STORE_PASSWORD",
         "--key-pass",
         "env:DROIDSEAL_KEY_PASSWORD",
+        "--v1-signing-enabled",
+        "true",
+        "--v2-signing-enabled",
+        "true",
+        "--v3-signing-enabled",
+        "true",
+        "--v4-signing-enabled",
+        "true",
         "--out",
         output,
         artifact,
@@ -1692,6 +1700,9 @@ export class Pipeline {
           if (certPrint.exitCode === 0) {
             const parsed = analyzeCertPrint(certPrint.stdout)
             if (parsed.length > 0) certs = parsed
+            const chainMatch = /证书链长度[:：]\s*(\d+)|Chain length[:：]\s*(\d+)/i.exec(certPrint.stdout)
+            const chainDepth = chainMatch ? Number(chainMatch[1] ?? chainMatch[2]) : undefined
+            detail.push(`证书链深度：${chainDepth ?? certs.length}`)
           }
         }
         const minSdkRaw = this.context.audit.apkMetadata?.minSdk
