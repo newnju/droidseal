@@ -21,6 +21,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 新增 R8/ProGuard 规则模板库（`docs/r8-rule-templates.md`）：Retrofit/Room/Kotlin 协程/kotlinx.serialization 的 keep 规则模板与反模式说明。
 - 新增签名指纹管理脚本（`scripts/signing-fingerprints.ts`）：keytool 读取证书 SHA-256 指纹清单并支持 `--expect` 多指纹校验（密钥轮换/多签名），密码仅从 `DROIDSEAL_STORE_PASSWORD` 环境变量读取。
 - 字符串加密桩生成器支持 `--from-audit <报告json>`：从 droidseal-report.json 自动提取 HARDCODED_SECRET/EMBEDDED_PRIVATE_KEY/CREDENTIAL_FORMAT 发现的敏感串并生成加密桩计划（审计→自动加固衔接）。
+- 报告新增「加固成效」节：产物前后大小对比、DEX/SO 敏感项计数与加固覆盖度评分（6 维度，JSON 与 Markdown 双输出）。
+- 资源名混淆 Mode C 值级混淆扩展：`Ndp` 维度值改写为 `Ndip`（等价单位，视觉不变），与颜色值混淆同类。
+- 新增发布预检脚本（`scripts/preflight.ts`）：一键运行 type-check / test / release-check 三项发布门禁并逐项汇总，全部通过方可继续发布流程。
 
 ### Fixed
 
