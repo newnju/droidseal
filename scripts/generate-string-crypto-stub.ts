@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// 源码侧字符串加密桩生成器（长期路线 ①）。
+// 源码侧字符串加密桩生成器（长期路线 ① / 中期路线：审计→自动加固衔接）。
 // 为每个敏感字符串生成密文常量，并生成 Kotlin 解密桩与接入指南。
 // 开发者把敏感字符串替换为解密调用后重新构建，DEX 字符串池只含密文。
 // 工具不事后改写 APK；密钥与密文都嵌入客户端，本能力只提高阅读门槛。
@@ -9,14 +9,18 @@
 //     --string "apiKey=AIza..." --string "endpoint=https://..." \
 //     --output src/main/kotlin/io/example/secrets \
 //     [--key <hex>]
+//   # 自动扫描：从 droidseal-report.json 提取审计发现的敏感串（HARDCODED_SECRET 等）
+//   bun scripts/generate-string-crypto-stub.ts \
+//     --from-audit droidseal-report.json --output src/main/kotlin/io/example/secrets
 import { generateKey, encryptString, keyFingerprint } from "../src/core/dex-string-crypto.ts"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 interface CliArgs {
   keyHex?: string
   strings: Map<string, string>
   outputDir: string
+  fromAudit?: string
 }
 
 function toHex(bytes: Uint8Array): string {
@@ -38,11 +42,39 @@ function parseArgs(argv: string[]): CliArgs {
       args.keyHex = argv[++i]!
     } else if (arg === "--output") {
       args.outputDir = argv[++i]!
+    } else if (arg === "--from-audit") {
+      args.fromAudit = argv[++i]!
     }
   }
   if (args.outputDir === "") throw new Error("缺少 --output 输出目录")
-  if (args.strings.size === 0) throw new Error("至少提供一个 --string name=value")
+  if (args.strings.size === 0 && !args.fromAudit) throw new Error("至少提供一个 --string name=value 或 --from-audit <报告json>")
   return args
+}
+
+// 从 droidseal-report.json 自动提取审计发现的敏感串（HARDCODED_SECRET /
+// EMBEDDED_PRIVATE_KEY / CREDENTIAL_FORMAT 类 finding 的 evidence 预览片段）。
+async function collectFromAudit(auditPath: string): Promise<Map<string, string>> {
+  const report = JSON.parse(await readFile(auditPath, "utf8")) as {
+    audit?: { findings?: Array<{ code?: string; evidence?: string }> }
+  }
+  const strings = new Map<string, string>()
+  const findings = report.audit?.findings ?? []
+  let index = 0
+  for (const finding of findings) {
+    const code = finding.code ?? ""
+    if (!/(?:HARDCODED_SECRET|EMBEDDED_PRIVATE_KEY|CREDENTIAL_FORMAT)/.test(code)) continue
+    const evidence = finding.evidence ?? ""
+    for (const part of evidence.split(",")) {
+      const preview = (part.split(":")[1] ?? part).trim()
+      if (preview.length >= 8 && preview.length <= 512) {
+        strings.set(`secret${++index}`, preview)
+      }
+    }
+  }
+  if (strings.size === 0) {
+    throw new Error("报告中没有可自动提取的敏感串 finding（HARDCODED_SECRET/EMBEDDED_PRIVATE_KEY/CREDENTIAL_FORMAT）")
+  }
+  return strings
 }
 
 function kotlinEscaped(value: string): string {
@@ -113,6 +145,12 @@ ${examples || "- 无"}
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2))
+  if (args.fromAudit) {
+    const fromAudit = await collectFromAudit(args.fromAudit)
+    for (const [name, value] of fromAudit) {
+      if (!args.strings.has(name)) args.strings.set(name, value)
+    }
+  }
   const key = args.keyHex
     ? Uint8Array.from(args.keyHex.match(/.{2}/g)!.map((h) => Number.parseInt(h, 16)))
     : generateKey()
