@@ -31,7 +31,8 @@ async function main(): Promise<void> {
   const [kind, inputPath, mode, keystorePath, alias] = argv
   const webEnabled = argv.includes("--web")
   const arscEnabled = argv.includes("--arsc")
-  if (!kind || !inputPath || !mode) throw new Error("用法: test-runner <apk|project> <输入路径> <skip|existing> [keystore] [alias] [--web] [--arsc]")
+  const learning = argv.includes("--learning")
+  if (!kind || !inputPath || !mode) throw new Error("用法: test-runner <apk|project> <输入路径> <skip|existing> [keystore] [alias] [--web] [--arsc] [--learning]")
 
   const config: PipelineConfig = {
     runMode: "one-click",
@@ -42,6 +43,7 @@ async function main(): Promise<void> {
     enableAlignment: true,
     enableWebAssetMinification: webEnabled,
     enableArscObfuscation: arscEnabled,
+    keepIntermediates: learning,
     signing:
       mode === "skip"
         ? { mode: "skip" }
