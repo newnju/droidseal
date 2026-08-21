@@ -14,6 +14,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 资源名混淆新增颜色值保守混淆（Mode C）：`#RRGGBB` 颜色值改写为 `#AARRGGBB`（alpha=FF，视觉不变），Res_value 引用保持有效。
 - 报告修复包扩展：新增 R8/ProGuard 规则最小化建议（`templates/proguard-rules.suggestion.md`）与 Manifest 权限/导出组件最小化清单（`templates/manifest-permissions.suggestion.md`）。
 - 报告修复包新增 DEX 字符串安全化计划（`templates/dex-string-security.plan.md`）：敏感字符串分类、服务端化与源码侧解密桩接入指引（参考 `dex-string-crypto` 原语）。
+- 新增源码侧字符串加密桩生成器（`scripts/generate-string-crypto-stub.ts`）：为敏感字符串生成密文常量、Kotlin 解密桩（与 `dex-string-crypto` 的变换对应）与接入指南，编译期加密、运行期解密，DEX 字符串池不再含明文敏感串；不事后改写 APK。
+- 反调试 stub 深化：检测标记扩展（magisk/zygisk/lspd/riru/Sui），并新增 `checkApkIntegrity`（APK SHA-256 完整性自检，防重打包；未配置预期哈希不阻断，读取失败保守视为可疑，只报告信号不阻断）。
 
 ### Fixed
 
