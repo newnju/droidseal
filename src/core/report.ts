@@ -1,5 +1,5 @@
 import path from "node:path"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, stat, writeFile } from "node:fs/promises"
 import { EDITION } from "../brand.ts"
 import { writeRemediationBundle } from "./remediation.ts"
 import { writeReleaseEvidence, type ReleaseEvidenceResult } from "./release-evidence.ts"
@@ -74,6 +74,49 @@ export function publicConfig(config: PipelineConfig): Record<string, unknown> {
     signing: publicSigningConfig(config.signing),
     protection: { mode: config.protection.mode },
   }
+}
+
+async function buildHardeningEffectiveness(context: RunContext): Promise<Record<string, unknown>> {
+  const sizeOf = async (p?: string): Promise<number | null> =>
+    p ? (await stat(p).catch(() => undefined))?.size ?? null : null
+  const originalBytes = await sizeOf(context.originalArtifact)
+  const finalBytes = await sizeOf(context.finalArtifact)
+  const sizeDeltaPercent =
+    originalBytes && finalBytes ? Math.round(((finalBytes - originalBytes) / originalBytes) * 1000) / 10 : null
+  const findingCount = (prefix: string): number =>
+    context.audit.findings.filter((f) => f.code.startsWith(prefix)).length
+  const stepOk = (id: string): boolean => context.stepResults.some((s) => s.id === id && s.status === "success")
+  const dimensions = [
+    { key: "signatureVerification", covered: context.signatureVerified === true },
+    { key: "apkAudit", covered: stepOk("apk-audit") },
+    { key: "debuggableNormalization", covered: stepOk("harden") },
+    { key: "resourceNameObfuscation", covered: stepOk("arsc-obfuscate") },
+    { key: "webAssetProcessing", covered: stepOk("web-assets") },
+    { key: "signingIntegrityChecks", covered: findingCount("SIGNING_") > 0 },
+  ]
+  const covered = dimensions.filter((d) => d.covered).length
+  return {
+    originalBytes,
+    finalBytes,
+    sizeDeltaPercent,
+    dexFindings: findingCount("DEX_"),
+    soFindings: findingCount("SO_"),
+    coverage: { total: dimensions.length, covered, dimensions },
+  }
+}
+
+async function hardeningEffectivenessMarkdown(context: RunContext): Promise<string> {
+  const effect = await buildHardeningEffectiveness(context)
+  const original = effect.originalBytes as number | null
+  const final = effect.finalBytes as number | null
+  const delta = effect.sizeDeltaPercent as number | null
+  const coverage = effect.coverage as { total: number; covered: number; dimensions: Array<{ key: string; covered: boolean }> }
+  const size = (b: number | null): string => (b === null ? "未知" : `${b} 字节`)
+  const dims = coverage.dimensions.map((d) => `\`${d.key}\`${d.covered ? " ✓" : " —"}`).join("、")
+  return `- 产物大小：原始 ${size(original)} → 最终 ${size(final)}（${delta === null ? "未知" : `${delta}%`}）
+- 敏感项计数：DEX 相关发现 ${effect.dexFindings as number} 条、SO 相关发现 ${effect.soFindings as number} 条
+- 加固覆盖：${coverage.covered}/${coverage.total} 项（${dims}）
+`
 }
 
 function toolchainForReport(toolchain: Toolchain | undefined): Record<string, unknown> | undefined {
@@ -388,6 +431,7 @@ export async function writeReports(
     },
     releaseDecision,
     controlCoverage,
+    hardeningEffectiveness: await buildHardeningEffectiveness(context),
     audit: {
       findings: sortedFindings,
       signatureSelfChecks: (context.audit.signatureSelfChecks ?? []).map((check) => ({
@@ -432,6 +476,10 @@ ${releaseDecisionMarkdown(releaseDecision)}
 ## 纵深防御控制覆盖
 
 ${controlCoverageMarkdown(controlCoverage)}
+
+## 加固成效
+
+${await hardeningEffectivenessMarkdown(context)}
 
 ## 执行步骤
 
