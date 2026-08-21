@@ -170,32 +170,43 @@ export function analyzeResourceReflection(
   return result
 }
 
-export interface ColorValueOptions {
-  // 仅改写 #RRGGBB 形式的颜色字符串值(视觉不变,保守子集)。
+export interface ValueRepresentationOptions {
+  // 仅改写 #RRGGBB 颜色值与 Ndp 维度字符串值（视觉不变，保守子集）。
 }
 
-export interface ColorValueResult {
+export interface ValueRepresentationResult {
   churned: number
-  // 原颜色值 -> 新表示形式。
+  // 原值 -> 新表示形式。
   mapping: Map<string, string>
 }
 
-// Mode C: 颜色字符串值的保守表示混淆。仅把 #RRGGBB 形式的颜色值改写为
-// #AARRGGBB（alpha=FF，视觉不变），运行时 Color.parseColor 对两种格式等价解析，
-// Res_value 引用的是字符串池下标，改写池内容不影响任何引用。非颜色值不触碰。
-export function obfuscateColorValues(table: ArscTable, _options: ColorValueOptions = {}): ColorValueResult {
+// Mode C：值级保守表示混淆。仅改写两类字符串值，视觉/语义不变：
+//   - 颜色：#RRGGBB -> #AARRGGBB（alpha=FF），Color.parseColor 等价解析；
+//   - 维度：Ndp -> Ndip（等价单位），Android 解析器两者等价。
+// Res_value 引用的是字符串池下标，改写池内容不影响任何引用；其余值不触碰。
+export function obfuscateValueRepresentations(
+  table: ArscTable,
+  _options: ValueRepresentationOptions = {},
+): ValueRepresentationResult {
   const mapping = new Map<string, string>()
   const pool = table.globalStrings
   let changed = false
   let churned = 0
   for (let i = 0; i < pool.strings.length; i += 1) {
     const original = pool.strings[i]!
-    if (!/^#[0-9A-Fa-f]{6}$/.test(original)) continue
+    let replacement: string | undefined
+    if (/^#[0-9A-Fa-f]{6}$/.test(original)) {
+      replacement = `#FF${original.slice(1)}`
+    } else {
+      const dim = /^(\d+(?:\.\d+)?)dp$/.exec(original)
+      if (dim) replacement = `${dim[1]}dip`
+    }
+    if (!replacement || replacement === original) continue
     const existing = mapping.get(original)
-    const replacement = existing ?? `#FF${original.slice(1)}`
+    const target = existing ?? replacement
     if (!existing) mapping.set(original, replacement)
-    if (replacement !== original) {
-      pool.strings[i] = replacement
+    if (pool.strings[i] !== target) {
+      pool.strings[i] = target
       churned += 1
       changed = true
     }

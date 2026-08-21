@@ -18,6 +18,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 反调试 stub 深化：检测标记扩展（magisk/zygisk/lspd/riru/Sui），并新增 `checkApkIntegrity`（APK SHA-256 完整性自检，防重打包；未配置预期哈希不阻断，读取失败保守视为可疑，只报告信号不阻断）。
 - 反调试 stub 新增 `checkApkSignature`（APK 签名证书 SHA-256 指纹自检，支持多指纹轮换，与 `checkApkIntegrity` 组成防重打包组合；未配置预期指纹不阻断，只报告信号）。
 - 新增 DEX 方法/类级混淆受控子集：设计文档（`docs/dex-method-obfuscation-plan.md`，含真机验证矩阵与失败关闭边界）与白名单映射生成器（`scripts/generate-method-obfuscation-plan.ts`，自动排除 override/native/JNI/反射/生命周期类方法，失败关闭）。
+- 新增 R8/ProGuard 规则模板库（`docs/r8-rule-templates.md`）：Retrofit/Room/Kotlin 协程/kotlinx.serialization 的 keep 规则模板与反模式说明。
+- 新增签名指纹管理脚本（`scripts/signing-fingerprints.ts`）：keytool 读取证书 SHA-256 指纹清单并支持 `--expect` 多指纹校验（密钥轮换/多签名），密码仅从 `DROIDSEAL_STORE_PASSWORD` 环境变量读取。
+- 字符串加密桩生成器支持 `--from-audit <报告json>`：从 droidseal-report.json 自动提取 HARDCODED_SECRET/EMBEDDED_PRIVATE_KEY/CREDENTIAL_FORMAT 发现的敏感串并生成加密桩计划（审计→自动加固衔接）。
 
 ### Fixed
 

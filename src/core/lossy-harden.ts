@@ -2,7 +2,7 @@ import { parseArsc, serializeArsc } from "./arsc-model.ts"
 import {
   analyzeResourceReflection,
   flattenFilePaths,
-  obfuscateColorValues,
+  obfuscateValueRepresentations,
   shortenKeyNames,
   type FlattenPathsOptions,
 } from "./arsc-obfuscate.ts"
@@ -122,7 +122,7 @@ export async function obfuscateArscInApk(
     pathsRenamed = result.renamed
     pathMapping = result.mapping
   }
-  colorsChurned = obfuscateColorValues(table).churned
+  colorsChurned = obfuscateValueRepresentations(table).churned
 
   if (keysRenamed === 0 && pathsRenamed === 0 && colorsChurned === 0) {
     return {
