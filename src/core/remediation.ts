@@ -202,10 +202,20 @@ export async function writeRemediationBundle(
     )
   }
   if (r8Codes.length > 0) {
+    const r8Findings = findings.filter((f) => r8Codes.includes(f.code))
+    const specifics = r8Findings.map((f) => `- **${f.title}**：${f.detail}`).join("\n")
     await writeArtifact(
       "templates/proguard-rules.suggestion.md",
-      R8_RULES_SUGGESTION,
-      "R8/ProGuard 规则最小化建议（恢复默认优化、收窄宽 keep、补缺失规则引用）",
+      `# R8 / ProGuard 规则优化建议（DroidSeal 审计发现）
+
+## 本次审计发现
+
+${specifics || "- 无具体项（审计不完整，见 R8_RULE_FILE_AUDIT_INCOMPLETE）"}
+
+## 通用最小化指引
+
+${R8_RULES_SUGGESTION}`,
+      "R8/ProGuard 规则最小化建议（基于本次审计发现 + 通用最小化指引）",
       r8Codes,
     )
   }
