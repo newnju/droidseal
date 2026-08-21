@@ -1857,7 +1857,7 @@ export class Pipeline {
     }
     const reports = await writeReports(this.config, this.context)
 
-    // 默认精简模式(keepIntermediates=false):清理中间 APK,只保留最终 release
+    // 默认经典模式(keepIntermediates=false):清理中间 APK,只保留最终 release
     // (输出目录的 sealed-*)与报告(报告目录的 json/md/junit/证据/SBOM/修复包)。
     if (!this.config.keepIntermediates) {
       const intermediates = await readdir(this.context.artifactDirectory).catch(() => [] as string[])

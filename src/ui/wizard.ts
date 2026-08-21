@@ -40,7 +40,7 @@ export interface WizardDraft {
   enableAlignment?: boolean
   enableWebAssetMinification?: boolean
   enableArscObfuscation?: boolean
-  // 默认 false(精简模式):流水线结束清理中间 APK;true(测试与学习模式)保留全部中间产物。
+  // 默认 false(经典模式):流水线结束清理中间 APK;true(测试与学习模式)保留全部中间产物。
   keepIntermediates?: boolean
   signingMode?: SigningMode
   // Only meaningful when signingMode === "existing": when true, the user wants
