@@ -30,7 +30,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 供应链审计新增离线已知漏洞比对（`SUPPLYCHAIN_KNOWN_VULNERABILITY`）：检测到的 SDK 与内置精简快照（commons-text/commons-io/log4j-core/jackson-databind 等）比对，不联网、清单级提示。
 - 反调试 stub 新增 `checkVpnProxy` VPN/代理检测信号（系统全局 HTTP 代理或 tun/ppp/tap 网络接口特征，只报告不阻断）。
 - 反调试 stub 接入指南补充「完整性自检（防重打包）定期复查」与「服务端协作上报」两节（信号字段组合与上报建议）。
-- 新增默认 / 测试与学习双模式：默认模式在流水线结束后清理中间 APK（01-input~05-signed），只保留最终 release APK 与报告文件；测试与学习模式（TUI 顶部切换按钮，或 runner 的 `--test-learning`）保留全部中间产物供学习与调试。
+- 新增经典 / 测试与学习双模式：经典模式在流水线结束后清理中间 APK（01-input~05-signed），只保留最终 release APK 与报告文件；测试与学习模式（TUI 顶部切换按钮，或 runner 的 `--test-learning`）保留全部中间产物供学习与调试。
+- 反调试 stub 新增 `checkClockAnomaly` 时间戳异常检测信号（单调时钟与墙上时钟偏移基线、默认 30s 阈值跳变判定，只报告不阻断）。
+- 供应链离线漏洞快照新增已知修复版本提示（`fixedIn`：commons-text ≥1.10.0 / commons-io ≥2.7 / log4j-core ≥2.17.1 / jackson-databind ≥2.13.0），`SUPPLYCHAIN_KNOWN_VULNERABILITY` 的建议自动带上修复版本。
+- 新增非交互流水线测试 runner（`scripts/test-runner.ts`）：`droidseal doctor` 之外的程序化运行方式（apk/project × skip/existing 组合，`--web`/`--arsc` 开启可选步骤，`--test-learning` 保留中间产物），CI 可用。
 
 ### Fixed
 

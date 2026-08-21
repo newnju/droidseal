@@ -1252,7 +1252,7 @@ export function App() {
               onMouseUp={() => setDraft((current) => ({ ...current, keepIntermediates: !(current.keepIntermediates ?? false) }))}
             >
               <text fg={theme.accentStrong} selectable={false}>
-                {draft().keepIntermediates ? "测试与学习" : "精简模式"}
+                {draft().keepIntermediates ? "测试与学习" : "经典模式"}
               </text>
             </box>
           </box>
