@@ -111,7 +111,7 @@ The route winds top-to-bottom: left column ①-⑦ goes down, then the flow turn
 │ ⑦ Local hardening                        │      │ ⑧ Release normalization                  │
 │ Self: evidence/confidence                │      │ Self: manifest rewrite/debug cleanup     │
 └──────────────────────────────────────────┘      └──────────────────────────────────────────┘
-                     └──────────────────────────────► flow ──►────┘
+                     └────────► flow ──►────┘
 ```
 
 All format parsing/rewriting/audit/reporting is self-developed (offline, low supply-chain footprint); rendering uses OpenTUI/Solid (third-party); external tools are only invoked where the official toolchain requires them, always through DroidSeal's own discovery, SHA-256 validation and fallback orchestration.
