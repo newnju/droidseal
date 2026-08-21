@@ -15,6 +15,7 @@ import { runProcess } from "./process.ts"
 import { buildPermissionFindings, type CustomPermission } from "./permissions-catalog.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
+import { buildPackerFindings } from "./packers.ts"
 import { analyzeElf, buildSoFindings } from "./elf-scan.ts"
 import { compareKnownVulnerabilities } from "./known-vulnerabilities.ts"
 import type {
@@ -968,6 +969,7 @@ async function scanDexFiles(
       evidence: sdks.join(", "),
     })
     findings.push(...compareKnownVulnerabilities(sdks))
+    findings.push(...buildPackerFindings(combined))
   }
   if (malformedDex > 0) {
     findings.push({
