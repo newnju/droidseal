@@ -28,6 +28,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 发布流水线 CI 集成：CI verify 任务改用发布预检脚本（`bun scripts/preflight.ts`——type-check / test / release-check 一键门禁，与本地完全一致）。
 - 反调试 stub 新增 `checkEmulator` 模拟器检测信号（Build.FINGERPRINT/HARDWARE/PRODUCT/MODEL 保守标记匹配，只报告不阻断）。
 - 供应链审计新增离线已知漏洞比对（`SUPPLYCHAIN_KNOWN_VULNERABILITY`）：检测到的 SDK 与内置精简快照（commons-text/commons-io/log4j-core/jackson-databind 等）比对，不联网、清单级提示。
+- 反调试 stub 新增 `checkVpnProxy` VPN/代理检测信号（系统全局 HTTP 代理或 tun/ppp/tap 网络接口特征，只报告不阻断）。
+- 反调试 stub 接入指南补充「完整性自检（防重打包）定期复查」与「服务端协作上报」两节（信号字段组合与上报建议）。
 
 ### Fixed
 
