@@ -11,6 +11,7 @@ import java.io.FileInputStream
 import java.net.NetworkInterface
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicLongArray
 import kotlin.system.exitProcess
 
 /**
@@ -277,6 +278,33 @@ object DroidSealAntiDebug {
                 false
             }
             hasProxy || vpn
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    /** 时钟检测基线：[elapsedRealtimeMs, wallClockMs]。 */
+    private val clockBaseline = AtomicLongArray(2)
+
+    /**
+     * 时间戳异常检测信号（只报告，不阻断）：对比单调时钟（elapsedRealtime）与
+     * 墙上时钟（currentTimeMillis）的相对偏移。首次调用记录基线；之后两者偏移
+     * 跳变超过 [thresholdMs] 视为时钟被回拨/前拨的信号。读取失败返回 false。
+     */
+    fun checkClockAnomaly(thresholdMs: Long = 30_000L): Boolean {
+        return try {
+            val nowElapsed = SystemClock.elapsedRealtime()
+            val nowWall = System.currentTimeMillis()
+            val baselineElapsed = clockBaseline.get(0)
+            if (baselineElapsed == 0L) {
+                clockBaseline.set(0, nowElapsed)
+                clockBaseline.set(1, nowWall)
+                return false
+            }
+            val baselineWall = clockBaseline.get(1)
+            val expectedWall = baselineWall + (nowElapsed - baselineElapsed)
+            val drift = if (expectedWall >= nowWall) expectedWall - nowWall else nowWall - expectedWall
+            drift > thresholdMs
         } catch (t: Throwable) {
             false
         }
