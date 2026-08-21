@@ -2,17 +2,15 @@
 import { createSignal } from "solid-js"
 import type { PipelineConfig } from "../core/types.ts"
 
-// 系统语言检测:简体/繁体中文 → zh,日语 → ja,其余 → en
-function detectSystemLanguage(): "en" | "zh" | "ja" {
+// 系统语言检测:简体/繁体中文 → zh,其余 → en
+function detectSystemLanguage(): "en" | "zh" {
   const env = process.env.LANG ?? process.env.LC_ALL ?? process.env.LANGUAGE ?? ""
   if (/^zh/i.test(env)) return "zh"
-  if (/^ja/i.test(env)) return "ja"
   if (process.platform === "win32") {
     try {
       const result = Bun.spawnSync(["powershell", "-NoProfile", "-Command", "(Get-Culture).Name"], { stdout: "pipe" })
       const name = result.stdout?.toString() ?? ""
       if (/^zh/i.test(name)) return "zh"
-      if (/^ja/i.test(name)) return "ja"
     } catch {
       // 检测失败时回退英文
     }
@@ -20,7 +18,7 @@ function detectSystemLanguage(): "en" | "zh" | "ja" {
   return "en"
 }
 
-export const [language, setLanguage] = createSignal<"en" | "zh" | "ja">(detectSystemLanguage())
+export const [language, setLanguage] = createSignal<"en" | "zh">(detectSystemLanguage())
 
 const en = {
   // 头部
@@ -789,40 +787,10 @@ const zh: Record<keyof typeof en, string> = {
 
 export type I18nKey = keyof typeof en
 
-// 日语核心文案(部分键;缺失键回退英文——支持后续逐步补全)
-const ja: Partial<Record<keyof typeof en, string>> = {
-  headerTitle: "Android Release Seal",
-  headerLocalOnly: "ローカルのみ",
-  headerReady: "準備完了",
-  headerProcessing: "処理中",
-  sidebarSuccess: "成功",
-  sidebarSkipped: "スキップ",
-  sidebarFailed: "失敗",
-  sidebarCurrentArtifact: "現在の成果物",
-  sidebarNotGenerated: "未生成",
-  sidebarOpenFolder: "▸ フォルダを開く",
-  sidebarNoOverwrite: "失敗時は上書きしない・ローカルのみ",
-  welcomeTitle: "Android Release Seal",
-  stepDoctor: "環境診断",
-  stepPrepare: "作業領域の準備",
-  stepKeystore: "署名キーストア",
-  stepSourceAudit: "ソース監査",
-  stepBuild: "Release APK のビルド",
-  stepApkAudit: "APK 監査",
-  stepProtect: "ローカル保護",
-  stepHarden: "Release 正規化",
-  stepWebAssets: "Web JS 処理",
-  stepArscObfuscate: "リソース名難読化",
-  stepAlign: "ZIP アライメント",
-  stepSign: "APK 署名",
-  stepVerify: "最終検証",
-  stepReport: "レポート生成",
-}
-
-const dict = { en, zh, ja } as const
+const dict = { en, zh } as const
 
 export function t(key: I18nKey): string {
-  return dict[language()][key] ?? dict.en[key]
+  return dict[language()][key]
 }
 
 // 步骤标题按 id 查翻译(侧栏/消息使用)
