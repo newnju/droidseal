@@ -4,6 +4,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ## [Unreleased]
 
+### Fixed
+
+- 修复传递依赖已知漏洞：`brace-expansion` 升级至 `^2.1.4`（GHSA-rgw5-rvv9-x895，无界中间数组 DoS）、`@babel/core` 升级至 `^7.29.1`（GHSA-4x5r-pxfx-6jf8，sourceMappingURL 注释任意文件读）；`bun audit` 现报告无已知漏洞，release-check 的依赖覆盖断言同步更新。
+
 ## [1.0.0] - 2026-08-20
 
 ### Added
