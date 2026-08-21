@@ -158,6 +158,12 @@ async function downloadVerified(
   onProgress?: (message: string) => void,
 ): Promise<void> {
   onProgress?.(`连接官方源：${asset.fileName}`)
+  // 离线校验缓存:若已有同哈希归档,跳过重新下载(已验证下载可离线复用,避免大文件重复下载)
+  const cached = await sha256File(destination).catch(() => undefined)
+  if (cached && cached.toLowerCase() === asset.sha256.toLowerCase()) {
+    onProgress?.(`复用已验证缓存：${asset.fileName}`)
+    return
+  }
   const response = await fetch(asset.url, { redirect: "follow" })
   if (!response.ok || !response.body) {
     throw new Error(`下载失败：HTTP ${response.status} ${response.statusText} (${asset.url})`)

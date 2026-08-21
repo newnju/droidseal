@@ -39,6 +39,7 @@ describe("signing material exposure audit", () => {
       "SIGNING_PASSWORD_LITERAL_IN_PROPERTIES",
       "SIGNING_PASSWORD_LITERAL_IN_DOCUMENTATION",
       "SIGNING_KEYSTORE_GIT_EXPOSED",
+      "SIGNING_KEYSTORE_HARDWARE_RECOMMENDED",
     ])
     const serialized = JSON.stringify(findings)
     expect(serialized).not.toContain("textseg123")

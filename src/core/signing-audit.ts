@@ -197,5 +197,15 @@ export function buildSigningFindings(input: SigningFindingInput): Finding[] {
     })
   }
 
+  if (certs.length > 0) {
+    findings.push({
+      severity: "info",
+      code: "SIGNING_CERT_REVOCATION_OFFLINE_ONLY",
+      title: "证书吊销状态为离线检查（不联网查询 OCSP/CRL）",
+      detail: "DroidSeal 本地优先，默认不联网查询证书吊销状态（OCSP/CRL）。已按离线指标（有效期/调试证书/密钥强度）审计，但不能确认证书是否已被颁发方吊销。",
+      recommendation: "发布前通过离线发布的 CRL/OCSP 快照或密钥基础设施核对吊销状态；对已泄露或轮换的证书及时撤销并更换签名身份。",
+    })
+  }
+
   return findings
 }
