@@ -2,6 +2,7 @@ import { parseArsc, serializeArsc } from "./arsc-model.ts"
 import {
   analyzeResourceReflection,
   flattenFilePaths,
+  obfuscateColorValues,
   shortenKeyNames,
   type FlattenPathsOptions,
 } from "./arsc-obfuscate.ts"
@@ -48,6 +49,7 @@ export interface ArscObfuscateResult {
   changed: boolean
   keysRenamed: number
   pathsRenamed: number
+  colorsChurned: number
   entriesRenamed: number
   usesGetIdentifier: boolean
   findings: Finding[]
@@ -71,7 +73,7 @@ export async function obfuscateArscInApk(
   const entries = parseRawZip(bytes)
   const arscEntry = entries.find((entry) => entry.name === ARSC_ENTRY)
   if (!arscEntry) {
-    return { changed: false, keysRenamed: 0, pathsRenamed: 0, entriesRenamed: 0, usesGetIdentifier: false, findings: [] }
+    return { changed: false, keysRenamed: 0, pathsRenamed: 0, colorsChurned: 0, entriesRenamed: 0, usesGetIdentifier: false, findings: [] }
   }
 
   const table = parseArsc(inflateEntry(arscEntry))
@@ -108,6 +110,7 @@ export async function obfuscateArscInApk(
 
   let keysRenamed = 0
   let pathsRenamed = 0
+  let colorsChurned = 0
   let pathMapping = new Map<string, string>()
   if (shortenKeys) {
     keysRenamed = shortenKeyNames(table, { keep: keepKeys }).renamed
@@ -119,12 +122,14 @@ export async function obfuscateArscInApk(
     pathsRenamed = result.renamed
     pathMapping = result.mapping
   }
+  colorsChurned = obfuscateColorValues(table).churned
 
-  if (keysRenamed === 0 && pathsRenamed === 0) {
+  if (keysRenamed === 0 && pathsRenamed === 0 && colorsChurned === 0) {
     return {
       changed: false,
       keysRenamed: 0,
       pathsRenamed: 0,
+      colorsChurned: 0,
       entriesRenamed: 0,
       usesGetIdentifier: reflection.usesGetIdentifier,
       findings,
@@ -178,6 +183,7 @@ export async function obfuscateArscInApk(
     changed: true,
     keysRenamed,
     pathsRenamed,
+    colorsChurned,
     entriesRenamed,
     usesGetIdentifier: reflection.usesGetIdentifier,
     findings,

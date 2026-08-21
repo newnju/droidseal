@@ -169,3 +169,37 @@ export function analyzeResourceReflection(
   }
   return result
 }
+
+export interface ColorValueOptions {
+  // 仅改写 #RRGGBB 形式的颜色字符串值(视觉不变,保守子集)。
+}
+
+export interface ColorValueResult {
+  churned: number
+  // 原颜色值 -> 新表示形式。
+  mapping: Map<string, string>
+}
+
+// Mode C: 颜色字符串值的保守表示混淆。仅把 #RRGGBB 形式的颜色值改写为
+// #AARRGGBB（alpha=FF，视觉不变），运行时 Color.parseColor 对两种格式等价解析，
+// Res_value 引用的是字符串池下标，改写池内容不影响任何引用。非颜色值不触碰。
+export function obfuscateColorValues(table: ArscTable, _options: ColorValueOptions = {}): ColorValueResult {
+  const mapping = new Map<string, string>()
+  const pool = table.globalStrings
+  let changed = false
+  let churned = 0
+  for (let i = 0; i < pool.strings.length; i += 1) {
+    const original = pool.strings[i]!
+    if (!/^#[0-9A-Fa-f]{6}$/.test(original)) continue
+    const existing = mapping.get(original)
+    const replacement = existing ?? `#FF${original.slice(1)}`
+    if (!existing) mapping.set(original, replacement)
+    if (replacement !== original) {
+      pool.strings[i] = replacement
+      churned += 1
+      changed = true
+    }
+  }
+  if (changed) markPoolDirty(pool)
+  return { churned, mapping }
+}
