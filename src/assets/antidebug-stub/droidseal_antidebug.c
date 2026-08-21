@@ -41,6 +41,11 @@ static const char *DROIDSEAL_TOKENS[] = {
     "xposed",
     "substrate",
     "libriru",
+    "magisk",
+    "zygisk",
+    "lspd",
+    "riru",
+    "Sui",
     NULL,
 };
 

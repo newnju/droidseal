@@ -3,6 +3,8 @@ package com.droidseal.antidebug
 import android.os.Debug
 import android.os.SystemClock
 import android.util.Log
+import java.io.FileInputStream
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.system.exitProcess
 
@@ -174,6 +176,31 @@ object DroidSealAntiDebug {
         nativeHasInjectionArtifacts()
     } catch (t: Throwable) {
         false
+    }
+
+    /**
+     * APK 完整性自检（防重打包）：对 [apkPath]（通常为 applicationInfo.sourceDir）
+     * 计算 SHA-256 并与构建期嵌入的 [expectedSha256] 比对。
+     * 未配置预期哈希时返回 true（不阻断）；读取失败或哈希不一致返回 false（保守视为可疑）。
+     * 本方法只返回信号，由宿主决定处置。
+     */
+    fun checkApkIntegrity(apkPath: String, expectedSha256: String?): Boolean {
+        if (expectedSha256.isNullOrBlank()) return true
+        return try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            FileInputStream(apkPath).use { input ->
+                val buffer = ByteArray(1 shl 16)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    digest.update(buffer, 0, n)
+                }
+            }
+            val hex = digest.digest().joinToString("") { "%02x".format(it) }
+            hex.equals(expectedSha256, ignoreCase = true)
+        } catch (t: Throwable) {
+            false
+        }
     }
 
     private external fun nativeTracerPid(): Int
