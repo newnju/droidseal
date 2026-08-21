@@ -1856,6 +1856,18 @@ export class Pipeline {
       }
     }
     const reports = await writeReports(this.config, this.context)
+
+    // 默认精简模式(keepIntermediates=false):清理中间 APK,只保留最终 release
+    // (输出目录的 sealed-*)与报告(报告目录的 json/md/junit/证据/SBOM/修复包)。
+    if (!this.config.keepIntermediates) {
+      const intermediates = await readdir(this.context.artifactDirectory).catch(() => [] as string[])
+      for (const entry of intermediates) {
+        if (entry.endsWith(".apk")) {
+          await this.safeRemove(path.join(this.context.artifactDirectory, entry))
+        }
+      }
+    }
+
     const result: OperationResult = {
       summary: artifact ? "最终 APK 与审计报告已生成" : "未生成 APK；已输出失败诊断报告",
       detail: [
