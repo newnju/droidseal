@@ -16,6 +16,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 报告修复包新增 DEX 字符串安全化计划（`templates/dex-string-security.plan.md`）：敏感字符串分类、服务端化与源码侧解密桩接入指引（参考 `dex-string-crypto` 原语）。
 - 新增源码侧字符串加密桩生成器（`scripts/generate-string-crypto-stub.ts`）：为敏感字符串生成密文常量、Kotlin 解密桩（与 `dex-string-crypto` 的变换对应）与接入指南，编译期加密、运行期解密，DEX 字符串池不再含明文敏感串；不事后改写 APK。
 - 反调试 stub 深化：检测标记扩展（magisk/zygisk/lspd/riru/Sui），并新增 `checkApkIntegrity`（APK SHA-256 完整性自检，防重打包；未配置预期哈希不阻断，读取失败保守视为可疑，只报告信号不阻断）。
+- 反调试 stub 新增 `checkApkSignature`（APK 签名证书 SHA-256 指纹自检，支持多指纹轮换，与 `checkApkIntegrity` 组成防重打包组合；未配置预期指纹不阻断，只报告信号）。
+- 新增 DEX 方法/类级混淆受控子集：设计文档（`docs/dex-method-obfuscation-plan.md`，含真机验证矩阵与失败关闭边界）与白名单映射生成器（`scripts/generate-method-obfuscation-plan.ts`，自动排除 override/native/JNI/反射/生命周期类方法，失败关闭）。
 
 ### Fixed
 
