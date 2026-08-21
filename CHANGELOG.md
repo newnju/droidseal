@@ -24,6 +24,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 报告新增「加固成效」节：产物前后大小对比、DEX/SO 敏感项计数与加固覆盖度评分（6 维度，JSON 与 Markdown 双输出）。
 - 资源名混淆 Mode C 值级混淆扩展：`Ndp` 维度值改写为 `Ndip`（等价单位，视觉不变），与颜色值混淆同类。
 - 新增发布预检脚本（`scripts/preflight.ts`）：一键运行 type-check / test / release-check 三项发布门禁并逐项汇总，全部通过方可继续发布流程。
+- 资源路径混淆深化：新增 Mode D 目录保留式路径混淆（`scrambleResourcePaths`——`res/drawable-hdpi/ic.png` → `res/a/a.png`，保留 res/ 结构与扩展名），资源混淆步骤新增 `pathMode: "flatten" | "scramble"` 选项。
+- 发布流水线 CI 集成：CI verify 任务改用发布预检脚本（`bun scripts/preflight.ts`——type-check / test / release-check 一键门禁，与本地完全一致）。
 
 ### Fixed
 

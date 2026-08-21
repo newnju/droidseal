@@ -16,6 +16,7 @@ import { buildPermissionFindings, type CustomPermission } from "./permissions-ca
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
 import { analyzeElf, buildSoFindings } from "./elf-scan.ts"
+import { compareKnownVulnerabilities } from "./known-vulnerabilities.ts"
 import type {
   ApkEntrySummary,
   ApkMetadata,
@@ -966,6 +967,7 @@ async function scanDexFiles(
       recommendation: "维护第三方 SDK 清单，关注其权限/数据采集行为与已知漏洞公告，及时升级。",
       evidence: sdks.join(", "),
     })
+    findings.push(...compareKnownVulnerabilities(sdks))
   }
   if (malformedDex > 0) {
     findings.push({
