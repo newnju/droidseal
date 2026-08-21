@@ -32,7 +32,13 @@ export interface ElfHardening {
   stackCanary: boolean
   fortify: boolean
   textRelocations: boolean
+  unstripped: boolean
+  debugInfo: boolean
+  credentialMarkers: string[]
 }
+
+// 凭据格式前缀(字节级扫描,与现有 bytesContainAscii 启发式一致)
+const CREDENTIAL_MARKERS = ["AKIA", "AIza", "ghp_", "-----BEGIN"]
 
 function bytesContainAscii(bytes: Uint8Array, needle: string): boolean {
   const target = new TextEncoder().encode(needle)
@@ -131,6 +137,9 @@ export function analyzeElf(bytes: Uint8Array): ElfHardening {
   const relro: RelroLevel = !hasRelro ? "none" : bindNow ? "full" : "partial"
   const stackCanary = bytesContainAscii(bytes, "__stack_chk_fail")
   const fortify = bytesContainAscii(bytes, "_chk")
+  const unstripped = bytesContainAscii(bytes, ".symtab")
+  const debugInfo = bytesContainAscii(bytes, ".debug_info") || bytesContainAscii(bytes, ".debug_line")
+  const credentialMarkers = CREDENTIAL_MARKERS.filter((marker) => bytesContainAscii(bytes, marker))
 
   return {
     bits: is64 ? 64 : 32,
@@ -139,6 +148,9 @@ export function analyzeElf(bytes: Uint8Array): ElfHardening {
     stackCanary,
     fortify,
     textRelocations,
+    unstripped,
+    debugInfo,
+    credentialMarkers,
   }
 }
 
@@ -202,6 +214,36 @@ export function buildSoFindings(library: string, hardening: ElfHardening): Findi
       detail: `${library} 含 DT_TEXTREL/DF_TEXTREL。文本重定位要求代码段可写，破坏 W^X，并在新版 Android 上可能被拒绝加载。`,
       recommendation: "编译为位置无关代码（-fPIC）以消除文本重定位。",
       evidence: library,
+    })
+  }
+  if (hardening.unstripped) {
+    findings.push({
+      severity: "low",
+      code: "SO_UNSTRIPPED_SYMBOLS",
+      title: "Native 库未剥离符号表",
+      detail: `${library} 含 .symtab 段（未 strip）。完整符号表会显著降低逆向与分析门槛。`,
+      recommendation: "发布前执行 strip（或构建脚本加 -Wl,-s / NDK strip），并移除调试信息。",
+      evidence: library,
+    })
+  }
+  if (hardening.debugInfo) {
+    findings.push({
+      severity: "info",
+      code: "SO_DEBUG_INFO_PRESENT",
+      title: "Native 库含调试信息",
+      detail: `${library} 含 .debug_* 段。调试信息可能泄露源文件名、行号与类型信息。`,
+      recommendation: "release 构建移除调试信息（不加 -g 或 strip --strip-debug）。",
+      evidence: library,
+    })
+  }
+  for (const marker of hardening.credentialMarkers) {
+    findings.push({
+      severity: "low",
+      code: "SO_CREDENTIAL_FORMAT",
+      title: "Native 库疑似包含凭据格式字符串",
+      detail: `${library} 字节中发现 ${marker} 开头的凭据格式串（AKIA/AIza/ghp_/私钥块等）。可能是真实密钥，也可能是测试样例。`,
+      recommendation: "确认 .so 内是否存在真实凭据；真实密钥应移入服务端或安全存储，勿编译进客户端。",
+      evidence: `${library} marker=${marker}`,
     })
   }
   return findings
