@@ -3,6 +3,7 @@ import {
   analyzeResourceReflection,
   flattenFilePaths,
   obfuscateValueRepresentations,
+  scrambleResourcePaths,
   shortenKeyNames,
   type FlattenPathsOptions,
 } from "./arsc-obfuscate.ts"
@@ -38,6 +39,9 @@ export interface ArscObfuscateOptions {
   shortenKeys?: boolean
   // Mode B: flatten resource file paths + rename matching ZIP entries. Default true.
   flattenPaths?: boolean
+  // Mode D (default "flatten"): "scramble" keeps the res/ structure and shortens
+  // directory/file names instead of flattening to a single prefix.
+  pathMode?: "flatten" | "scramble"
   // Extra names/paths the caller wants preserved beyond reflection detection.
   keepKeys?: ReadonlySet<string>
   keepPaths?: ReadonlySet<string>
@@ -116,11 +120,17 @@ export async function obfuscateArscInApk(
     keysRenamed = shortenKeyNames(table, { keep: keepKeys }).renamed
   }
   if (flattenPaths) {
-    const opts: FlattenPathsOptions = { keep: keepPaths }
-    if (options.pathPrefix !== undefined) opts.prefix = options.pathPrefix
-    const result = flattenFilePaths(table, opts)
-    pathsRenamed = result.renamed
-    pathMapping = result.mapping
+    if (options.pathMode === "scramble") {
+      const result = scrambleResourcePaths(table, { keep: keepPaths })
+      pathsRenamed = result.renamed
+      pathMapping = result.mapping
+    } else {
+      const opts: FlattenPathsOptions = { keep: keepPaths }
+      if (options.pathPrefix !== undefined) opts.prefix = options.pathPrefix
+      const result = flattenFilePaths(table, opts)
+      pathsRenamed = result.renamed
+      pathMapping = result.mapping
+    }
   }
   colorsChurned = obfuscateValueRepresentations(table).churned
 
