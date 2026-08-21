@@ -20,6 +20,7 @@ const COMPONENT_CODES = /(?:EXPORTED_COMPONENT|EXPORTED_ACTIVITY|DEEPLINK|TASK_A
 const SIGNING_MATERIAL_CODES = /^(?:SIGNING_PASSWORD_LITERAL_|SIGNING_KEYSTORE_)/
 const R8_RULES_CODES = /(?:^R8_|PROGUARD)/
 const MANIFEST_PERMISSION_CODES = /(?:^MANIFEST_|PERMISSION)/
+const DEX_STRING_CODES = /(?:^DEX_HARDCODED_SECRET|^DEX_(?:WEAK_CRYPTO|UNSAFE_TLS|DYNAMIC_LOADING|RUNTIME_EXECUTION|WEBVIEW_JS_BRIDGE|WEAK_RANDOM))/
 const SIGNING_MATERIAL_GUIDE = `# 发布签名材料处置清单
 
 本文件只提供人工处置步骤，不会删除密钥、改写 Git 历史或覆盖项目配置。
@@ -62,6 +63,17 @@ const MANIFEST_PERMISSION_SUGGESTION = `# Manifest 权限与导出组件最小�
 3. 深链：http/https 深链如非公开用途，移除 \`autoVerify\` 或增加签名校验；BROWSABLE 导出且无权限的入口应加权限或收窄 intent-filter。
 4. provider：导出 provider 授予 URI 权限时收紧 grantUriPermissions 与 exported，必要时加 path-permission。
 5. 复核：改动后重新构建并用 APK 审计确认导出面与权限清单收敛。
+`
+
+const DEX_STRING_PLAN = `# DEX 字符串安全化计划
+
+本文件提供敏感字符串的处置计划模板，需人工在源码侧实施（不事后改写 APK）。
+
+1. 敏感字符串分类：密钥/令牌、API URL、内部路径、加密盐、WebView 桥接口名等。
+2. 首选方案：把真实密钥/令牌移入服务端或在构建期注入，客户端不持有。
+3. 源码侧加密接入：确需客户端持有的敏感串，用自研解密桩模式（参考 \`src/core/dex-string-crypto.ts\` 的加密/解密原语），在源码编译期加密、运行时解密，避免明文进入 DEX 字符串池。
+4. 规避：不要把密钥/令牌以明文硬编码进 DEX 字符串池；弱加密/ECB 与不安全 TLS 配置应改用标准安全实现。
+5. 复核：改动后重新构建，再用本工具的 DEX 审计确认字符串池中已无敏感明文。
 `
 
 const NETWORK_SECURITY_CONFIG = `<?xml version="1.0" encoding="utf-8"?>
@@ -138,6 +150,7 @@ export async function writeRemediationBundle(
   const signingMaterialCodes = codes.filter((code) => SIGNING_MATERIAL_CODES.test(code))
   const r8Codes = codes.filter((code) => R8_RULES_CODES.test(code))
   const manifestCodes = codes.filter((code) => MANIFEST_PERMISSION_CODES.test(code))
+  const dexStringCodes = codes.filter((code) => DEX_STRING_CODES.test(code))
   const artifacts: RemediationArtifact[] = []
 
   const writeArtifact = async (
@@ -202,6 +215,14 @@ export async function writeRemediationBundle(
       MANIFEST_PERMISSION_SUGGESTION,
       "Manifest 权限与导出组件最小化人工核对清单",
       manifestCodes,
+    )
+  }
+  if (dexStringCodes.length > 0) {
+    await writeArtifact(
+      "templates/dex-string-security.plan.md",
+      DEX_STRING_PLAN,
+      "DEX 字符串安全化计划（敏感字符串分类、服务端化与源码侧解密桩接入）",
+      dexStringCodes,
     )
   }
   if (networkCodes.length > 0 || backupCodes.length > 0) {
