@@ -85,7 +85,7 @@ export interface PipelineConfig {
   enableWebAssetMinification?: boolean
   enableArscObfuscation?: boolean
   // 默认 false(精简模式):流水线结束清理中间 APK,只保留最终 release 与报告;
-  // true(测试学习模式):保留全部中间产物(学习/调试流水线内部阶段)。
+  // true(测试与学习模式):保留全部中间产物(学习/调试流水线内部阶段)。
   keepIntermediates?: boolean
   signing: SigningConfig
   protection: ProtectionConfig
