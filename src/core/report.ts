@@ -435,6 +435,8 @@ ${controlCoverageMarkdown(controlCoverage)}
 
 ## 执行步骤
 
+> 已处理 ${context.stepResults.length} 步（流程到达）；其中**真实处理成功 ${context.stepResults.filter((r) => r.status === "success").length} 步**、跳过 ${context.stepResults.filter((r) => r.status === "skipped").length} 步、失败并回退 ${context.stepResults.filter((r) => r.status === "failed").length} 步。"已处理"包含跳过与失败回退，不表示全部真实执行；跳过类型见下表情形。
+
 ${markdownTable(context.stepResults)}
 
 ## 发布证据
