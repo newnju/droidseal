@@ -18,6 +18,8 @@ const NETWORK_CODES = /(?:^NSC_|NETWORK_SECURITY_CONFIG|NETWORK_CONFIG)/
 const BACKUP_CODES = /BACKUP/
 const COMPONENT_CODES = /(?:EXPORTED_COMPONENT|EXPORTED_ACTIVITY|DEEPLINK|TASK_AFFINITY|PROVIDER_GRANT_URI)/
 const SIGNING_MATERIAL_CODES = /^(?:SIGNING_PASSWORD_LITERAL_|SIGNING_KEYSTORE_)/
+const R8_RULES_CODES = /(?:^R8_|PROGUARD)/
+const MANIFEST_PERMISSION_CODES = /(?:^MANIFEST_|PERMISSION)/
 const SIGNING_MATERIAL_GUIDE = `# 发布签名材料处置清单
 
 本文件只提供人工处置步骤，不会删除密钥、改写 Git 历史或覆盖项目配置。
@@ -38,6 +40,28 @@ keystore.properties
 key.properties
 signing.properties
 release-signing.properties
+`
+
+const R8_RULES_SUGGESTION = `# R8 / ProGuard 规则最小化建议
+
+本文件只提供建议模板，需人工核对后合并到模块的 proguard-rules.pro 或 release 变体。
+
+1. 优先恢复默认优化：避免 \`-dontobfuscate\`、\`-dontshrink\`、\`-dontoptimize\` 等整包关闭项。
+2. 收窄宽 keep：把全局/整包 keep 收敛到具体类、接口或注解约束，只保留真正需要的成员。
+3. 保留项用注解/继承约束：优先 \`@Keep\` 或注解类 keep，减少显式规则。
+4. 缺失规则引用：为 release 变体补上被引用的规则文件（proguard-rules.pro 或 src/main/keepRules/）。
+5. 复核映射：改动后用 release 构建的 mapping.txt 复核，确认混淆覆盖与保留面符合预期。
+`
+
+const MANIFEST_PERMISSION_SUGGESTION = `# Manifest 权限与导出组件最小化建议
+
+本文件只提供人工核对清单，不自动改写 Manifest。
+
+1. 权限：删除未使用的高风险权限（悬浮窗、安装未知应用、无障碍、管理全部存储、QUERY_ALL_PACKAGES 等），权限越少攻击面越小。
+2. 导出组件：未暴露给其他应用的 activity/service/receiver 应设为 \`android:exported="false"\`。
+3. 深链：http/https 深链如非公开用途，移除 \`autoVerify\` 或增加签名校验；BROWSABLE 导出且无权限的入口应加权限或收窄 intent-filter。
+4. provider：导出 provider 授予 URI 权限时收紧 grantUriPermissions 与 exported，必要时加 path-permission。
+5. 复核：改动后重新构建并用 APK 审计确认导出面与权限清单收敛。
 `
 
 const NETWORK_SECURITY_CONFIG = `<?xml version="1.0" encoding="utf-8"?>
@@ -112,6 +136,8 @@ export async function writeRemediationBundle(
   const backupCodes = codes.filter((code) => BACKUP_CODES.test(code))
   const componentCodes = codes.filter((code) => COMPONENT_CODES.test(code))
   const signingMaterialCodes = codes.filter((code) => SIGNING_MATERIAL_CODES.test(code))
+  const r8Codes = codes.filter((code) => R8_RULES_CODES.test(code))
+  const manifestCodes = codes.filter((code) => MANIFEST_PERMISSION_CODES.test(code))
   const artifacts: RemediationArtifact[] = []
 
   const writeArtifact = async (
@@ -160,6 +186,22 @@ export async function writeRemediationBundle(
       SIGNING_GITIGNORE,
       "阻止常见签名密钥库和密码属性文件再次进入版本库的示例规则",
       signingMaterialCodes,
+    )
+  }
+  if (r8Codes.length > 0) {
+    await writeArtifact(
+      "templates/proguard-rules.suggestion.md",
+      R8_RULES_SUGGESTION,
+      "R8/ProGuard 规则最小化建议（恢复默认优化、收窄宽 keep、补缺失规则引用）",
+      r8Codes,
+    )
+  }
+  if (manifestCodes.length > 0) {
+    await writeArtifact(
+      "templates/manifest-permissions.suggestion.md",
+      MANIFEST_PERMISSION_SUGGESTION,
+      "Manifest 权限与导出组件最小化人工核对清单",
+      manifestCodes,
     )
   }
   if (networkCodes.length > 0 || backupCodes.length > 0) {
