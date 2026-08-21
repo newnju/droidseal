@@ -127,6 +127,67 @@ export function flattenFilePaths(table: ArscTable, options: FlattenPathsOptions 
   return { renamed, mapping }
 }
 
+export interface ScramblePathsOptions {
+  // Resource file paths that must NOT be renamed.
+  keep?: ReadonlySet<string>
+}
+
+export interface ScrambleResult {
+  renamed: number
+  // Original ZIP path -> new path. The caller must rename the matching ZIP
+  // entries so the on-disk file names stay in sync with the arsc references.
+  mapping: Map<string, string>
+}
+
+// Mode D: directory-preserving resource path scrambling. Keeps the res/ prefix
+// and the file extension but shortens directory and file names deterministically
+// (res/drawable-hdpi/ic.png -> res/a/a.png). The arsc resolves resources by
+// index (Res_value), not by path text, so scrambled path strings stay valid;
+// the returned mapping MUST be applied to the ZIP entry names by the caller.
+export function scrambleResourcePaths(table: ArscTable, options: ScramblePathsOptions = {}): ScrambleResult {
+  const keep = options.keep ?? new Set<string>()
+  const mapping = new Map<string, string>()
+  const dirMap = new Map<string, string>()
+  const nameMap = new Map<string, string>()
+  let dirCounter = 0
+  let nameCounter = 0
+  const pool = table.globalStrings
+  let changed = false
+  let renamed = 0
+  for (let i = 0; i < pool.strings.length; i += 1) {
+    const original = pool.strings[i]!
+    if (!original.startsWith("res/") || keep.has(original)) continue
+    const slash = original.lastIndexOf("/")
+    if (slash <= 4) continue
+    const dir = original.slice(4, slash)
+    const file = original.slice(slash + 1)
+    let shortDir = dirMap.get(dir)
+    if (!shortDir) {
+      shortDir = shortName(dirCounter)
+      dirCounter += 1
+      dirMap.set(dir, shortDir)
+    }
+    let shortFile = nameMap.get(file)
+    if (!shortFile) {
+      const { ext } = splitExt(file)
+      shortFile = `${shortName(nameCounter)}${ext}`
+      nameCounter += 1
+      nameMap.set(file, shortFile)
+    }
+    const replacement = `res/${shortDir}/${shortFile}`
+    const existing = mapping.get(original)
+    if (existing && existing !== replacement) continue
+    if (!existing) mapping.set(original, replacement)
+    if (pool.strings[i] !== replacement) {
+      pool.strings[i] = replacement
+      renamed += 1
+      changed = true
+    }
+  }
+  if (changed) markPoolDirty(pool)
+  return { renamed, mapping }
+}
+
 export interface ReflectionAnalysis {
   // True when the DEX string pool references Resources.getIdentifier.
   usesGetIdentifier: boolean
