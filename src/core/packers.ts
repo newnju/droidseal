@@ -11,6 +11,8 @@ export interface PackerFingerprint {
   regex?: string
   note: string
   source?: string
+  version?: string
+  author?: string
 }
 
 // 外部指纹文件加载(APKiD 差距②):JSON 数组 { name, marker?, regex?, note, source? }——校验失败关闭。
@@ -35,6 +37,8 @@ export function parsePackerFingerprints(text: string): PackerFingerprint[] {
       ...(rule.regex ? { regex: rule.regex } : {}),
       note: rule.note ?? "",
       ...(rule.source ? { source: rule.source } : {}),
+      ...(rule.version ? { version: rule.version } : {}),
+      ...(rule.author ? { author: rule.author } : {}),
     })
   }
   return rules
@@ -190,6 +194,36 @@ export const KNOWN_PACKERS: readonly PackerFingerprint[] = [
     marker: "com.tencent.jg",
     note: "腾讯加固(jiagu)的类名变体。",
   },
+  {
+    name: "AndResGuard 资源混淆",
+    marker: "com.tencent.andresguard",
+    note: "AndResGuard 是开源资源路径混淆工具(资源名/路径混淆)。",
+  },
+  {
+    name: "BlackObfuscator 方法混淆",
+    marker: "blackobfuscator",
+    note: "BlackObfuscator 是开源 DEX 方法名混淆工具。",
+  },
+  {
+    name: "Obfuscapk",
+    marker: "com.obfuscapk",
+    note: "Obfuscapk 是开源全功能 APK 混淆器。",
+  },
+  {
+    name: "Allatori 混淆器",
+    marker: "com.allatori",
+    note: "Allatori 是商业 Java/Android 混淆器。",
+  },
+  {
+    name: "Zelix KlassMaster(ZKM)",
+    marker: "zelix",
+    note: "ZKM 是商业 Java 混淆器(字符串加密/流混淆)。",
+  },
+  {
+    name: "DashO(PreEmptive)",
+    marker: "preemptive",
+    note: "DashO 是商业加固混淆器(字符串/流混淆)。",
+  },
 ]
 
 // 从 DEX 字符串/类描述符集合中匹配已知加固指纹,返回命中的指纹列表。
@@ -214,6 +248,8 @@ export function buildPackerFindings(strings: Iterable<string>, fingerprints: rea
       detail:
         `从 DEX 类描述符/字符串识别到以下加固特征：${packers.map((p) => p.marker ?? p.regex ?? p.name).join("、")}。` +
         packers.map((p) => p.note).join(" ") +
+        (packers.some((p) => p.version) ? ` 版本：${packers.map((p) => p.version).filter(Boolean).join("、")}。` : "") +
+        (packers.some((p) => p.author) ? ` 规则作者：${packers.map((p) => p.author).filter(Boolean).join("、")}。` : "") +
         " 加固壳会降低静态审计可见性（部分代码在运行时才解密），请结合加固商配置核对与商业加固核验。",
       recommendation: "确认加固版本与配置；对加壳应用需结合真机动态验证与加固商文档，静态审计结论按可见性降级。",
       evidence: packers.map((p) => p.marker ?? p.regex ?? p.name).join(", "),
