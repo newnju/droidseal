@@ -41,6 +41,27 @@ export const KNOWN_VULNERABILITIES: readonly KnownVulnerability[] = [
     note: "jackson-databind 2.13.0 之前版本的反序列化 DoS。",
     fixedIn: "jackson-databind >= 2.13.0",
   },
+  {
+    package: "gson",
+    cve: "CVE-2022-25647",
+    severity: "high",
+    note: "Gson 2.8.9 之前版本对超深层/超大 JSON 的反序列化 DoS（堆栈溢出/资源耗尽）。",
+    fixedIn: "gson >= 2.8.9",
+  },
+  {
+    package: "commons-compress",
+    cve: "CVE-2021-36090",
+    severity: "medium",
+    note: "commons-compress 1.21 之前版本对畸形压缩包的拒绝服务（资源耗尽）。",
+    fixedIn: "commons-compress >= 1.21",
+  },
+  {
+    package: "okio",
+    cve: "CVE-2023-3635",
+    severity: "medium",
+    note: "okio 3.4.0 之前版本的缓冲区溢出导致的拒绝服务（Android 常见依赖）。",
+    fixedIn: "okio >= 3.4.0",
+  },
 ]
 
 // 用离线快照比对检测到的 SDK/组件名，命中返回 finding（仅清单提示，不联网）。

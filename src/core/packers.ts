@@ -53,6 +53,21 @@ export const KNOWN_PACKERS: readonly PackerFingerprint[] = [
     marker: "com.naga.",
     note: "娜迦加固的特征包。",
   },
+  {
+    name: "顶象(DingXiang)",
+    marker: "com.dingxiang",
+    note: "顶象加固的特征包。",
+  },
+  {
+    name: "APKProtect",
+    marker: "apkprotect",
+    note: "APKProtect 的特征标识。",
+  },
+  {
+    name: "通付盾(TongFuDun)",
+    marker: "com.tongfudun",
+    note: "通付盾加固的特征包。",
+  },
 ]
 
 // 从 DEX 字符串/类描述符集合中匹配已知加固指纹,返回命中的指纹列表。
