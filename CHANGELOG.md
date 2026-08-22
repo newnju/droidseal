@@ -92,6 +92,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 新增服务端协作上报协议规范（`docs/server-report-protocol.md`：字段表/决策矩阵/抗滥用/接入示例）。
 - TUI 底部新增快捷键提示（Enter 重试失败步骤 · Ctrl+C 复制不退出）。
 
+- 开发路线精简：删除已实现且已记录的条目，保留未实现 3 项（① DEX 方法混淆改写 / ② 字符串值·布局名保守混淆 / ④ Frida·maps 分层检测），并标注「已实现并记录于 [1.0.1]」。
+- ARSC 字符串值保守混淆：技术标识符形态字符串值（key_/id_/token_/api_/secret_ 前缀）改写为短标识符（失败关闭，运行时按值消费会失效——仅内部技术标记）。
+- 反调试 stub 新增 `checkFridaInjection`：`/proc/self/maps` 的 Frida 特征分层检测（只报告不阻断，失败关闭），`signalsToJson` 新增 `fridaInjection` 字段。
+
 #### 文档
 
 - R8/ProGuard 规则模板库（`docs/r8-rule-templates.md`）：Retrofit/Room/协程/序列化 keep 模板与反模式。
