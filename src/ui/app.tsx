@@ -650,7 +650,12 @@ export function App() {
     const highCount = active.context.audit.findings.filter((f) => f.severity === "high").length
     const gate = evaluateReleaseDecision(active.context)
     addMessage(failed.length === 0 ? "success" : "warning", "全部步骤已处理", [
-      `已处理：${active.getSteps().length}/${active.getSteps().length}；其中成功：${successCount()}；跳过：${skipped.length}；失败并回退：${failed.length}。请以“已处理”判断流程是否走完。`,
+      t("gateBannerSummary", {
+        total: String(active.getSteps().length),
+        success: String(successCount()),
+        skipped: String(skipped.length),
+        failed: String(failed.length),
+      }),
       t("gateBannerFindings", {
         count: String(findingsCount),
         critical: String(criticalCount),
@@ -659,7 +664,7 @@ export function App() {
         codes: String(gate.reasonCodes.length),
       }),
       ...(skipped.length > 0
-        ? [`跳过原因：${skipped.map((step) => `${step.title}（${skipKindLabel(step.result?.skipKind)}）`).join("、")}。跳过不等于失败。`]
+        ? [t("gateBannerSkipped", { reasons: skipped.map((step) => `${step.title}（${skipKindLabel(step.result?.skipKind)}）`).join("、") })]
         : []),
       finalArtifact ? `最终 APK：${finalArtifact}` : "没有生成最终 APK，请根据失败步骤解释修复后重试。",
       active.context.signatureVerified === true ? "签名状态：apksigner 验证通过。" : active.context.signatureVerified === false ? "签名状态：未签名或签名无效。" : "签名状态：未验证。",
@@ -1564,6 +1569,7 @@ export function App() {
                 )}
               </Show>
               <text fg={theme.textMuted}>{t("sidebarNoOverwrite")}</text>
+              <text fg={theme.textMuted}>{t("shortcutHints")}</text>
             </box>
           </box>
         </Show>
