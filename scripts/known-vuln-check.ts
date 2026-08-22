@@ -45,7 +45,14 @@ function main(): void {
     console.error(`一致性校验失败（${errors.length}）:\n${errors.join("\n")}`)
     process.exitCode = 1
   } else {
-    console.log(`一致性校验通过：快照 ${KNOWN_VULNERABILITIES.length} 条、指纹 ${KNOWN_PACKERS.length} 个`)
+    const severityCounts: Record<string, number> = {}
+    for (const entry of KNOWN_VULNERABILITIES) {
+      severityCounts[entry.severity] = (severityCounts[entry.severity] ?? 0) + 1
+    }
+    const distribution = Object.entries(severityCounts)
+      .map(([severity, count]) => `${severity} ${count}`)
+      .join(" / ")
+    console.log(`一致性校验通过：快照 ${KNOWN_VULNERABILITIES.length} 条（severity：${distribution}）、指纹 ${KNOWN_PACKERS.length} 个`)
   }
   if (process.argv.includes("--suggest")) {
     console.log(`\n新条目格式模板：

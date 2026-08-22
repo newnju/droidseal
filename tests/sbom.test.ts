@@ -282,7 +282,7 @@ describe("CycloneDX and license review artifacts", () => {
     }
     const markdown = await readFile(paths.markdown, "utf8")
 
-    expect(report.schemaVersion).toBe(7)
+    expect(report.schemaVersion).toBe(8)
     expect(report.supplyChain.sbom).toBe(paths.sbom)
     expect(report.supplyChain.licenseReview).toBe(paths.licenseReview)
     expect(report.supplyChain.componentCount).toBe(1)

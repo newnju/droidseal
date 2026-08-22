@@ -299,7 +299,7 @@ describe("confidence-aware release policy", () => {
     }
     const markdown = await readFile(paths.markdown, "utf8")
 
-    expect(report.schemaVersion).toBe(7)
+    expect(report.schemaVersion).toBe(8)
     expect(report.releaseDecision).toMatchObject({
       ruleVersion: RELEASE_POLICY_VERSION,
       status: "block",
