@@ -17,8 +17,8 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
-      # 发布预检门禁：type-check + test + release-check 一键执行，与本地 preflight 完全一致
-      - run: bun scripts/preflight.ts
+      # 发布预检门禁:type-check + test + release-check + data-tables 一键执行(--json 机器可读)
+      - run: bun scripts/preflight.ts --json
 
   package-windows-x64:
     needs: verify

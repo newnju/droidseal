@@ -1510,7 +1510,7 @@ export function App() {
                   <>
                     <Show when={index() === 0 || steps()[index() - 1]?.phase !== step.phase}>
                       <text fg={theme.borderActive} selectable={false}>
-                        ── {PHASE_LABELS[step.phase]} ──
+                        ── {({ prepare: t("phasePrepare"), audit: t("phaseAudit"), harden: t("phaseHarden"), release: t("phaseRelease") })[step.phase]} ──
                       </text>
                     </Show>
                     <box flexDirection="column" flexShrink={0} paddingBottom={1}>
@@ -1522,7 +1522,7 @@ export function App() {
                           <text fg={theme.borderActive}>
                             {"  ↳ "}
                             {skipKindLabel(kind())}
-                            {(step.id === "web-assets" || step.id === "arsc-obfuscate") && kind() === "configuration" ? "（可选未开启）" : ""}
+                            {(step.id === "web-assets" || step.id === "arsc-obfuscate") && kind() === "configuration" ? `（${t("stepOptionalOff")}）` : ""}
                           </text>
                         )}
                       </Show>

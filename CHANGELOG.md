@@ -69,6 +69,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 报告新增 `previousRun` 历史对比字段（与上一次运行的发现对比：消除/新增/剩余）。
 - TUI 运行完成新增门禁横幅（发现数 + 发布门禁状态 + 原因 code 数）。
 - `known-vuln-check.ts` 新增 `--suggest`：新条目格式模板提示。
+- 报告 Markdown 新增「与上次运行对比」节（消除/新增/剩余 + 上次门禁状态）。
+- TUI 运行完成门禁横幅新增严重度统计（critical/high 计数）；侧栏可选步骤（Web JS/资源名混淆）未开启时行内标注「可选未开启」。
+- `re-test.ts` 新增 `--fail-on-remaining`：剩余 finding 未消除时非零退出（CI 门禁）。
+- `known-vuln-check.ts` 新增 affected 字段格式校验（非空字符串或省略）。
 
 #### 文档
 

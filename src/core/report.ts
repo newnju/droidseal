@@ -323,7 +323,8 @@ function releaseReasonsMarkdown(reasons: readonly ReleaseDecisionReason[]): stri
         : reason.findingCode
           ? `发现 \`${reason.findingCode}\``
           : "全局"
-      return `- \`${reason.code}\`（${subject}）：${reason.message}`
+      const severity = reason.severity ? ` [严重度 ${reason.severity}]` : ""
+      return `- \`${reason.code}\`${severity}（${subject}）：${reason.message}`
     })
     .join("\n")
 }

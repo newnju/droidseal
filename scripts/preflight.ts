@@ -16,9 +16,11 @@ const GATES: Array<{ name: string; command: string; args: string[] }> = [
 
 function main(): void {
   const jsonOutput = process.argv.includes("--json")
+  const skipTest = process.argv.includes("--skip-test")
   const results: Array<{ name: string; passed: boolean }> = []
   let failed = 0
   for (const gate of GATES) {
+    if (skipTest && gate.name === "test") continue
     if (!jsonOutput) process.stdout.write(`▶ ${gate.name} ... `)
     const result = spawnSync(gate.command, gate.args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
     const passed = result.status === 0
