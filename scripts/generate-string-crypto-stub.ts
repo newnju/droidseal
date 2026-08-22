@@ -12,7 +12,7 @@
 //   # 自动扫描：从 droidseal-report.json 提取审计发现的敏感串（HARDCODED_SECRET 等）
 //   bun scripts/generate-string-crypto-stub.ts \
 //     --from-audit droidseal-report.json --output src/main/kotlin/io/example/secrets
-import { generateKey, encryptString, keyFingerprint } from "../src/core/dex-string-crypto.ts"
+import { generateKey, encryptString, decryptToString, keyFingerprint } from "../src/core/dex-string-crypto.ts"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 
@@ -168,6 +168,18 @@ async function main(): Promise<void> {
   console.log(`已生成：${args.outputDir}/StringCrypto.kt、${args.outputDir}/INTEGRATION.md`)
   console.log(`密钥指纹：${fingerprint}（十六进制密钥 ${keyHex.length / 2} 字节）`)
   for (const [name, cipher] of ciphers) console.log(`  ${name} -> ${cipher.slice(0, 16)}…(${cipher.length / 2} 字节密文)`)
+
+  if (process.argv.includes("--verify")) {
+    // 回程验证:每个密文用对应变换解密回原文,失败即整体失败(失败关闭)
+    for (const [name, cipher] of ciphers) {
+      const data = Uint8Array.from(cipher.match(/.{2}/g)!.map((h) => Number.parseInt(h, 16)))
+      const plain = decryptToString(data, key)
+      if (plain !== args.strings.get(name)) {
+        throw new Error(`回程验证失败：${name} 密文无法解密回原文`)
+      }
+    }
+    console.log(`回程验证通过：${ciphers.size} 个密文均可解密回原文`)
+  }
 }
 
 main().catch((error) => {
