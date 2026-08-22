@@ -121,9 +121,6 @@ function errorResponse(code: string, message: string, status: number): Response 
 // 运行串行化:同一时刻只允许一个流水线运行
 let running = false
 
-// 专业 Web UI 由启动时读取 scripts/web-ui.html（与脚本同目录）
-let webUi = ""
-
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   let port = 8787
@@ -133,7 +130,6 @@ async function main(): Promise<void> {
     else if (argv[i] === "--output") outputDir = path.resolve(argv[++i]!)
   }
   const token = process.env.DROIDSEAL_SERVER_TOKEN
-  webUi = await readFile(path.join(import.meta.dir, "web-ui.html"), "utf8")
 
   const server = Bun.serve({
     port,
@@ -198,7 +194,9 @@ async function main(): Promise<void> {
         })
       }
       if (request.method === "GET" && url.pathname === "/") {
-        return new Response(webUi, { headers: { "Content-Type": "text/html; charset=utf-8" } })
+        // 每次请求读取 web-ui.html：修改文件后无需重启即可看到变化
+        const page = await readFile(path.join(import.meta.dir, "web-ui.html"), "utf8").catch(() => "")
+        return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } })
       }
       return errorResponse("NOT_FOUND", "not found", 404)
     },
