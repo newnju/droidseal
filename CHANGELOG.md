@@ -96,6 +96,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - ARSC 字符串值保守混淆：技术标识符形态字符串值（key_/id_/token_/api_/secret_ 前缀）改写为短标识符（失败关闭，运行时按值消费会失效——仅内部技术标记）。
 - 反调试 stub 新增 `checkFridaInjection`：`/proc/self/maps` 的 Frida 特征分层检测（只报告不阻断，失败关闭），`signalsToJson` 新增 `fridaInjection` 字段。
 - 新增 DEX 方法重命名工具（`scripts/apply-method-obfuscation.ts`）：按白名单映射（`method-obfuscation.map`）重写 DEX 方法名——新建短名串 + 改该 `method_id` 的 `name_idx`（调用点自动跟随）——重算 adler32 校验和与 SHA-1 签名——引用完整性验证（失败关闭）；构建期工具（源码接入模式，不事后改写未知 APK）。
+- 新增 URL/域名/端点提取（`ENDPOINT_INVENTORY`）：从 DEX 字符串池提取 URL/域名/路径端点（apkleaks 式，去重排序有界，失败关闭）。
+- 新增弱加密算法检测（`SOURCE_WEAK_CRYPTO`）：AES 默认 ECB / AES-ECB / DES / 3DES / 硬编码 IV 的源码模式匹配（失败关闭）。
+- 签名审计新增证书有效期提示（`SIGNING_CERT_EXPIRED`/`SIGNING_CERT_EXPIRING`）：证书过期（medium）与临近 30 天（low）提示。
+- 新增自定义规则文件加载（`customRulesFile` 配置）：JSON 正则规则（source/dex/all scope），审计时应用（失败关闭）。
 
 #### 文档
 
