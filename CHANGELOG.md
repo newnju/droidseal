@@ -201,6 +201,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
   - 缺口补强：隐私数据收集清单（`PRIVACY_DATA_COLLECTION`/`PRIVACY_API_USAGE`）；证书固定缺失检测（`SOURCE_NO_CERT_PINNING`）；SQLite 明文存储审计（`SOURCE_UNENCRYPTED_STORAGE`）；反编译导出工具（`scripts/export-decompiled.ts`）。
 - **仍缺（边界项——明确不实现）**：iOS/Windows 多平台（大工程——见 `docs/platform-matrix.md`）；内置动态分析（本地优先边界——见 `docs/dynamic-analysis-bridge.md`）；恶意软件沙箱/反病毒（偏离发布安全定位）。
 - **下一竞争者（Quark-Engine——活跃，恶意行为加权评分）**：~~差距与设计~~ **已全部实现并记录于 [1.0.1]——已追平/超越（11/11 项核对无遗漏）**：DEX 调用图（含调用链）、行为规则引擎、加权评分、内置规则库（10 条）、行为报告节、反混淆辅助（hex/base64/URL）、行为规则文件加载、评分阈值配置、调用图导出——均落地；CLI/API 维度以 REST 语言无关接口超越。
+- **下一竞争者（AndroBugs——已归档，字节码语义分析代表）差距**：① 字节码语义分析深化（SSL 无效校验器/证书校验绕过的语义检测——从 NSC 配置级升级到字节码语义级——中）；② 语义漏洞模式库（数据流感知的漏洞模式，与数据流跟踪结合——中）；③ 目录/库级批量扫描（海量模式——低）。已归档（不活跃）——效率（3-40s/APK）与活跃维护维度 DroidSeal 已超越。
 
 ### 边界说明（能力方向）
 
@@ -217,7 +218,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 - **综合框架**：~~MobSF~~（**已追平/超越——移出竞争名单**，功能面已全覆盖，见开发路线「下一阶段」）；QARK（LinkedIn，2019 停更——POC 生成，反编译不完整漏报）；APKHunt（2023 停更——MASTG 正则模式）；SUPER（停更——并行扫描快）。
 - **字节码/语义分析**：AndroBugs（**已归档**——修改版 Androguard 的字节码语义分析，效率与准确率高）；JAADAS（2017 停更——Soot 污点分析）；DroidStatx / Marvin / AUSERA / Trueseeing / SPECK（学术型，多已停更）。
-- **基础设施**：Androguard（解析库——多数工具的基础，非开箱审计）；APKiD（打包器/保护器识别）；Quark-Engine（恶意行为加权评分）；apkleaks（URI/端点/密钥提取）；mobsfscan / Semgrep（规则引擎，CI 可用）。
+- **基础设施**：Androguard（解析库——多数工具的基础，非开箱审计）；APKiD（打包器/保护器识别）；~~Quark-Engine~~（**已追平/超越——移出竞争名单**，见开发路线「下一阶段」）；apkleaks（URI/端点/密钥提取）；mobsfscan / Semgrep（规则引擎，CI 可用）。
 - **实证（arxiv 2410.20740，11 个 SAST 工具基准）**：分为源码/AST 模式匹配与字节码语义分析两类；召回差异大（MobSF 硬编码敏感数据 93.9%、AndroBugs 无效服务器校验 96.9%）；**共性痛点：误报率高、需人工验证**。
 - **DroidSeal 差异**：误报控制/置信度分级/交叉证据/失败关闭（正是免费工具的共同短板）；活跃维护（AndroBugs 已归档、QARK/APKHunt/JAADAS 停更）；本地优先 + 纯 TypeScript 自研解析；审计加固一体化 + 发布安全闭环。
 
@@ -228,7 +229,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **JAADAS / Marvin / AUSERA / Trueseeing**：污点/数据流分析（Soot/FlowDroid 追踪敏感数据源→汇）、可达性/调用链分析。
 - **QARK**：POC/exploit 生成（ADB 命令/APK）、教育性漏洞详解。
 - **APKiD**：打包器/保护器指纹识别（YARA 规则——检测壳/混淆器）。
-- **Androguard / Quark-Engine / apkleaks / mobsfscan / Semgrep / APKHunt**：通用可编程解析库、行为加权评分、专项密钥提取工具、规则引擎生态、规则与 OWASP MASTG 对齐。
+- **Androguard / ~~Quark-Engine~~ / apkleaks / mobsfscan / Semgrep / APKHunt**：通用可编程解析库、~~行为加权评分（已追平/超越——移出）~~、专项密钥提取工具、规则引擎生态、规则与 OWASP MASTG 对齐。
 - **汇总（12 项）**：动态分析、多平台、恶意检测、Web/REST 平台化、反编译浏览、数据流/污点分析、POC 生成、打包器指纹、规则生态、标准对齐、海量批量、教育性说明。
 - **平衡补充**：误报控制/置信度/交叉证据/失败关闭、审计加固一体化、发布安全闭环（门禁/证据/SBOM/修复包）、本地优先/纯 TS/活跃维护——竞争对手不具备；**最值得补的差距：① 数据流/污点跟踪 ② 打包器指纹识别 ③ Web/REST 平台化**。
 
