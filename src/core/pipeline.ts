@@ -21,6 +21,7 @@ import { scanProjectWeakCrypto } from "./weak-crypto.ts"
 import { loadCustomRules, applyCustomRulesToProject } from "./custom-rules.ts"
 import { scanProjectPrivacyApis } from "./privacy-collection.ts"
 import { scanProjectStorageSecurity } from "./storage-security.ts"
+import { scanProjectSslBypass } from "./ssl-bypass.ts"
 import { loadBehaviorRules, mergeBehaviorRules, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
 import { writeReports } from "./report.ts"
 import { selectedMissingTools } from "./tool-installer.ts"
@@ -585,6 +586,9 @@ export class Pipeline {
     // 源码侧证书固定缺失 + 明文存储审计(MobSF 缺口):低置信度提示,失败关闭
     const storageFindings = await scanProjectStorageSecurity(this.config.inputPath)
     this.context.audit.findings.push(...storageFindings)
+    // 源码侧 SSL 证书校验绕过检测(AndroBugs 差距①):失败关闭
+    const sslFindings = await scanProjectSslBypass(this.config.inputPath)
+    this.context.audit.findings.push(...sslFindings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [
         ...(this.context.audit.softwareComponents ?? []),

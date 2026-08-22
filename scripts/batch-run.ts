@@ -4,13 +4,15 @@
 //
 // 用法：
 //   bun scripts/batch-run.ts <manifest.json> [--base http://127.0.0.1:8787] [--token <token>]
+//   bun scripts/batch-run.ts --dir <APK目录> [--base ...] [--token ...]   # 目录/库级批量：扫描 *.apk 自动建清单
 //
 // 清单格式（与 POST /run 的 body 一致，另加 name）：
 //   [
 //     { "name": "app1", "inputKind": "apk", "inputPath": "C:/apks/app1.apk", "signingMode": "skip" },
 //     { "name": "app2", "inputKind": "apk", "inputPath": "C:/apks/app2.apk", "signingMode": "skip", "enableArscObfuscation": true }
 //   ]
-import { readFile } from "node:fs/promises"
+import { readFile, readdir } from "node:fs/promises"
+import path from "node:path"
 
 interface BatchItem {
   name: string
@@ -35,15 +37,33 @@ interface RunResponse {
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
-  const manifestPath = argv[0]
-  if (!manifestPath) throw new Error("用法: batch-run <清单.json> [--base http://127.0.0.1:8787] [--token <token>]")
+  const dirMode = argv[0] === "--dir"
+  const manifestPath = dirMode ? undefined : argv[0]
+  if (!dirMode && !manifestPath) throw new Error("用法: batch-run <清单.json> [--base http://127.0.0.1:8787] [--token <token>] 或 batch-run --dir <APK目录> [...]")
   let base = "http://127.0.0.1:8787"
   let token: string | undefined
-  for (let i = 1; i < argv.length; i += 1) {
+  const argStart = dirMode ? 1 : 1
+  for (let i = argStart; i < argv.length; i += 1) {
     if (argv[i] === "--base") base = argv[++i]!
     else if (argv[i] === "--token") token = argv[++i]!
   }
-  const items = JSON.parse(await readFile(manifestPath, "utf8")) as BatchItem[]
+  let items: BatchItem[]
+  if (dirMode) {
+    // 目录/库级批量（AndroBugs 差距③）：扫描目录下所有 *.apk，自动建清单
+    const dir = manifestPath ?? argv[1]!
+    const entries = await readdir(dir, { recursive: true }).catch(() => [] as string[])
+    const apks = entries.filter((entry) => entry.toLowerCase().endsWith(".apk"))
+    if (apks.length === 0) throw new Error(`目录中未找到 APK：${dir}`)
+    items = apks.map((entry) => ({
+      name: path.basename(entry),
+      inputKind: "apk",
+      inputPath: path.join(dir, entry),
+      signingMode: "skip",
+    }))
+    console.log(`目录批量模式：发现 ${items.length} 个 APK`)
+  } else {
+    items = JSON.parse(await readFile(manifestPath!, "utf8")) as BatchItem[]
+  }
   if (items.length === 0) throw new Error("清单为空")
   const headers: Record<string, string> = { "Content-Type": "application/json" }
   if (token) headers["Authorization"] = `Bearer ${token}`

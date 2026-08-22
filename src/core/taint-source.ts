@@ -27,13 +27,21 @@ const SINK_PATTERNS = [
   "sendtextmessage(",
   "startactivity(",
   "settext(",
+  "rawquery(",
+  "compilestatement(",
+  "runtime.exec(",
+  "processbuilder(",
 ]
+
+// 语义漏洞汇（AndroBugs 差距②——语义漏洞模式库）：源数据流入这些汇 → 注入/命令执行风险。
+const SEMANTIC_VULN_SINKS = ["execsql(", "rawquery(", "compilestatement(", "runtime.exec(", "processbuilder("]
 
 export interface DataflowMatch {
   line: number
   source: string
   sink: string
   snippet: string
+  vuln?: boolean
 }
 
 // 简化数据流：逐行扫描，源调用赋值给变量（记录变量→源），后续行中该变量出现在
@@ -60,7 +68,7 @@ export function scanTaintFlow(source: string): DataflowMatch[] {
       if (!line.includes(varName)) continue
       const sink = SINK_PATTERNS.find((s) => lower.includes(s))
       if (sink) {
-        matches.push({ line: i + 1, source: src, sink, snippet: line.trim().slice(0, 120) })
+        matches.push({ line: i + 1, source: src, sink, snippet: line.trim().slice(0, 120), vuln: SEMANTIC_VULN_SINKS.includes(sink) })
         break
       }
     }
@@ -99,11 +107,13 @@ export async function scanProjectDataflow(projectRoot: string): Promise<Finding[
     const relative = path.relative(projectRoot, file).replaceAll("\\", "/")
     for (const match of matches.slice(0, 3)) {
       findings.push({
-        severity: "low",
+        severity: match.vuln ? "medium" : "low",
         confidence: "medium",
-        code: "SOURCE_DATAFLOW",
-        title: "敏感数据可能流向高风险汇",
-        detail: `${relative}:${match.line} 中 ${match.source} 获取的数据可能流入 ${match.sink}（同函数内变量传播，启发式）。`,
+        code: match.vuln ? "SOURCE_SEMANTIC_VULN" : "SOURCE_DATAFLOW",
+        title: match.vuln
+          ? "敏感数据可能流入漏洞型汇（注入/命令执行）"
+          : "敏感数据可能流向高风险汇",
+        detail: `${relative}:${match.line} 中 ${match.source} 获取的数据可能流入 ${match.sink}（同函数内变量传播，启发式${match.vuln ? "；漏洞型汇——建议优先核验注入/命令执行风险" : ""}）。`,
         recommendation: "核对数据流向；敏感数据应避免写入日志/明文网络/WebView，必要时脱敏或移入服务端处理。",
         evidence: `${relative}:${match.line} ${match.snippet}`,
       })
