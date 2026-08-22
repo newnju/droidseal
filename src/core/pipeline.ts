@@ -14,9 +14,11 @@ import {
 } from "./capacitor-build.ts"
 import { gradleJvmArgsString, runProcess } from "./process.ts"
 import { auditProject, detectReleaseMinifyEnabled } from "./project-audit.ts"
-import { analyzeApksignerVerbose, analyzeCertPrint, buildSigningFindings } from "./signing-audit.ts"
+import { analyzeApksignerVerbose, analyzeCertPrint, buildSigningFindings, buildCertValidityFindings } from "./signing-audit.ts"
 import { compareSignatureSelfCheckFingerprints } from "./signature-self-check.ts"
 import { scanProjectDataflow } from "./taint-source.ts"
+import { scanProjectWeakCrypto } from "./weak-crypto.ts"
+import { loadCustomRules, applyCustomRulesToProject } from "./custom-rules.ts"
 import { writeReports } from "./report.ts"
 import { selectedMissingTools } from "./tool-installer.ts"
 import { discoverToolchain } from "./toolchain.ts"
@@ -565,6 +567,15 @@ export class Pipeline {
     // 源码侧敏感数据流/污点跟踪(高补强③):源→汇 的轻量传播,失败关闭
     const dataflowFindings = await scanProjectDataflow(this.config.inputPath)
     this.context.audit.findings.push(...dataflowFindings)
+    // 源码侧弱加密算法检测(短期②):AES-ECB/DES/硬编码 IV,失败关闭
+    const weakCryptoFindings = await scanProjectWeakCrypto(this.config.inputPath)
+    this.context.audit.findings.push(...weakCryptoFindings)
+    // 自定义规则(source 规则)应用(短期④):--rules 文件加载,失败关闭
+    if (this.config.customRulesFile) {
+      const customRules = await loadCustomRules(this.config.customRulesFile)
+      const customFindings = await applyCustomRulesToProject(customRules, this.config.inputPath)
+      this.context.audit.findings.push(...customFindings)
+    }
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [
         ...(this.context.audit.softwareComponents ?? []),
@@ -1708,6 +1719,7 @@ export class Pipeline {
       if (signatureVerified) {
         const { schemes, certs: apksignerCerts } = analyzeApksignerVerbose(signature.stdout)
         let certs = apksignerCerts
+        this.context.audit.findings.push(...buildCertValidityFindings(certs))
         if (toolchain.keytool.path) {
           const certPrint = await runProcess({
             command: toolchain.keytool.path,

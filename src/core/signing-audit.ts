@@ -209,3 +209,32 @@ export function buildSigningFindings(input: SigningFindingInput): Finding[] {
 
   return findings
 }
+
+// 证书有效期提示(下一阶段短期③——MobSF 缺口):过期/临近提示,失败关闭(无有效期信息即跳过)。
+export function buildCertValidityFindings(certs: readonly CertInfo[], now: Date = new Date()): Finding[] {
+  const findings: Finding[] = []
+  for (const cert of certs) {
+    if (!cert.validUntil) continue
+    const daysLeft = Math.floor((cert.validUntil.getTime() - now.getTime()) / 86_400_000)
+    if (daysLeft < 0) {
+      findings.push({
+        severity: "medium",
+        code: "SIGNING_CERT_EXPIRED",
+        title: "签名证书已过期",
+        detail: `证书已于 ${cert.validUntil.toISOString()} 过期（${-daysLeft} 天前）。过期证书可能导致应用更新/安装异常。`,
+        recommendation: "尽快生成新签名证书并轮换（signing-fingerprints.ts --expect 多指纹轮换）。",
+        evidence: cert.sha256 ?? cert.validUntil.toISOString(),
+      })
+    } else if (daysLeft <= 30) {
+      findings.push({
+        severity: "low",
+        code: "SIGNING_CERT_EXPIRING",
+        title: "签名证书临近过期",
+        detail: `证书将在 ${daysLeft} 天后（${cert.validUntil.toISOString()}）过期。`,
+        recommendation: "规划证书轮换；轮换前用 signing-fingerprints.ts 记录新旧指纹。",
+        evidence: cert.sha256 ?? cert.validUntil.toISOString(),
+      })
+    }
+  }
+  return findings
+}

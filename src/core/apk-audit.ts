@@ -16,6 +16,7 @@ import { buildPermissionFindings, type CustomPermission } from "./permissions-ca
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
 import { estimateEncryptableStrings } from "./dex-string-crypto.ts"
+import { buildEndpointFindings } from "./endpoint-extract.ts"
 import { buildPackerFindings } from "./packers.ts"
 import { analyzeElf, buildSoFindings } from "./elf-scan.ts"
 import { compareKnownVulnerabilities } from "./known-vulnerabilities.ts"
@@ -971,6 +972,7 @@ async function scanDexFiles(
     })
     findings.push(...compareKnownVulnerabilities(sdks))
     findings.push(...buildPackerFindings(combined))
+    findings.push(...buildEndpointFindings(combined))
     const encryptable = estimateEncryptableStrings(combined)
     if (encryptable.length > 0) {
       findings.push({
