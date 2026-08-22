@@ -43,6 +43,7 @@ const en = {
   phaseHarden: "Harden",
   phaseRelease: "Release",
   stepOptionalOff: "optional, off",
+  gateBannerFindings: "Findings: {count} (critical {critical} / high {high}); release gate: {gate} ({codes} reason codes)",
 
   // 输入区
   composerPlaceholder: "Type a message or /help · or drag a file here",
@@ -446,6 +447,7 @@ const zh: Record<keyof typeof en, string> = {
   phaseHarden: "加固",
   phaseRelease: "发布",
   stepOptionalOff: "可选未开启",
+  gateBannerFindings: "发现数：{count}（critical {critical} / high {high}）；发布门禁：{gate}（{codes} 个原因 code）",
 
   composerPlaceholder: "输入消息或 /help · 或拖动文件到此处",
   secretPlaceholder: "请输入后确认",
@@ -801,8 +803,10 @@ export type I18nKey = keyof typeof en
 
 const dict = { en, zh } as const
 
-export function t(key: I18nKey): string {
-  return dict[language()][key]
+export function t(key: I18nKey, params?: Record<string, string>): string {
+  const value = dict[language()][key]
+  if (!params) return value
+  return value.replace(/\{(\w+)\}/g, (match, name: string) => params[name] ?? match)
 }
 
 // 步骤标题按 id 查翻译(侧栏/消息使用)

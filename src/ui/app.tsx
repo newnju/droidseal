@@ -651,7 +651,13 @@ export function App() {
     const gate = evaluateReleaseDecision(active.context)
     addMessage(failed.length === 0 ? "success" : "warning", "全部步骤已处理", [
       `已处理：${active.getSteps().length}/${active.getSteps().length}；其中成功：${successCount()}；跳过：${skipped.length}；失败并回退：${failed.length}。请以“已处理”判断流程是否走完。`,
-      `发现数：${findingsCount}（critical ${criticalCount} / high ${highCount}）；发布门禁：${gate.status}（${gate.reasonCodes.length} 个原因 code）。`,
+      t("gateBannerFindings", {
+        count: String(findingsCount),
+        critical: String(criticalCount),
+        high: String(highCount),
+        gate: gate.status,
+        codes: String(gate.reasonCodes.length),
+      }),
       ...(skipped.length > 0
         ? [`跳过原因：${skipped.map((step) => `${step.title}（${skipKindLabel(step.result?.skipKind)}）`).join("、")}。跳过不等于失败。`]
         : []),

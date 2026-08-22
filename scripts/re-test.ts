@@ -141,6 +141,9 @@ async function main(): Promise<void> {
       if (process.argv.includes("--fail-on-remaining") && remaining.length > 0) {
         console.error(`\n仍有 ${remaining.length} 个 finding 未消除——--fail-on-remaining 触发，复测失败（CI 门禁）。`)
         process.exitCode = 1
+      } else if (gateStatus === "block" && remaining.length > 0) {
+        console.error(`\n复测门禁 block：仍有 ${remaining.length} 个 finding 未消除（gateStatus 门禁，复测失败）。`)
+        process.exitCode = 1
       }
     }
   } else if (auto && !jsonOutput) {

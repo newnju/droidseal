@@ -73,6 +73,12 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - TUI 运行完成门禁横幅新增严重度统计（critical/high 计数）；侧栏可选步骤（Web JS/资源名混淆）未开启时行内标注「可选未开启」。
 - `re-test.ts` 新增 `--fail-on-remaining`：剩余 finding 未消除时非零退出（CI 门禁）。
 - `known-vuln-check.ts` 新增 affected 字段格式校验（非空字符串或省略）。
+- i18n 补键：阶段分组头（准备/审计/加固/发布）与可选步骤提示的中英文键（TUI 语言切换即时生效）。
+- `preflight.ts` 新增 `--skip-test`：CI 快速门禁（跳过慢测试门禁）。
+- 报告门禁原因的 Markdown 新增严重度标注（`[严重度 X]`）。
+- `known-vuln-check.ts` 新增 fixedIn 字段格式校验。
+- CI 工作流 verify 门禁改用 `preflight.ts --json`（机器可读输出入 CI 日志）。
+- `re-test.ts` 新增门禁状态输出（`gateStatus`：剩余 finding 为 block，否则 pass）。
 
 #### 文档
 

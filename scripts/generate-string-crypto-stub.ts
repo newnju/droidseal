@@ -151,9 +151,13 @@ async function main(): Promise<void> {
       if (!args.strings.has(name)) args.strings.set(name, value)
     }
   }
-  const key = args.keyHex
+  const rotate = process.argv.includes("--rotate")
+  const key = args.keyHex && !rotate
     ? Uint8Array.from(args.keyHex.match(/.{2}/g)!.map((h) => Number.parseInt(h, 16)))
     : generateKey()
+  if (rotate) {
+    console.log("密钥轮换：已生成新密钥（旧密文将失效——需全量重新生成并更新客户端）。")
+  }
   const keyHex = toHex(key)
   const fingerprint = keyFingerprint(key)
   const ciphers = new Map<string, string>()

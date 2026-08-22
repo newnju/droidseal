@@ -274,7 +274,7 @@ describe("release evidence archive", () => {
     }
     const markdown = await readFile(reportPaths.markdown, "utf8")
 
-    expect(json.schemaVersion).toBe(7)
+    expect(json.schemaVersion).toBe(8)
     expect(json.releaseEvidence.status).toBe("complete")
     expect(json.releaseEvidence.variant).toBe("release")
     expect(json.releaseEvidence.manifest).toBe(reportPaths.releaseEvidenceManifest)

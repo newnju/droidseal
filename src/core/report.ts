@@ -114,6 +114,7 @@ async function buildHardeningEffectiveness(context: RunContext): Promise<Record<
   const dimensions = [
     { key: "signatureVerification", covered: context.signatureVerified === true },
     { key: "apkAudit", covered: stepOk("apk-audit") },
+    { key: "nativeAudit", covered: stepOk("apk-audit") },
     { key: "debuggableNormalization", covered: stepOk("harden") },
     { key: "resourceNameObfuscation", covered: stepOk("arsc-obfuscate") },
     { key: "webAssetProcessing", covered: stepOk("web-assets") },
@@ -437,7 +438,7 @@ export async function writeReports(
   const remediation = await writeRemediationBundle(context.reportDirectory, sortedFindings)
 
   const json = {
-    schemaVersion: 7,
+    schemaVersion: 8,
     product: "DroidSeal",
     edition: EDITION,
     generatedAt,
