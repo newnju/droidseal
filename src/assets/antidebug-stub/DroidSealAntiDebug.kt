@@ -310,6 +310,37 @@ object DroidSealAntiDebug {
         }
     }
 
+    /**
+     * 服务端协作上报：把当前检测信号汇总为 JSON 字符串（只报告，不阻断）。
+     * 字段含 inspect() 快照、完整性、签名、模拟器、VPN/代理、时钟异常；宿主上报后由服务端决策。
+     */
+    fun signalsToJson(
+        contentResolver: ContentResolver?,
+        apkPath: String?,
+        expectedSha256: String?,
+        expectedFingerprints: Set<String>?,
+        packageManager: PackageManager?,
+        packageName: String?,
+    ): String {
+        val report = inspect()
+        val integrity = apkPath?.let { checkApkIntegrity(it, expectedSha256) } ?: true
+        val signature = packageManager?.let { checkApkSignature(it, packageName ?: "", expectedFingerprints) } ?: true
+        return buildString {
+            append("{")
+            append("\"nativeAvailable\":").append(report.nativeAvailable).append(",")
+            append("\"tracerPid\":").append(report.tracerPid).append(",")
+            append("\"injectionArtifacts\":").append(report.injectionArtifacts).append(",")
+            append("\"javaDebuggerConnected\":").append(report.javaDebuggerConnected).append(",")
+            append("\"waitingForDebugger\":").append(report.waitingForDebugger).append(",")
+            append("\"integrityOk\":").append(integrity).append(",")
+            append("\"signatureOk\":").append(signature).append(",")
+            append("\"emulator\":").append(checkEmulator()).append(",")
+            append("\"vpnOrProxy\":").append(checkVpnProxy(contentResolver)).append(",")
+            append("\"clockAnomaly\":").append(checkClockAnomaly())
+            append("}")
+        }
+    }
+
     private external fun nativeTracerPid(): Int
 
     private external fun nativeHasInjectionArtifacts(): Boolean
