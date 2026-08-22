@@ -47,6 +47,11 @@ const en = {
   gateBannerFindings: "Findings: {count} (critical {critical} / high {high}); release gate: {gate} ({codes} reason codes)",
   gateBannerSummary: "Processed {total}/{total} steps: {success} succeeded, {skipped} skipped, {failed} failed and rolled back. Use 'processed' to judge the flow.",
   gateBannerSkipped: "Skip reasons: {reasons}. Skipped is not a failure.",
+  gateBannerFinalArtifact: "Final APK: {path}",
+  gateBannerNoArtifact: "No final APK generated — fix per the failed steps and retry.",
+  gateBannerSignatureVerified: "Signature: apksigner verified.",
+  gateBannerSignatureInvalid: "Signature: unsigned or invalid.",
+  gateBannerSignatureUnverified: "Signature: not verified.",
 
   // 输入区
   composerPlaceholder: "Type a message or /help · or drag a file here",
@@ -454,6 +459,11 @@ const zh: Record<keyof typeof en, string> = {
   gateBannerFindings: "发现数：{count}（critical {critical} / high {high}）；发布门禁：{gate}（{codes} 个原因 code）",
   gateBannerSummary: "已处理：{total}/{total}；其中成功：{success}；跳过：{skipped}；失败并回退：{failed}。请以“已处理”判断流程是否走完。",
   gateBannerSkipped: "跳过原因：{reasons}。跳过不等于失败。",
+  gateBannerFinalArtifact: "最终 APK：{path}",
+  gateBannerNoArtifact: "没有生成最终 APK，请根据失败步骤解释修复后重试。",
+  gateBannerSignatureVerified: "签名状态：apksigner 验证通过。",
+  gateBannerSignatureInvalid: "签名状态：未签名或签名无效。",
+  gateBannerSignatureUnverified: "签名状态：未验证。",
 
   composerPlaceholder: "输入消息或 /help · 或拖动文件到此处",
   secretPlaceholder: "请输入后确认",

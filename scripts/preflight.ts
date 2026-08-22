@@ -4,7 +4,10 @@
 // 全部通过才适合继续发布流程（版本号同步、打 tag、npm publish、twine 等）。
 //
 // 用法：
-//   bun scripts/preflight.ts
+//   bun scripts/preflight.ts                     # 完整门禁（type-check + test + release-check + data-tables）
+//   bun scripts/preflight.ts --json              # 门禁结果 JSON 输出（CI 消费，失败带错误尾部）
+//   bun scripts/preflight.ts --skip-test         # 快速门禁（跳过慢测试门禁）
+//   bun scripts/preflight.ts --json --skip-test  # 组合
 import { spawnSync } from "node:child_process"
 
 const GATES: Array<{ name: string; command: string; args: string[] }> = [

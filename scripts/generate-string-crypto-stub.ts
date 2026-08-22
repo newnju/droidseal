@@ -8,7 +8,8 @@
 //   bun scripts/generate-string-crypto-stub.ts \
 //     --string "apiKey=AIza..." --string "endpoint=https://..." \
 //     --output src/main/kotlin/io/example/secrets \
-//     [--key <hex>]
+//     [--key <hex>] [--rotate]  # 固定密钥 / 强制轮换新密钥（旧密文失效需全量重新生成）
+//     [--verify]                # 密文回程验证（失败关闭）
 //   # 自动扫描：从 droidseal-report.json 提取审计发现的敏感串（HARDCODED_SECRET 等）
 //   bun scripts/generate-string-crypto-stub.ts \
 //     --from-audit droidseal-report.json --output src/main/kotlin/io/example/secrets
