@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DroidSeal · 本地发布安全平台</title>
+<style>
+:root {
+  --bg: #0b1220;
+  --bg-card: #111a2e;
+  --bg-card-hover: #16223c;
+  --border: #233252;
+  --text: #dbe4f4;
+  --text-muted: #8fa0c0;
+  --accent: #22d3ee;
+  --accent-strong: #0ea5e9;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #60a5fa;
+  --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: radial-gradient(1200px 600px at 20% -10%, #14233f 0%, var(--bg) 60%);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  min-height: 100vh;
+}
+.wrap { max-width: 1000px; margin: 0 auto; padding: 28px 24px 60px; }
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 24px;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo {
+  width: 36px; height: 36px; border-radius: 9px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  display: grid; place-items: center; font-weight: 800; color: #04222e; font-size: 16px;
+}
+.brand h1 { font-size: 19px; font-weight: 700; letter-spacing: .3px; }
+.brand small { display: block; color: var(--text-muted); font-size: 12px; font-weight: 400; margin-top: 2px; }
+.status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
+.card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 20px; margin-bottom: 20px;
+}
+.card h2 { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.card h2 .tag { font-size: 11px; color: var(--text-muted); font-weight: 400; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 5px; }
+input[type=text], input[type=password], select {
+  width: 100%; background: #0c1526; border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); padding: 9px 11px; font-size: 13px; outline: none; margin-bottom: 12px;
+}
+input:focus, select:focus { border-color: var(--accent-strong); box-shadow: 0 0 0 3px rgba(14,165,233,.15); }
+.checks { display: flex; flex-wrap: wrap; gap: 14px; margin: 6px 0 14px; }
+.checks label { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; cursor: pointer; margin: 0; }
+button {
+  border: 0; border-radius: 9px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong)); color: #04222e; transition: opacity .15s;
+}
+button:hover { opacity: .88; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.banner { border-radius: 10px; padding: 14px 16px; font-size: 13px; display: none; margin-bottom: 14px; }
+.banner.pass { display: block; background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.35); color: var(--success); }
+.banner.review { display: block; background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.35); color: var(--warning); }
+.banner.block { display: block; background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.35); color: var(--danger); }
+.banner.error { display: block; background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.25); color: var(--danger); }
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.metric { background: #0c1526; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.metric .k { font-size: 11px; color: var(--text-muted); }
+.metric .v { font-size: 20px; font-weight: 700; margin-top: 3px; }
+.metric .v.pass { color: var(--success); } .metric .v.review { color: var(--warning); } .metric .v.block { color: var(--danger); }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; color: var(--text-muted); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid rgba(35,50,82,.6); vertical-align: top; }
+tr:hover td { background: var(--bg-card-hover); }
+.chip { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.chip.critical { background: rgba(248,113,113,.15); color: var(--danger); }
+.chip.high { background: rgba(251,146,60,.15); color: #fb923c; }
+.chip.medium { background: rgba(251,191,36,.15); color: var(--warning); }
+.chip.low { background: rgba(96,165,250,.15); color: var(--info); }
+.chip.info { background: rgba(143,160,192,.15); color: var(--text-muted); }
+.code { font-family: var(--mono); font-size: 11.5px; color: var(--accent); }
+.steps { display: flex; flex-wrap: wrap; gap: 6px; }
+.step-pill { font-size: 11px; padding: 3px 9px; border-radius: 20px; border: 1px solid var(--border); color: var(--text-muted); }
+.step-pill.success { color: var(--success); border-color: rgba(52,211,153,.35); }
+.step-pill.skipped { color: var(--warning); border-color: rgba(251,191,36,.3); }
+.step-pill.failed { color: var(--danger); border-color: rgba(248,113,113,.35); }
+.hist { display: flex; flex-direction: column; gap: 8px; }
+.hist-item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; transition: background .12s; }
+.hist-item:hover { background: var(--bg-card-hover); }
+.hist-item .id { font-family: var(--mono); font-size: 12px; }
+.hist-item .meta { margin-left: auto; font-size: 12px; color: var(--text-muted); display: flex; gap: 10px; align-items: center; }
+.filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.filters button { padding: 6px 14px; font-size: 12px; background: #0c1526; border: 1px solid var(--border); color: var(--text); border-radius: 20px; }
+.filters button.active { background: var(--accent-strong); color: #04222e; border-color: var(--accent-strong); }
+.spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(4,34,46,.3); border-top-color: #04222e; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+footer { margin-top: 26px; text-align: center; font-size: 11.5px; color: var(--text-muted); }
+.empty { color: var(--text-muted); font-size: 13px; padding: 10px 0; }
+@media (max-width: 720px) { .grid2, .metrics { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">DS</div>
+      <div>
+        <h1>DroidSeal</h1>
+        <small>本地发布安全平台 · Local-first · 不联网</small>
+      </div>
+    </div>
+    <div class="status"><span class="dot"></span> 服务运行中 · 127.0.0.1</div>
+  </header>
+
+  <div class="card">
+    <h2>运行流水线 <span class="tag">审计 → 加固 → 签名 → 验证</span></h2>
+    <div class="grid2">
+      <div>
+        <label>输入类型</label>
+        <select id="kind"><option value="apk">APK 文件</option><option value="project">Android 项目目录</option></select>
+      </div>
+      <div>
+        <label>输入路径</label>
+        <input id="inputPath" placeholder="C:/path/app.apk 或 C:/path/android">
+      </div>
+    </div>
+    <div class="grid2">
+      <div>
+        <label>签名方式</label>
+        <select id="signing"><option value="skip">不签名（仅审计）</option><option value="existing">使用现有签名库</option></select>
+      </div>
+      <div>
+        <label>签名库路径 / 别名（可选）</label>
+        <input id="keystore" placeholder="C:/path/release.jks"><input id="alias" placeholder="别名">
+      </div>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="web"> Web JS 处理</label>
+      <label><input type="checkbox" id="arsc"> 资源名混淆</label>
+      <label><input type="checkbox" id="learning"> 测试与学习模式</label>
+    </div>
+    <button id="runBtn"><span class="spinner" id="spin"></span>运行流水线</button>
+  </div>
+
+  <div id="banner" class="banner"></div>
+  <div class="card" id="resultCard" style="display:none">
+    <h2>运行结果</h2>
+    <div class="metrics" id="metrics"></div>
+    <h2 style="font-size:13px">步骤状态</h2>
+    <div class="steps" id="steps"></div>
+    <h2 style="font-size:13px; margin-top:18px">发现（<span id="fcount">0</span>）</h2>
+    <div class="filters" id="filters"></div>
+    <table>
+      <thead><tr><th>严重度</th><th>代码</th><th>标题</th><th>置信度</th><th>证据</th></tr></thead>
+      <tbody id="findings"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>运行历史 <span class="tag">点击查看 · 最多 10 条</span></h2>
+    <div class="hist" id="runs"><div class="empty">加载中…</div></div>
+  </div>
+
+  <footer>DroidSeal Web · 本地优先（127.0.0.1）· 失败不覆盖 · 报告与门禁由 DroidSeal 流水线生成</footer>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let currentRun = null, currentSeverity = '';
+
+document.getElementById('f') ? null : null;
+$('runBtn').addEventListener('click', run);
+$('kind').addEventListener('change', () => {
+  $('signing').options.length = 2;
+});
+
+async function run() {
+  const body = {
+    inputKind: $('kind').value,
+    inputPath: $('inputPath').value,
+    signingMode: $('signing').value,
+    keystorePath: $('keystore').value || undefined,
+    keyAlias: $('alias').value || undefined,
+    storePassword: undefined,
+    enableWebAssetMinification: $('web').checked,
+    enableArscObfuscation: $('arsc').checked,
+    keepIntermediates: $('learning').checked,
+  };
+  $('banner').className = 'banner';
+  $('banner').style.display = 'none';
+  $('spin').style.display = 'inline-block';
+  $('runBtn').disabled = true;
+  const res = await fetch('/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json();
+  $('spin').style.display = 'none';
+  $('runBtn').disabled = false;
+  if (!data.ok) {
+    showError(data.error && data.error.message ? data.error.message : '运行失败');
+    return;
+  }
+  showBanner('pass', '流水线完成：' + (data.steps ? data.steps.filter(s => s.status === 'success').length : 0) + ' 步成功');
+  loadRuns();
+  const runs = await (await fetch('/runs')).json();
+  if (runs.runs && runs.runs.length > 0) loadRun(runs.runs[0].runId);
+}
+
+function showError(msg) { $('banner').className = 'banner error'; $('banner').textContent = msg; $('banner').style.display = 'block'; }
+function showBanner(kind, msg) { $('banner').className = 'banner ' + kind; $('banner').textContent = msg; $('banner').style.display = 'block'; }
+
+async function loadRuns() {
+  const data = await (await fetch('/runs')).json();
+  const list = $('runs');
+  if (!data.runs || data.runs.length === 0) { list.innerHTML = '<div class="empty">暂无运行历史</div>'; return; }
+  list.innerHTML = data.runs.map(r => {
+    const chip = r.status ? '<span class="chip ' + r.status + '">' + r.status + '</span>' : '<span class="chip info">unknown</span>';
+    return '<div class="hist-item" onclick="loadRun(\'' + r.runId + '\')"><span class="id">' + r.runId + '</span><span class="meta">' + r.findingsCount + ' 发现' + chip + '</span></div>';
+  }).join('');
+}
+
+async function loadRun(id) {
+  currentRun = id;
+  currentSeverity = '';
+  const [detail, findingData] = await Promise.all([
+    fetch('/runs/' + id), fetch('/runs/' + id + '/findings'),
+  ]);
+  const detailJson = await detail.json();
+  const findingJson = await findingData.json();
+  const findings = findingJson.findings || [];
+  $('resultCard').style.display = 'block';
+  showBanner(detailJson.status || 'pass', '运行 ' + id + ' · 门禁 ' + (detailJson.status || 'unknown'));
+  $('metrics').innerHTML = [
+    ['门禁状态', '<span class="v ' + (detailJson.status || 'pass') + '">' + (detailJson.status || 'unknown') + '</span>'],
+    ['发现数', '<span class="v">' + detailJson.findingsCount + '</span>'],
+    ['运行 ID', '<span class="v" style="font-size:13px">' + id.slice(0, 12) + '…</span>'],
+    ['严重度', '<span class="v">critical ' + findings.filter(f => f.severity === 'critical').length + '</span>'],
+  ].map(m => '<div class="metric"><div class="k">' + m[0] + '</div><div>' + m[1] + '</div></div>').join('');
+  renderFindings(findings);
+  loadSteps(id);
+}
+
+function renderFindings(findings) {
+  const severities = ['critical', 'high', 'medium', 'low', 'info'];
+  $('fcount').textContent = findings.length;
+  $('filters').innerHTML = ['<button class="active" onclick="setSeverity(\'\')">全部</button>']
+    .concat(severities.map(s => '<button' + (currentSeverity === s ? ' class="active"' : '') + ' onclick="setSeverity(\'' + s + '\')">' + s + ' ' + findings.filter(f => f.severity === s).length + '</button>'))
+    .join('');
+  const filtered = currentSeverity ? findings.filter(f => f.severity === currentSeverity) : findings;
+  $('findings').innerHTML = filtered.length === 0
+    ? '<tr><td colspan="5" class="empty">无发现</td></tr>'
+    : filtered.map(f => '<tr><td><span class="chip ' + (f.severity || 'info') + '">' + (f.severity || 'info') + '</span></td><td class="code">' + (f.code || '') + '</td><td>' + (f.title || '') + '</td><td>' + (f.confidence || '') + '</td><td style="max-width:260px;word-break:break-all">' + (f.evidence || '') + '</td></tr>').join('');
+}
+
+async function setSeverity(s) { currentSeverity = s; const d = await (await fetch('/runs/' + currentRun + '/findings')).json(); renderFindings(d.findings || []); }
+
+async function loadSteps(id) {
+  const report = await (await fetch('/reports/' + id + '/reports/droidseal-report.json')).catch(() => null);
+  if (!report) return;
+  const json = await report.json();
+  const steps = json.steps || [];
+  $('steps').innerHTML = steps.length === 0 ? '<span class="empty">无步骤信息</span>' : steps.map(s => '<span class="step-pill ' + s.status + '">' + (s.id || '') + ' · ' + s.status + '</span>').join('');
+}
+
+loadRuns();
+</script>
+</body>
+</html>

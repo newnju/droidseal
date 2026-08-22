@@ -121,75 +121,8 @@ function errorResponse(code: string, message: string, status: number): Response 
 // 运行串行化:同一时刻只允许一个流水线运行
 let running = false
 
-const WEB_UI = `<!doctype html>
-<html lang="zh"><head><meta charset="utf-8"><title>DroidSeal Web</title>
-<style>body{font-family:system-ui;max-width:860px;margin:24px auto;padding:0 16px;color:#222}
-pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow:auto}input,select{width:100%;margin:4px 0 10px;padding:6px}
-button{padding:8px 18px;cursor:pointer}</style></head><body>
-<h2>DroidSeal Web（本地 127.0.0.1）</h2>
-<form id="f">
-<label>输入类型</label><select id="kind"><option value="apk">APK</option><option value="project">项目目录</option></select>
-<label>输入路径</label><input id="inputPath" placeholder="C:/path/app.apk 或 C:/path/android">
-<label>签名</label><select id="signing"><option value="skip">不签名</option><option value="existing">使用签名库</option></select>
-<label>签名库路径(optional)</label><input id="keystore"><label>别名(optional)</label><input id="alias">
-<label>store 密码(optional)</label><input id="store" type="password">
-<label><input type="checkbox" id="web"> 开启 Web JS 处理</label>
-<label><input type="checkbox" id="arsc"> 开启资源名混淆</label>
-<label><input type="checkbox" id="learning"> 测试与学习模式(保留中间产物)</label>
-<button type="submit">运行流水线</button></form>
-<h3>结果</h3><pre id="out">等待运行…</pre>
-<h3>运行历史（点击查看详情，可筛选严重度）</h3>
-<div id="filters">
-  <button onclick="loadRunWithFilter('')">全部</button>
-  <button onclick="loadRunWithFilter('critical')">critical</button>
-  <button onclick="loadRunWithFilter('high')">high</button>
-  <button onclick="loadRunWithFilter('medium')">medium</button>
-</div>
-<div id="runs">加载中…</div>
-<script>
-const form = document.getElementById('f');
-let currentRun = null;
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const body = {
-    inputKind: document.getElementById('kind').value,
-    inputPath: document.getElementById('inputPath').value,
-    signingMode: document.getElementById('signing').value,
-    keystorePath: document.getElementById('keystore').value || undefined,
-    keyAlias: document.getElementById('alias').value || undefined,
-    storePassword: document.getElementById('store').value || undefined,
-    enableWebAssetMinification: document.getElementById('web').checked,
-    enableArscObfuscation: document.getElementById('arsc').checked,
-    keepIntermediates: document.getElementById('learning').checked,
-  };
-  document.getElementById('out').textContent = '运行中…';
-  const res = await fetch('/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  document.getElementById('out').textContent = JSON.stringify(await res.json(), null, 2);
-  loadRuns();
-});
-async function loadRuns() {
-  const res = await fetch('/runs');
-  const data = await res.json();
-  const list = document.getElementById('runs');
-  list.innerHTML = (data.runs || []).map(r =>
-    '<div style="cursor:pointer;margin:2px 0" onclick="loadRun(\'' + r.runId + '\')">' + r.runId + ' — 门禁 ' + (r.status || 'unknown') + ' — ' + r.findingsCount + ' 发现</div>'
-  ).join('') || '暂无运行历史';
-}
-async function loadRun(id) {
-  currentRun = id;
-  await loadRunWithFilter('');
-}
-async function loadRunWithFilter(severity) {
-  if (!currentRun) return;
-  const url = '/runs/' + currentRun + '/findings' + (severity ? '?severity=' + severity : '');
-  const res = await fetch(url);
-  const data = await res.json();
-  const findings = data.findings || [];
-  const summary = findings.reduce((acc, f) => { const key = f.severity || 'unknown'; acc[key] = (acc[key] || 0) + 1; return acc; }, {});
-  document.getElementById('out').textContent = '运行 ' + currentRun + '（' + (severity || '全部') + '）：' + findings.length + ' 个发现\n严重度分布：' + JSON.stringify(summary, null, 2) + '\n\n' + JSON.stringify(findings, null, 2);
-}
-loadRuns();
-</script></body></html>`
+// 专业 Web UI 由启动时读取 scripts/web-ui.html（与脚本同目录）
+let webUi = ""
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
@@ -200,6 +133,7 @@ async function main(): Promise<void> {
     else if (argv[i] === "--output") outputDir = path.resolve(argv[++i]!)
   }
   const token = process.env.DROIDSEAL_SERVER_TOKEN
+  webUi = await readFile(path.join(import.meta.dir, "web-ui.html"), "utf8")
 
   const server = Bun.serve({
     port,
@@ -264,7 +198,7 @@ async function main(): Promise<void> {
         })
       }
       if (request.method === "GET" && url.pathname === "/") {
-        return new Response(WEB_UI, { headers: { "Content-Type": "text/html; charset=utf-8" } })
+        return new Response(webUi, { headers: { "Content-Type": "text/html; charset=utf-8" } })
       }
       return errorResponse("NOT_FOUND", "not found", 404)
     },
