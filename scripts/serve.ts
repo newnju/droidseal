@@ -1,13 +1,16 @@
 #!/usr/bin/env bun
-// 本地 Web UI / REST API 服务（差距分析高补强①：平台化）。
+// 本地 REST API 服务（差距分析高补强①：平台化；Web UI 已移除，批量/CI 使用 REST）。
 // 只绑定 127.0.0.1（本地优先、不对外联网）；设置 DROIDSEAL_SERVER_TOKEN 时要求
 // Authorization: Bearer <token>。零运行时依赖（Bun.serve）。
 //
 // 用法：
 //   bun scripts/serve.ts [--port 8787] [--output <目录>]
-//   POST /run           提交运行配置（JSON），跑完整流水线，返回报告路径与门禁
+//   POST /run           提交运行配置（JSON），跑完整流水线，返回步骤状态
+//   GET  /runs          运行历史（门禁状态 + 发现数）
+//   GET  /runs/:id      运行详情
+//   GET  /runs/:id/findings  读取运行的发现（?severity= 筛选）
 //   GET  /reports/<path> 读取输出目录下的报告文件（json/md）
-//   GET  /              返回 Web UI（运行表单 + 报告浏览）
+//   GET  /health         健康检查
 import { Pipeline } from "../src/core/pipeline.ts"
 import type { PipelineConfig, StepId } from "../src/core/types.ts"
 import { readFile, readdir } from "node:fs/promises"
@@ -130,7 +133,6 @@ async function main(): Promise<void> {
     else if (argv[i] === "--output") outputDir = path.resolve(argv[++i]!)
   }
   const token = process.env.DROIDSEAL_SERVER_TOKEN
-  const noWeb = process.argv.includes("--no-web")
 
   const server = Bun.serve({
     port,
@@ -194,18 +196,10 @@ async function main(): Promise<void> {
           headers: { "Content-Type": relative.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8" },
         })
       }
-      if (request.method === "GET" && url.pathname === "/") {
-        if (noWeb) {
-          return errorResponse("WEB_DISABLED", "REST-only 模式(--no-web)：Web UI 已禁用，请使用 REST API（/health /runs /run /reports）", 404)
-        }
-        // 每次请求读取 web-ui.html：修改文件后无需重启即可看到变化
-        const page = await readFile(path.join(import.meta.dir, "web-ui.html"), "utf8").catch(() => "")
-        return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } })
-      }
       return errorResponse("NOT_FOUND", "not found", 404)
     },
   })
-  console.log(`DroidSeal Web 服务：http://127.0.0.1:${server.port}（输出目录 ${outputDir}${token ? "，已启用 token 认证" : ""}${noWeb ? "，REST-only 模式（Web UI 已禁用）" : ""}）`)
+  console.log(`DroidSeal REST 服务：http://127.0.0.1:${server.port}（输出目录 ${outputDir}${token ? "，已启用 token 认证" : ""}）`)
 }
 
 main().catch((error) => {
