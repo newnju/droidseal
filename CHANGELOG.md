@@ -59,6 +59,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - assets 资源轻量加密工具（`scripts/encrypt-assets.ts`）：构建期加密 + `manifest.json` 生成（与字符串加密桩同模式）。
 - DEX 方法混淆设备验证清单生成器（`scripts/generate-device-checklist.ts`）：7 项真机矩阵清单。
 - 签名指纹管理脚本（`scripts/signing-fingerprints.ts`）：keytool 指纹清单 + `--expect` 多指纹校验，密码仅从环境变量读取。
+- `encrypt-assets.ts` 新增 `--gen-reader`：生成 `AssetsReader.kt` 解密器（嵌入密钥与清单，运行时按清单解密 `.enc`，源码接入完整化）。
+- `preflight.ts` 新增 `--json`（门禁结果机器可读输出）并集成 `known-vuln-check`（数据表一致性门禁，共 4 项）。
+- `generate-string-crypto-stub.ts` 新增 `--verify`：密文回程验证（每个密文解密回原文，失败关闭）。
+- `re-test.ts` 新增 `--json`：复测结果机器可读（消除/新增/剩余 + `gateSuggestion` 门禁建议）。
 
 #### 文档
 

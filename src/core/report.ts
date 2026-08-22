@@ -1,5 +1,5 @@
 import path from "node:path"
-import { mkdir, stat, writeFile } from "node:fs/promises"
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises"
 import { EDITION } from "../brand.ts"
 import { writeRemediationBundle } from "./remediation.ts"
 import { writeReleaseEvidence, type ReleaseEvidenceResult } from "./release-evidence.ts"
@@ -73,6 +73,27 @@ export function publicConfig(config: PipelineConfig): Record<string, unknown> {
     enableArscObfuscation: config.enableArscObfuscation ?? false,
     signing: publicSigningConfig(config.signing),
     protection: { mode: config.protection.mode },
+  }
+}
+
+// 报告历史对比:与上一次运行(输出目录 runs 的倒数第二个)的发现对比
+async function buildPreviousRunComparison(context: RunContext): Promise<Record<string, unknown> | null> {
+  const runsRoot = path.join(context.config?.outputDirectory ?? "", ".droidseal", "runs")
+  const ids = await readdir(runsRoot).catch(() => [] as string[])
+  if (ids.length < 2) return null
+  ids.sort()
+  const previousId = ids[ids.length - 2]!
+  const previousReport = path.join(runsRoot, previousId, "reports", "droidseal-report.json")
+  const previous = await readFile(previousReport, "utf8").catch(() => null)
+  if (!previous) return null
+  const prev = JSON.parse(previous) as { audit?: { findings?: Array<{ code?: string }> } }
+  const prevCodes = new Set((prev.audit?.findings ?? []).map((f) => f.code ?? "").filter(Boolean))
+  const currentCodes = new Set(context.audit.findings.map((f) => f.code).filter(Boolean))
+  return {
+    previousRunId: previousId,
+    eliminated: [...prevCodes].filter((c) => !currentCodes.has(c)),
+    added: [...currentCodes].filter((c) => !prevCodes.has(c)),
+    remaining: [...prevCodes].filter((c) => currentCodes.has(c)),
   }
 }
 
@@ -432,6 +453,7 @@ export async function writeReports(
     releaseDecision,
     controlCoverage,
     hardeningEffectiveness: await buildHardeningEffectiveness(context),
+    previousRun: await buildPreviousRunComparison(context),
     audit: {
       findings: sortedFindings,
       signatureSelfChecks: (context.audit.signatureSelfChecks ?? []).map((check) => ({

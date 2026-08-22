@@ -13,6 +13,7 @@ import type { MouseEvent, ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, usePaste, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { DROIDSEAL_LOGO, DROIDSEAL_LOGO_HEIGHT, DROIDSEAL_LOGO_WIDTH, VERSION } from "../brand.ts"
 import { Pipeline, STEP_DEFINITIONS, statusGlyph } from "../core/pipeline.ts"
+import { evaluateReleaseDecision } from "../core/release-policy.ts"
 import { sha256File } from "../core/apk-audit.ts"
 import { language, setLanguage, t, tGuidance, translateDetail, translateProgress, translateSummary, tStep, tStepDesc } from "./i18n.ts"
 import { dlopen, FFIType } from "bun:ffi"
@@ -644,8 +645,11 @@ export function App() {
     const failed = active.getSteps().filter((step) => step.status === "failed")
     const skipped = active.getSteps().filter((step) => step.status === "skipped")
     const finalArtifact = active.context.finalArtifact
+    const findingsCount = active.context.audit.findings.length
+    const gate = evaluateReleaseDecision(active.context)
     addMessage(failed.length === 0 ? "success" : "warning", "全部步骤已处理", [
       `已处理：${active.getSteps().length}/${active.getSteps().length}；其中成功：${successCount()}；跳过：${skipped.length}；失败并回退：${failed.length}。请以“已处理”判断流程是否走完。`,
+      `发现数：${findingsCount}；发布门禁：${gate.status}（${gate.reasonCodes.length} 个原因 code）。`,
       ...(skipped.length > 0
         ? [`跳过原因：${skipped.map((step) => `${step.title}（${skipKindLabel(step.result?.skipKind)}）`).join("、")}。跳过不等于失败。`]
         : []),

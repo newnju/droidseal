@@ -9,7 +9,7 @@
 //     --method "com.example.auth.TokenManager#computeToken" \
 //     --method "com.example.auth.TokenManager#refresh" \
 //     --output plans/method-obfuscation
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 // 必须排除的类别：override/生命周期/原生/JNI/反射查找/注解处理相关命名。
@@ -44,6 +44,7 @@ function shortName(index: number): string {
 interface CliArgs {
   methods: string[]
   outputDir: string
+  fromAudit?: string
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -56,11 +57,36 @@ function parseArgs(argv: string[]): CliArgs {
       args.methods.push(method)
     } else if (arg === "--output") {
       args.outputDir = argv[++i]!
+    } else if (arg === "--from-audit") {
+      args.fromAudit = argv[++i]!
     }
   }
   if (args.outputDir === "") throw new Error("缺少 --output 输出目录")
-  if (args.methods.length === 0) throw new Error("至少提供一个 --method 类名#方法名")
+  if (args.methods.length === 0 && !args.fromAudit) throw new Error("至少提供一个 --method 类名#方法名 或 --from-audit <报告json>")
   return args
+}
+
+// 从 droidseal-report.json 提取疑似使用反射/注解的类 → 建议整类保留(#*)。
+// 仅清单级建议,命中 DEX 描述符(L...;)或类路径特征,排除 android.* 系统类。
+async function collectFromAudit(auditPath: string): Promise<string[]> {
+  const report = JSON.parse(await readFile(auditPath, "utf8")) as {
+    audit?: { findings?: Array<{ code?: string; evidence?: string }> }
+  }
+  const classes = new Set<string>()
+  for (const finding of report.audit?.findings ?? []) {
+    const evidence = finding.evidence ?? ""
+    for (const match of evidence.matchAll(/L([a-zA-Z0-9_/$]+);/g)) {
+      classes.add(match[1]!.replaceAll("/", ".").replaceAll("$", "."))
+    }
+    for (const match of evidence.matchAll(/([a-z][a-z0-9_]*\.[a-zA-Z0-9_.]+)/g)) {
+      const candidate = match[1]!
+      if (candidate.includes(".") && !candidate.startsWith("com.android") && !candidate.startsWith("android.")) {
+        const base = candidate.split(/[.#]/).slice(0, -1).join(".")
+        if (base.includes(".")) classes.add(base)
+      }
+    }
+  }
+  return [...classes].sort().map((c) => `${c}#*`)
 }
 
 function buildMapping(methods: string[]): { mapping: Map<string, string>; excluded: string[] } {
@@ -107,6 +133,13 @@ ${excludedNote}
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2))
+  if (args.fromAudit) {
+    const suggested = await collectFromAudit(args.fromAudit)
+    for (const suggestion of suggested) {
+      if (!args.methods.includes(suggestion)) args.methods.push(suggestion)
+    }
+    if (suggested.length > 0) console.log(`从报告自动提取 ${suggested.length} 个疑似反射/注解类建议（#* 整类保留）`)
+  }
   const { mapping, excluded } = buildMapping(args.methods)
   if (mapping.size === 0) throw new Error("白名单方法全部命中禁区标记；没有可重命名的方法，已失败关闭。")
 
