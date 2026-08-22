@@ -253,6 +253,7 @@ export function obfuscateValueRepresentations(
   const pool = table.globalStrings
   let changed = false
   let churned = 0
+  let shortIndex = 0
   for (let i = 0; i < pool.strings.length; i += 1) {
     const original = pool.strings[i]!
     let replacement: string | undefined
@@ -260,7 +261,17 @@ export function obfuscateValueRepresentations(
       replacement = `#FF${original.slice(1)}`
     } else {
       const dim = /^(\d+(?:\.\d+)?)dp$/.exec(original)
-      if (dim) replacement = `${dim[1]}dip`
+      if (dim) {
+        replacement = `${dim[1]}dip`
+      } else {
+        // 技术标识符形态字符串值的保守混淆（非显示文本——key_/id_/token_/api_/secret_ 前缀、
+        // 纯 ASCII 标识符、长度 ≤ 32）：改写为短标识符，失败关闭。
+        // 注意：运行时按值消费此类标记会失效——仅适用于内部技术标记，不适用于显示文本/数据值。
+        if (/^(key|id|token|api|secret)[_-][a-z0-9_-]{1,24}$/i.test(original)) {
+          shortIndex += 1
+          replacement = `k${shortIndex}`
+        }
+      }
     }
     if (!replacement || replacement === original) continue
     const existing = mapping.get(original)
