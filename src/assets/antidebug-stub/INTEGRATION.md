@@ -119,6 +119,20 @@ stub 只产生信号，决策在服务端。建议把以下字段组合上报（
 
 服务端按风险等级决策（降级、限流、人工复核），不要只依赖客户端信号做唯一访问控制；信号可被绕过，需与授权/风控组合使用。
 
+信号汇总上报示例（`signalsToJson`——只报告，决策在服务端）：
+
+```kotlin
+val json = DroidSealAntiDebug.signalsToJson(
+    contentResolver,
+    applicationInfo.sourceDir,
+    BuildConfig.DROIDSEAL_EXPECTED_APK_SHA256,
+    BuildConfig.DROIDSEAL_EXPECTED_SIGNER_FINGERPRINTS,
+    packageManager,
+    packageName,
+)
+// 把 json 上报给服务端风控（JSON 含 inspect 快照 + 完整性/签名/模拟器/VPN·代理/时钟异常）
+```
+
 ## 边界与限制
 
 - **可被绕过**：反调试是提高成本的纵深防御，不是不可逾越的屏障。定制内核、硬件取证、patch native 库都可能绕过。请把它与服务端授权、完整性/风控信号组合使用。

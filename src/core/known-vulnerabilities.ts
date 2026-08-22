@@ -8,6 +8,8 @@ export interface KnownVulnerability {
   cve: string
   severity: Finding["severity"]
   note: string
+  // 已知受影响版本区间（清单级，不联网核对实际版本）。
+  affected?: string
   // 已知修复版本提示（清单级，不联网核对实际版本）。
   fixedIn?: string
 }
@@ -18,6 +20,7 @@ export const KNOWN_VULNERABILITIES: readonly KnownVulnerability[] = [
     cve: "CVE-2022-42889",
     severity: "high",
     note: "Text4Shell：commons-text 1.9/1.10 的字符串替换可达 RCE（需可达的不可信输入）。",
+    affected: "1.9–1.10",
     fixedIn: "commons-text >= 1.10.0",
   },
   {
@@ -25,6 +28,7 @@ export const KNOWN_VULNERABILITIES: readonly KnownVulnerability[] = [
     cve: "CVE-2021-29425",
     severity: "medium",
     note: "commons-io 2.2–2.6 的文件名路径规范化问题。",
+    affected: "2.2–2.6",
     fixedIn: "commons-io >= 2.7",
   },
   {
@@ -32,6 +36,7 @@ export const KNOWN_VULNERABILITIES: readonly KnownVulnerability[] = [
     cve: "CVE-2021-44228",
     severity: "critical",
     note: "Log4Shell：log4j 2.0–2.14.1 的 JNDI 注入 RCE（Android 客户端通常少见，多与服务端相关）。",
+    affected: "2.0–2.14.1",
     fixedIn: "log4j-core >= 2.17.1",
   },
   {
@@ -39,6 +44,7 @@ export const KNOWN_VULNERABILITIES: readonly KnownVulnerability[] = [
     cve: "CVE-2020-36518",
     severity: "medium",
     note: "jackson-databind 2.13.0 之前版本的反序列化 DoS。",
+    affected: "<2.13.0",
     fixedIn: "jackson-databind >= 2.13.0",
   },
   {
@@ -46,6 +52,7 @@ export const KNOWN_VULNERABILITIES: readonly KnownVulnerability[] = [
     cve: "CVE-2022-25647",
     severity: "high",
     note: "Gson 2.8.9 之前版本对超深层/超大 JSON 的反序列化 DoS（堆栈溢出/资源耗尽）。",
+    affected: "<2.8.9",
     fixedIn: "gson >= 2.8.9",
   },
   {
@@ -53,6 +60,7 @@ export const KNOWN_VULNERABILITIES: readonly KnownVulnerability[] = [
     cve: "CVE-2021-36090",
     severity: "medium",
     note: "commons-compress 1.21 之前版本对畸形压缩包的拒绝服务（资源耗尽）。",
+    affected: "<1.21",
     fixedIn: "commons-compress >= 1.21",
   },
   {
@@ -60,6 +68,7 @@ export const KNOWN_VULNERABILITIES: readonly KnownVulnerability[] = [
     cve: "CVE-2023-3635",
     severity: "medium",
     note: "okio 3.4.0 之前版本的缓冲区溢出导致的拒绝服务（Android 常见依赖）。",
+    affected: "<3.4.0",
     fixedIn: "okio >= 3.4.0",
   },
 ]
@@ -83,7 +92,7 @@ export function compareKnownVulnerabilities(
         severity: entry.severity,
         code: "SUPPLYCHAIN_KNOWN_VULNERABILITY",
         title: `检测到已知漏洞组件：${entry.package}（${entry.cve}）`,
-        detail: `${component} 命中离线漏洞快照 ${entry.cve}。${entry.note} 仅清单提示，不联网核对实际版本。`,
+        detail: `${component} 命中离线漏洞快照 ${entry.cve}（受影响区间 ${entry.affected ?? "未知"}）。${entry.note} 仅清单提示，不联网核对实际版本。`,
         recommendation: `确认实际引入版本；如受影响请升级到修复版本（${entry.fixedIn ?? "见官方公告"}），并核对是否存在利用路径。`,
         evidence: `${component} -> ${entry.cve}`,
       })

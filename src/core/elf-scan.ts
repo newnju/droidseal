@@ -225,6 +225,15 @@ export function buildSoFindings(library: string, hardening: ElfHardening): Findi
       recommendation: "发布前执行 strip（或构建脚本加 -Wl,-s / NDK strip），并移除调试信息。",
       evidence: library,
     })
+  } else {
+    findings.push({
+      severity: "info",
+      code: "SO_STRIPPED_OK",
+      title: "Native 库已剥离符号表",
+      detail: `${library} 未发现 .symtab 段（已 strip），符号表剥离状态符合发布预期。`,
+      recommendation: "无需处理；保持剥离状态即可。",
+      evidence: library,
+    })
   }
   if (hardening.debugInfo) {
     findings.push({
