@@ -139,6 +139,15 @@ export function matchDeobfuscatedRules(strings: Iterable<string>, rules: readonl
         // 解码失败跳过
       }
     }
+    // URL 编码(%XX):解码后匹配
+    if (/%[0-9a-fA-F]{2}/.test(s) && s.length <= 256) {
+      try {
+        const text = decodeURIComponent(s)
+        if (/[a-zA-Z]{4,}/.test(text)) decoded.add(text)
+      } catch {
+        // 解码失败跳过
+      }
+    }
   }
   const hits: BehaviorHit[] = []
   for (const rule of rules) {
