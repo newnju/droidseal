@@ -130,6 +130,7 @@ async function main(): Promise<void> {
     else if (argv[i] === "--output") outputDir = path.resolve(argv[++i]!)
   }
   const token = process.env.DROIDSEAL_SERVER_TOKEN
+  const noWeb = process.argv.includes("--no-web")
 
   const server = Bun.serve({
     port,
@@ -194,6 +195,9 @@ async function main(): Promise<void> {
         })
       }
       if (request.method === "GET" && url.pathname === "/") {
+        if (noWeb) {
+          return errorResponse("WEB_DISABLED", "REST-only 模式(--no-web)：Web UI 已禁用，请使用 REST API（/health /runs /run /reports）", 404)
+        }
         // 每次请求读取 web-ui.html：修改文件后无需重启即可看到变化
         const page = await readFile(path.join(import.meta.dir, "web-ui.html"), "utf8").catch(() => "")
         return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } })
@@ -201,7 +205,7 @@ async function main(): Promise<void> {
       return errorResponse("NOT_FOUND", "not found", 404)
     },
   })
-  console.log(`DroidSeal Web 服务：http://127.0.0.1:${server.port}（输出目录 ${outputDir}${token ? "，已启用 token 认证" : ""}）`)
+  console.log(`DroidSeal Web 服务：http://127.0.0.1:${server.port}（输出目录 ${outputDir}${token ? "，已启用 token 认证" : ""}${noWeb ? "，REST-only 模式（Web UI 已禁用）" : ""}）`)
 }
 
 main().catch((error) => {
