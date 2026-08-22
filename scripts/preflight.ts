@@ -17,7 +17,7 @@ const GATES: Array<{ name: string; command: string; args: string[] }> = [
 function main(): void {
   const jsonOutput = process.argv.includes("--json")
   const skipTest = process.argv.includes("--skip-test")
-  const results: Array<{ name: string; passed: boolean }> = []
+  const results: Array<{ name: string; passed: boolean; tail?: string }> = []
   let failed = 0
   for (const gate of GATES) {
     if (skipTest && gate.name === "test") continue
@@ -26,7 +26,13 @@ function main(): void {
     const passed = result.status === 0
     results.push({ name: gate.name, passed })
     if (!passed) failed += 1
-    if (jsonOutput) continue
+    if (jsonOutput) {
+      if (!passed) {
+        const tail = ((result.stderr ?? result.stdout) ?? "").split(/\r?\n/).slice(-6).join("\n").trim()
+        if (tail.length > 0) results[results.length - 1]!.tail = tail
+      }
+      continue
+    }
     console.log(passed ? "通过" : "失败")
     if (!passed) {
       const tail = ((result.stderr ?? result.stdout) ?? "").split(/\r?\n/).slice(-6).join("\n")

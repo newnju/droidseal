@@ -141,6 +141,20 @@ async function main(): Promise<void> {
     if (suggested.length > 0) console.log(`从报告自动提取 ${suggested.length} 个疑似反射/注解类建议（#* 整类保留）`)
   }
   const { mapping, excluded } = buildMapping(args.methods)
+  await mkdir(args.outputDir, { recursive: true })
+  const mapText = mappingText(mapping)
+  await writeFile(path.join(args.outputDir, "method-obfuscation.map"), mapText + "\n", "utf8")
+  if (process.argv.includes("--verify")) {
+    // 映射文件格式校验:每行 "原方法 -> 短名" 两段且非空(失败关闭)
+    const lines = mapText.split(/\r?\n/).filter((line) => line.trim() !== "")
+    for (const line of lines) {
+      const parts = line.split(/\s*->\s*/)
+      if (parts.length !== 2 || parts[0]!.trim() === "" || parts[1]!.trim() === "") {
+        throw new Error(`映射格式异常：${line}`)
+      }
+    }
+    console.log(`映射校验通过：${lines.length} 条（类名#方法名 -> 短名#方法名）`)
+  }
   if (mapping.size === 0) throw new Error("白名单方法全部命中禁区标记；没有可重命名的方法，已失败关闭。")
 
   await mkdir(args.outputDir, { recursive: true })

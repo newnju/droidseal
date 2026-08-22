@@ -37,6 +37,7 @@ const en = {
   sidebarNotGenerated: "Not generated yet",
   sidebarOpenFolder: "▸ Open containing folder",
   sidebarNoOverwrite: "Failure never overwrites · local only",
+  shortcutHints: "Enter: retry failed step · Ctrl+C: copy (never exits)",
   // 阶段分组与可选步骤提示
   phasePrepare: "Prepare",
   phaseAudit: "Audit",
@@ -44,6 +45,8 @@ const en = {
   phaseRelease: "Release",
   stepOptionalOff: "optional, off",
   gateBannerFindings: "Findings: {count} (critical {critical} / high {high}); release gate: {gate} ({codes} reason codes)",
+  gateBannerSummary: "Processed {total}/{total} steps: {success} succeeded, {skipped} skipped, {failed} failed and rolled back. Use 'processed' to judge the flow.",
+  gateBannerSkipped: "Skip reasons: {reasons}. Skipped is not a failure.",
 
   // 输入区
   composerPlaceholder: "Type a message or /help · or drag a file here",
@@ -441,6 +444,7 @@ const zh: Record<keyof typeof en, string> = {
   sidebarNotGenerated: "尚未生成",
   sidebarOpenFolder: "▸ 打开所在目录",
   sidebarNoOverwrite: "失败不覆盖 · 本地处理",
+  shortcutHints: "Enter: 重试失败步骤 · Ctrl+C: 复制（不退出）",
   // 阶段分组与可选步骤提示
   phasePrepare: "准备",
   phaseAudit: "审计",
@@ -448,6 +452,8 @@ const zh: Record<keyof typeof en, string> = {
   phaseRelease: "发布",
   stepOptionalOff: "可选未开启",
   gateBannerFindings: "发现数：{count}（critical {critical} / high {high}）；发布门禁：{gate}（{codes} 个原因 code）",
+  gateBannerSummary: "已处理：{total}/{total}；其中成功：{success}；跳过：{skipped}；失败并回退：{failed}。请以“已处理”判断流程是否走完。",
+  gateBannerSkipped: "跳过原因：{reasons}。跳过不等于失败。",
 
   composerPlaceholder: "输入消息或 /help · 或拖动文件到此处",
   secretPlaceholder: "请输入后确认",

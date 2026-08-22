@@ -79,6 +79,12 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - `known-vuln-check.ts` 新增 fixedIn 字段格式校验。
 - CI 工作流 verify 门禁改用 `preflight.ts --json`（机器可读输出入 CI 日志）。
 - `re-test.ts` 新增门禁状态输出（`gateStatus`：剩余 finding 为 block，否则 pass）。
+- TUI 门禁横幅消息 i18n 化（`t()` 支持参数化，`gateBannerFindings` 中英文键，语言切换即时生效）。
+- `re-test.ts` 门禁状态 `block` 时非零退出（gateStatus 门禁，CI 统一）。
+- `generate-string-crypto-stub.ts` 新增 `--rotate`：密钥轮换（强制新密钥，旧密文失效需全量重新生成）。
+- 报告 schemaVersion 升版至 8（`previousRun`/`previousGate` 字段的结构版本化）。
+- `known-vuln-check.ts` 输出严重度分布统计。
+- 报告加固成效新增 `nativeAudit` 覆盖维度（6 → 7 维）。
 
 #### 文档
 

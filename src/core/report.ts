@@ -491,6 +491,7 @@ export async function writeReports(
       directory: remediation.directory,
       plan: remediation.plan,
       artifacts: remediation.artifacts,
+      suggestionCount: remediation.artifacts.length,
     } : null,
     steps: context.stepResults.map(resultForReport),
   }
