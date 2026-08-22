@@ -86,11 +86,15 @@ async function buildPreviousRunComparison(context: RunContext): Promise<Record<s
   const previousReport = path.join(runsRoot, previousId, "reports", "droidseal-report.json")
   const previous = await readFile(previousReport, "utf8").catch(() => null)
   if (!previous) return null
-  const prev = JSON.parse(previous) as { audit?: { findings?: Array<{ code?: string }> } }
+  const prev = JSON.parse(previous) as {
+    audit?: { findings?: Array<{ code?: string }> }
+    releaseDecision?: { status?: string }
+  }
   const prevCodes = new Set((prev.audit?.findings ?? []).map((f) => f.code ?? "").filter(Boolean))
   const currentCodes = new Set(context.audit.findings.map((f) => f.code).filter(Boolean))
   return {
     previousRunId: previousId,
+    previousGate: prev.releaseDecision?.status ?? null,
     eliminated: [...prevCodes].filter((c) => !currentCodes.has(c)),
     added: [...currentCodes].filter((c) => !prevCodes.has(c)),
     remaining: [...prevCodes].filter((c) => currentCodes.has(c)),
@@ -124,6 +128,16 @@ async function buildHardeningEffectiveness(context: RunContext): Promise<Record<
     soFindings: findingCount("SO_"),
     coverage: { total: dimensions.length, covered, dimensions },
   }
+}
+
+async function previousRunMarkdown(context: RunContext): Promise<string> {
+  const previousRun = await buildPreviousRunComparison(context)
+  if (!previousRun) return "- 无历史运行可对比。"
+  const join = (values: unknown): string => (values as string[]).join("、") || "无"
+  return `- 上次门禁：${(previousRun.previousGate as string | null) ?? "未知"}
+- 消除：${join(previousRun.eliminated)}
+- 新增：${join(previousRun.added)}
+- 剩余：${join(previousRun.remaining)}`
 }
 
 async function hardeningEffectivenessMarkdown(context: RunContext): Promise<string> {
@@ -502,6 +516,10 @@ ${controlCoverageMarkdown(controlCoverage)}
 ## 加固成效
 
 ${await hardeningEffectivenessMarkdown(context)}
+
+## 与上次运行对比
+
+${await previousRunMarkdown(context)}
 
 ## 执行步骤
 

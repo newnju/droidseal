@@ -18,6 +18,9 @@ function main(): void {
     }
     if (!/^CVE-\d{4}-\d+$/.test(entry.cve)) errors.push(`CVE 格式异常: ${entry.cve}`)
     if (!SEVERITIES.includes(entry.severity)) errors.push(`严重度异常: ${entry.severity}`)
+    if (entry.affected !== undefined && (typeof entry.affected !== "string" || entry.affected.trim() === "")) {
+      errors.push(`affected 格式异常: ${entry.package}（应为非空字符串或省略）`)
+    }
     if (cves.has(entry.cve)) errors.push(`重复 CVE: ${entry.cve}`)
     cves.add(entry.cve)
     if (packages.has(entry.package)) errors.push(`重复包名: ${entry.package}`)

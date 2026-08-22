@@ -646,10 +646,12 @@ export function App() {
     const skipped = active.getSteps().filter((step) => step.status === "skipped")
     const finalArtifact = active.context.finalArtifact
     const findingsCount = active.context.audit.findings.length
+    const criticalCount = active.context.audit.findings.filter((f) => f.severity === "critical").length
+    const highCount = active.context.audit.findings.filter((f) => f.severity === "high").length
     const gate = evaluateReleaseDecision(active.context)
     addMessage(failed.length === 0 ? "success" : "warning", "全部步骤已处理", [
       `已处理：${active.getSteps().length}/${active.getSteps().length}；其中成功：${successCount()}；跳过：${skipped.length}；失败并回退：${failed.length}。请以“已处理”判断流程是否走完。`,
-      `发现数：${findingsCount}；发布门禁：${gate.status}（${gate.reasonCodes.length} 个原因 code）。`,
+      `发现数：${findingsCount}（critical ${criticalCount} / high ${highCount}）；发布门禁：${gate.status}（${gate.reasonCodes.length} 个原因 code）。`,
       ...(skipped.length > 0
         ? [`跳过原因：${skipped.map((step) => `${step.title}（${skipKindLabel(step.result?.skipKind)}）`).join("、")}。跳过不等于失败。`]
         : []),
@@ -1516,7 +1518,13 @@ export function App() {
                         {statusGlyph(step.status)} {String(index() + 1).padStart(2, "0")} · <b>{tStep(step.id)}</b>
                       </text>
                       <Show when={step.status === "skipped" && step.result?.skipKind}>
-                        {(kind) => <text fg={theme.borderActive}>  ↳ {skipKindLabel(kind())}</text>}
+                        {(kind) => (
+                          <text fg={theme.borderActive}>
+                            {"  ↳ "}
+                            {skipKindLabel(kind())}
+                            {(step.id === "web-assets" || step.id === "arsc-obfuscate") && kind() === "configuration" ? "（可选未开启）" : ""}
+                          </text>
+                        )}
                       </Show>
                       <Show when={step.status === "processing"}>
                         <text fg={theme.ice}>

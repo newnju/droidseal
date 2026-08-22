@@ -63,6 +63,12 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - `preflight.ts` 新增 `--json`（门禁结果机器可读输出）并集成 `known-vuln-check`（数据表一致性门禁，共 4 项）。
 - `generate-string-crypto-stub.ts` 新增 `--verify`：密文回程验证（每个密文解密回原文，失败关闭）。
 - `re-test.ts` 新增 `--json`：复测结果机器可读（消除/新增/剩余 + `gateSuggestion` 门禁建议）。
+- `encrypt-assets.ts` 新增 `--verify`：密文回程验证（每个文件解密回原文，失败关闭）。
+- `generate-method-obfuscation-plan.ts` 新增 `--from-audit`：从报告自动提取疑似反射/注解类 → 白名单 `#*` 整类保留建议。
+- 发布门禁新增可配置加固覆盖度阈值（`minimumHardeningCoverage`）。
+- 报告新增 `previousRun` 历史对比字段（与上一次运行的发现对比：消除/新增/剩余）。
+- TUI 运行完成新增门禁横幅（发现数 + 发布门禁状态 + 原因 code 数）。
+- `known-vuln-check.ts` 新增 `--suggest`：新条目格式模板提示。
 
 #### 文档
 
