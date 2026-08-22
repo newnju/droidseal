@@ -16,6 +16,8 @@ import { buildPermissionFindings, type CustomPermission } from "./permissions-ca
 import { buildPrivacyFindings } from "./privacy-collection.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
+import { extractCalledMethods } from "./dex-callgraph.ts"
+import { matchBehaviorRules, maliciousScore, buildBehaviorFindings, matchDeobfuscatedRules } from "./behavior-rules.ts"
 import { estimateEncryptableStrings } from "./dex-string-crypto.ts"
 import { buildEndpointFindings } from "./endpoint-extract.ts"
 import { buildPackerFindings } from "./packers.ts"
@@ -964,6 +966,7 @@ async function scanDexFiles(
   if (dexFiles.length === 0) return []
   onProgress?.("扫描 DEX 字符串池（密钥、弱加密、动态加载等启发式）")
   const combined = new Set<string>()
+  const calledMethods = new Set<string>()
   let truncated = false
   let failed = 0
   let malformedDex = 0
@@ -988,8 +991,24 @@ async function scanDexFiles(
     } catch {
       failed += 1
     }
+    if (isDex) {
+      try {
+        const called = extractCalledMethods(bytes)
+        for (const method of called) calledMethods.add(method)
+      } catch {
+        // 调用图提取失败关闭:不阻断主扫描
+      }
+    }
   }
   const findings = scanDex([...combined])
+  const behaviorHits = matchBehaviorRules(calledMethods)
+  const deobfuscatedHits = matchDeobfuscatedRules(combined).filter(
+    (hit) => !behaviorHits.some((existing) => existing.rule.crimer === hit.rule.crimer),
+  )
+  const allHits = [...behaviorHits, ...deobfuscatedHits]
+  if (allHits.length > 0) {
+    findings.push(...buildBehaviorFindings(allHits, maliciousScore(allHits)))
+  }
   const sdks = detectSdkPackages(combined)
   if (sdks.length > 0) {
     findings.push({

@@ -515,6 +515,9 @@ export async function writeReports(
     } : null,
     mastg: mappedMastgFindings(sortedFindings),
     decompileSuggestions: decompileSuggestions(sortedFindings),
+    behaviorAnalysis: sortedFindings
+      .filter((f) => f.code === "MALICIOUS_BEHAVIOR" || f.code === "MALICIOUS_SCORE")
+      .map((f) => ({ code: f.code, title: f.title, evidence: f.evidence })),
     steps: context.stepResults.map(resultForReport),
   }
 
@@ -577,6 +580,15 @@ ${(() => {
   return decompiled.length > 0
     ? `以下发现建议反编译人工核验（${command}）：\n${decompiled.slice(0, 10).map((d) => `- \`${d.code}\` ${d.title}`).join("\n")}${decompiled.length > 10 ? "\n- …" : ""}`
     : "- 无需反编译核验（无可疑复杂发现）。"
+})()}
+
+## 行为分析（恶意行为特征）
+
+${(() => {
+  const behaviors = sortedFindings.filter((f) => f.code === "MALICIOUS_BEHAVIOR" || f.code === "MALICIOUS_SCORE")
+  return behaviors.length > 0
+    ? behaviors.map((f) => `- **${f.title}**：${f.evidence}`).join("\n")
+    : "- 未检测到恶意行为特征（调用图/解码匹配均未命中内置规则）。"
 })()}
 
 ## 执行步骤
