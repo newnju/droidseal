@@ -17,7 +17,7 @@ import { buildPrivacyFindings } from "./privacy-collection.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
 import { extractCalledMethods } from "./dex-callgraph.ts"
-import { matchBehaviorRules, maliciousScore, buildBehaviorFindings, matchDeobfuscatedRules } from "./behavior-rules.ts"
+import { matchBehaviorRules, maliciousScore, buildBehaviorFindings, matchDeobfuscatedRules, type BehaviorRule, BUILTIN_BEHAVIOR_RULES, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
 import { estimateEncryptableStrings } from "./dex-string-crypto.ts"
 import { buildEndpointFindings } from "./endpoint-extract.ts"
 import { buildPackerFindings } from "./packers.ts"
@@ -962,6 +962,8 @@ async function scanDexFiles(
   apkPath: string,
   dexFiles: string[],
   onProgress?: (message: string) => void,
+  rules: readonly BehaviorRule[] = BUILTIN_BEHAVIOR_RULES,
+  thresholds: MaliciousScoreThresholds = DEFAULT_SCORE_THRESHOLDS,
 ): Promise<Finding[]> {
   if (dexFiles.length === 0) return []
   onProgress?.("扫描 DEX 字符串池（密钥、弱加密、动态加载等启发式）")
@@ -1001,13 +1003,13 @@ async function scanDexFiles(
     }
   }
   const findings = scanDex([...combined])
-  const behaviorHits = matchBehaviorRules(calledMethods)
-  const deobfuscatedHits = matchDeobfuscatedRules(combined).filter(
+  const behaviorHits = matchBehaviorRules(calledMethods, rules)
+  const deobfuscatedHits = matchDeobfuscatedRules(combined, rules).filter(
     (hit) => !behaviorHits.some((existing) => existing.rule.crimer === hit.rule.crimer),
   )
   const allHits = [...behaviorHits, ...deobfuscatedHits]
   if (allHits.length > 0) {
-    findings.push(...buildBehaviorFindings(allHits, maliciousScore(allHits)))
+    findings.push(...buildBehaviorFindings(allHits, maliciousScore(allHits), thresholds))
   }
   const sdks = detectSdkPackages(combined)
   if (sdks.length > 0) {
@@ -1363,6 +1365,8 @@ export async function auditApk(
   apkPath: string,
   toolchain: Toolchain,
   onProgress?: (message: string) => void,
+  rules: readonly BehaviorRule[] = BUILTIN_BEHAVIOR_RULES,
+  thresholds: MaliciousScoreThresholds = DEFAULT_SCORE_THRESHOLDS,
 ): Promise<SecurityAudit> {
   onProgress?.("读取 APK ZIP 中央目录")
   const entries = await parseZipEntries(apkPath)
@@ -1465,7 +1469,7 @@ export async function auditApk(
     findings.push(clipboardFinding("HYBRID_SENSITIVE_PLUGIN_CLIPBOARD"))
   }
 
-  findings.push(...(await scanDexFiles(apkPath, summary.dexFiles, onProgress)))
+  findings.push(...(await scanDexFiles(apkPath, summary.dexFiles, onProgress, rules, thresholds)))
   findings.push(...(await scanNativeLibraries(apkPath, summary.nativeLibraries, onProgress)))
   findings.push(...(await scanEmbeddedAssets(apkPath, entries, onProgress)))
 

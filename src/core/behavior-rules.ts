@@ -1,7 +1,8 @@
 // 行为规则引擎（Quark-Engine 差距②④——behavior-rules.ts）。
 // 规则格式 { crimer, className, methodName, score, label }——调用图匹配
 // （被调 "类.方法" 命中规则即计为该行为）。加权评分：命中规则 score 累计 → 恶意度 0-100。
-// 失败关闭：调用图为空/未命中即不输出。
+// 支持外部行为规则文件加载（差距③）与评分阈值配置（差距④）。失败关闭。
+import { readFile } from "node:fs/promises"
 import type { Finding } from "./types.ts"
 
 export interface BehaviorRule {
@@ -10,6 +11,44 @@ export interface BehaviorRule {
   methodName: string
   score: number
   label: string
+}
+
+// 评分分级阈值（差距④——可配置；默认保持既有行为：≥60 medium / ≥30 low）。
+export interface MaliciousScoreThresholds {
+  high: number
+  medium: number
+}
+
+export const DEFAULT_SCORE_THRESHOLDS: MaliciousScoreThresholds = { high: 60, medium: 30 }
+
+// 外部行为规则文件加载（差距③）：JSON 数组，字段校验失败关闭。
+export function parseBehaviorRules(text: string): BehaviorRule[] {
+  const parsed = JSON.parse(text) as unknown
+  if (!Array.isArray(parsed)) throw new Error("行为规则文件应为 JSON 数组")
+  const rules: BehaviorRule[] = []
+  for (const [index, raw] of parsed.entries()) {
+    const rule = raw as Partial<BehaviorRule>
+    if (!rule.crimer || !rule.className || !rule.methodName || !rule.label) {
+      throw new Error(`行为规则 #${index + 1} 缺 crimer/className/methodName/label`)
+    }
+    if (typeof rule.score !== "number" || rule.score < 0 || rule.score > 100) {
+      throw new Error(`行为规则 #${index + 1}（${rule.crimer}）score 应为 0-100`)
+    }
+    rules.push({ crimer: rule.crimer, className: rule.className, methodName: rule.methodName, score: rule.score, label: rule.label })
+  }
+  return rules
+}
+
+export async function loadBehaviorRules(rulesFile: string): Promise<BehaviorRule[]> {
+  return parseBehaviorRules(await readFile(rulesFile, "utf8"))
+}
+
+// 合并规则：内置 + 自定义（自定义追加，crimer 去重——自定义优先）。
+export function mergeBehaviorRules(custom: readonly BehaviorRule[] = []): BehaviorRule[] {
+  const merged = new Map<string, BehaviorRule>()
+  for (const rule of BUILTIN_BEHAVIOR_RULES) merged.set(rule.crimer, rule)
+  for (const rule of custom) merged.set(rule.crimer, rule)
+  return [...merged.values()]
 }
 
 // 内置恶意行为规则库（10 条常见恶意行为——短信劫持/键盘记录/设备管理滥用/截屏/录音等）。
@@ -50,7 +89,11 @@ export function maliciousScore(hits: readonly BehaviorHit[]): number {
 }
 
 // 命中转 findings（恶意行为 finding + 评分提示——失败关闭）。
-export function buildBehaviorFindings(hits: readonly BehaviorHit[], score: number): Finding[] {
+export function buildBehaviorFindings(
+  hits: readonly BehaviorHit[],
+  score: number,
+  thresholds: MaliciousScoreThresholds = DEFAULT_SCORE_THRESHOLDS,
+): Finding[] {
   const findings: Finding[] = []
   for (const hit of hits.slice(0, 6)) {
     findings.push({
@@ -65,10 +108,10 @@ export function buildBehaviorFindings(hits: readonly BehaviorHit[], score: numbe
   }
   if (score > 0) {
     findings.push({
-      severity: score >= 60 ? "medium" : "low",
+      severity: score >= thresholds.high ? "medium" : score >= thresholds.medium ? "low" : "info",
       code: "MALICIOUS_SCORE",
       title: `恶意行为加权评分 ${score}/100`,
-      detail: `命中 ${hits.length} 条恶意行为规则（权值累计归一化）。仅静态评分提示，不判定恶意。`,
+      detail: `命中 ${hits.length} 条恶意行为规则（权值累计归一化；high ≥ ${thresholds.high}、medium ≥ ${thresholds.medium}）。仅静态评分提示，不判定恶意。`,
       recommendation: "高评分样本建议结合行为规则证据与人工核验。",
       evidence: hits.map((h) => h.rule.crimer).join(", "),
     })
