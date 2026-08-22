@@ -10,44 +10,60 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ### Added
 
-- Native 加固检查深化：`.so` 未剥离符号表（`SO_UNSTRIPPED_SYMBOLS`）、含调试信息（`SO_DEBUG_INFO_PRESENT`）、疑似包含凭据格式字符串（`SO_CREDENTIAL_FORMAT`，AKIA/AIza/ghp_/私钥块）。
-- 资源名混淆新增颜色值保守混淆（Mode C）：`#RRGGBB` 颜色值改写为 `#AARRGGBB`（alpha=FF，视觉不变），Res_value 引用保持有效。
-- 报告修复包扩展：新增 R8/ProGuard 规则最小化建议（`templates/proguard-rules.suggestion.md`）与 Manifest 权限/导出组件最小化清单（`templates/manifest-permissions.suggestion.md`）。
-- 报告修复包新增 DEX 字符串安全化计划（`templates/dex-string-security.plan.md`）：敏感字符串分类、服务端化与源码侧解密桩接入指引（参考 `dex-string-crypto` 原语）。
-- 新增源码侧字符串加密桩生成器（`scripts/generate-string-crypto-stub.ts`）：为敏感字符串生成密文常量、Kotlin 解密桩（与 `dex-string-crypto` 的变换对应）与接入指南，编译期加密、运行期解密，DEX 字符串池不再含明文敏感串；不事后改写 APK。
-- 反调试 stub 深化：检测标记扩展（magisk/zygisk/lspd/riru/Sui），并新增 `checkApkIntegrity`（APK SHA-256 完整性自检，防重打包；未配置预期哈希不阻断，读取失败保守视为可疑，只报告信号不阻断）。
-- 反调试 stub 新增 `checkApkSignature`（APK 签名证书 SHA-256 指纹自检，支持多指纹轮换，与 `checkApkIntegrity` 组成防重打包组合；未配置预期指纹不阻断，只报告信号）。
-- 新增 DEX 方法/类级混淆受控子集：设计文档（`docs/dex-method-obfuscation-plan.md`，含真机验证矩阵与失败关闭边界）与白名单映射生成器（`scripts/generate-method-obfuscation-plan.ts`，自动排除 override/native/JNI/反射/生命周期类方法，失败关闭）。
-- 新增 R8/ProGuard 规则模板库（`docs/r8-rule-templates.md`）：Retrofit/Room/Kotlin 协程/kotlinx.serialization 的 keep 规则模板与反模式说明。
-- 新增签名指纹管理脚本（`scripts/signing-fingerprints.ts`）：keytool 读取证书 SHA-256 指纹清单并支持 `--expect` 多指纹校验（密钥轮换/多签名），密码仅从 `DROIDSEAL_STORE_PASSWORD` 环境变量读取。
-- 字符串加密桩生成器支持 `--from-audit <报告json>`：从 droidseal-report.json 自动提取 HARDCODED_SECRET/EMBEDDED_PRIVATE_KEY/CREDENTIAL_FORMAT 发现的敏感串并生成加密桩计划（审计→自动加固衔接）。
-- 报告新增「加固成效」节：产物前后大小对比、DEX/SO 敏感项计数与加固覆盖度评分（6 维度，JSON 与 Markdown 双输出）。
-- 资源名混淆 Mode C 值级混淆扩展：`Ndp` 维度值改写为 `Ndip`（等价单位，视觉不变），与颜色值混淆同类。
-- 新增发布预检脚本（`scripts/preflight.ts`）：一键运行 type-check / test / release-check 三项发布门禁并逐项汇总，全部通过方可继续发布流程。
-- 资源路径混淆深化：新增 Mode D 目录保留式路径混淆（`scrambleResourcePaths`——`res/drawable-hdpi/ic.png` → `res/a/a.png`，保留 res/ 结构与扩展名），资源混淆步骤新增 `pathMode: "flatten" | "scramble"` 选项。
-- 发布流水线 CI 集成：CI verify 任务改用发布预检脚本（`bun scripts/preflight.ts`——type-check / test / release-check 一键门禁，与本地完全一致）。
-- 反调试 stub 新增 `checkEmulator` 模拟器检测信号（Build.FINGERPRINT/HARDWARE/PRODUCT/MODEL 保守标记匹配，只报告不阻断）。
-- 供应链审计新增离线已知漏洞比对（`SUPPLYCHAIN_KNOWN_VULNERABILITY`）：检测到的 SDK 与内置精简快照（commons-text/commons-io/log4j-core/jackson-databind 等）比对，不联网、清单级提示。
-- 反调试 stub 新增 `checkVpnProxy` VPN/代理检测信号（系统全局 HTTP 代理或 tun/ppp/tap 网络接口特征，只报告不阻断）。
-- 反调试 stub 接入指南补充「完整性自检（防重打包）定期复查」与「服务端协作上报」两节（信号字段组合与上报建议）。
-- 新增经典 / 测试与学习双模式：经典模式在流水线结束后清理中间 APK（01-input~05-signed），只保留最终 release APK 与报告文件；测试与学习模式（TUI 顶部切换按钮，或 runner 的 `--test-learning`）保留全部中间产物供学习与调试。
-- 反调试 stub 新增 `checkClockAnomaly` 时间戳异常检测信号（单调时钟与墙上时钟偏移基线、默认 30s 阈值跳变判定，只报告不阻断）。
-- 供应链离线漏洞快照新增已知修复版本提示（`fixedIn`：commons-text ≥1.10.0 / commons-io ≥2.7 / log4j-core ≥2.17.1 / jackson-databind ≥2.13.0），`SUPPLYCHAIN_KNOWN_VULNERABILITY` 的建议自动带上修复版本。
-- 新增非交互流水线测试 runner（`scripts/test-runner.ts`）：`droidseal doctor` 之外的程序化运行方式（apk/project × skip/existing 组合，`--web`/`--arsc` 开启可选步骤，`--test-learning` 保留中间产物），CI 可用。
-- 新增打包器/保护器指纹识别（`PACKER_DETECTED`）：纯 TypeScript 指纹表检测常见加固壳/混淆器（腾讯乐固/梆梆/爱加密/360 加固/DexProtector/DexGuard/阿里聚安全/娜迦），并提示静态审计可见性降级、建议商业加固核验；失败关闭。
-- R8/ProGuard 规则优化建议动态化：报告修复包的 `proguard-rules.suggestion.md` 现带本次审计发现的具体项（缺失/不完整规则引用），前置于通用最小化指引。
-- 新增本地 Web UI / REST API 服务（`scripts/serve.ts`）：零依赖 Bun.serve，绑定 127.0.0.1 并支持可选 Bearer token——`POST /run` 提交配置跑完整流水线、`GET /reports/<path>` 读取报告文件、`GET /` 返回 Web UI（运行表单 + 报告浏览）；本地优先、不对外联网，面向企业/DevSecOps 集成。
-- DEX 字符串安全子集接入主线：新增 `DEX_STRING_SECURITY` finding（字符串池级可加密敏感串估计——非标识符形态且含 URL/密钥格式/高熵特征），衔接源码侧加密桩生成器 `--from-audit`；修复包的 DEX 字符串安全化计划现带本次审计发现。
-- Manifest 权限/导出组件建议动态化：修复包 `manifest-permissions.suggestion.md` 现带本次审计发现（与 R8/DEX 建议一致）。
-- 新增修复包复测闭环（`scripts/re-test.ts`）：修复后重跑流水线，`--before` 对比消除/新增/剩余 findings。
-- 供应链离线漏洞快照扩充至 8 条（新增 gson CVE-2022-25647 / commons-compress CVE-2021-36090 / okio CVE-2023-3635）；打包器指纹扩充至 12 个（新增顶象/APKProtect/通付盾）。
-- 新增强制 R8 按变体细化模板（`docs/force-r8-variant-template.md`）：按 buildType/flavor 分支的 init-script 模板与使用说明。
-- 发布门禁新增加固覆盖度提示（`HARDENING_COVERAGE_LOW`）：核心审计/防护/验证步骤未真实执行时给 review 提示（不阻断）。
-- 新增供应链快照 / 打包器指纹一致性校验（`scripts/known-vuln-check.ts`）与数据表一致性测试（CVE/包名/marker 唯一性、字段完整性）。
+#### 审计与加固（静态审计扩展 / 加固能力）
+
+- Native 加固检查深化：`.so` 未剥离符号表（`SO_UNSTRIPPED_SYMBOLS`）、含调试信息（`SO_DEBUG_INFO_PRESENT`）、疑似包含凭据格式字符串（`SO_CREDENTIAL_FORMAT`）；已剥离时给 `SO_STRIPPED_OK` 确认信号。
+- 资源名混淆：Mode C 值级保守混淆（颜色 `#RRGGBB`→`#AARRGGBB`、维度 `Ndp`→`Ndip`，视觉不变）+ Mode D 目录保留式路径混淆（`res/drawable-hdpi/ic.png`→`res/a/a.png`，`pathMode: "flatten" | "scramble"` 选项）。
 - ARSC 值级审计新增 `ARSC_VALUE_TECHNICAL` finding（key_/id_/token_ 等技术形态字符串值识别，仅审计不改写）。
-- 复测脚本 `re-test.ts` 新增 `--auto`：自动定位输入目录下最近一次运行报告并对比 findings（消除/新增/剩余）。
-- 反调试 stub 新增 `signalsToJson`：把全部检测信号（inspect 快照 + 完整性/签名/模拟器/VPN·代理/时钟异常）汇总为 JSON，供服务端协作上报（只报告不阻断）。
-- 新增 assets 资源轻量加密方案设计（`docs/assets-encryption-plan.md`）：源码接入模式（构建期加密、运行期解密，与字符串加密桩同模式，不事后改写 APK）。
+- 新增打包器/保护器指纹识别（`PACKER_DETECTED`）：纯 TypeScript 指纹表（腾讯乐固/梆梆/爱加密/360 加固/DexProtector/DexGuard/阿里聚安全/娜迦/顶象/APKProtect/通付盾），提示静态审计可见性降级与商业加固核验，失败关闭。
+- DEX 字符串安全子集接入主线：`DEX_STRING_SECURITY` finding（字符串池级可加密敏感串估计）衔接 `--from-audit` 加密桩生成。
+- DEX 头结构只读校验（`DEX_HEADER_MALFORMED`，失败关闭）。
+- 源码凭据格式启发式：AWS/Google/GitHub 令牌与 PEM 私钥块检测（`SOURCE_CREDENTIAL_FORMAT_*` / `SOURCE_PRIVATE_KEY_BLOCK`）。
+- Web JS 处理支持 webpack 动态 import chunk 发现（白名单内懒加载产物纳入处理，有界单遍、容错解码）。
+- DEX 方法/类级混淆受控子集：设计文档（`docs/dex-method-obfuscation-plan.md`，含真机验证矩阵与失败关闭边界）+ 白名单映射生成器（`scripts/generate-method-obfuscation-plan.ts`）。
+- 源码侧字符串加密桩生成器（`scripts/generate-string-crypto-stub.ts`）：编译期加密、运行期解密，DEX 池不含明文敏感串；支持 `--from-audit` 自动提取审计发现的敏感串。
+- 报告修复包建议动态化：`proguard-rules.suggestion.md` 与 `manifest-permissions.suggestion.md` 现带本次审计发现的具体项，前置于通用指引。
+
+#### 发布工程化（门禁 / 证据 / SBOM / CI / 双模式）
+
+- 新增发布预检脚本（`scripts/preflight.ts`）：一键运行 type-check / test / release-check 并逐项汇总。
+- 发布流水线 CI 集成：CI verify 任务改用预检脚本，门禁与本地完全一致。
+- 发布门禁新增加固覆盖度提示（`HARDENING_COVERAGE_LOW`）：核心审计/防护/验证步骤未真实执行时给 review 提示（不阻断）。
+- 新增修复包复测闭环（`scripts/re-test.ts`）：`--before`/`--auto` 对比消除/新增/剩余 findings，并输出门禁建议。
+- 新增经典 / 测试与学习双模式：经典模式清理中间 APK 只留最终 release 与报告；测试与学习模式（TUI 顶部切换按钮或 `--test-learning`）保留全部中间产物。
+- 报告新增「加固成效」节：产物前后大小对比、DEX/SO 敏感项计数与加固覆盖度评分。
+- AAB 输入显式检测：`AAB_INPUT_NOT_SUPPORTED`（含 bundletool/Gradle 转换指引）。
+- 新增非交互流水线测试 runner（`scripts/test-runner.ts`）：apk/project × skip/existing + `--web`/`--arsc`/`--test-learning`，CI 可用。
+
+#### 运行时防护（反调试 stub）
+
+- 检测标记扩展（magisk/zygisk/lspd/riru/Sui），并新增五类只报告信号：`checkApkIntegrity`（完整性哈希自检）、`checkApkSignature`（签名指纹自检，多指纹轮换）、`checkEmulator`（模拟器特征）、`checkVpnProxy`（VPN/代理）、`checkClockAnomaly`（时钟异常，30s 阈值）。
+- 新增 `signalsToJson`：把全部检测信号汇总为 JSON，供服务端协作上报（只报告不阻断）。
+- 接入指南补充「完整性自检定期复查」「服务端协作上报」与 `signalsToJson` 上报示例。
+
+#### 供应链
+
+- 离线已知漏洞比对（`SUPPLYCHAIN_KNOWN_VULNERABILITY`）：检测到的 SDK 与内置精简快照比对，不联网、清单级提示。
+- 快照补 `fixedIn`/`affected` 版本区间提示，建议自动带上修复版本。
+- 供应链快照扩充至 8 条（gson/commons-compress/okio 等）；打包器指纹扩充至 12 个。
+- 新增快照/指纹一致性校验（`scripts/known-vuln-check.ts`）与数据表一致性测试（CVE/包名/marker 唯一性、字段完整性）。
+
+#### 报告与门禁
+
+- 报告「执行步骤」段新增真实处理/跳过计数说明（“已处理”含跳过与失败回退，真实处理成功单独列出）。
+- 发布门禁置信度感知（pass/review/block）与修复包 4 模板（network_security_config / backup_rules / manifest 片段 / dex-string-security 计划）。
+
+#### 工具与脚本
+
+- 本地 Web UI / REST API 服务（`scripts/serve.ts`）：127.0.0.1 + 可选 Bearer token——`POST /run` / `GET /reports/<path>` / `GET /`，本地优先。
+- assets 资源轻量加密工具（`scripts/encrypt-assets.ts`）：构建期加密 + `manifest.json` 生成（与字符串加密桩同模式）。
+- DEX 方法混淆设备验证清单生成器（`scripts/generate-device-checklist.ts`）：7 项真机矩阵清单。
+- 签名指纹管理脚本（`scripts/signing-fingerprints.ts`）：keytool 指纹清单 + `--expect` 多指纹校验，密码仅从环境变量读取。
+
+#### 文档
+
+- R8/ProGuard 规则模板库（`docs/r8-rule-templates.md`）：Retrofit/Room/协程/序列化 keep 模板与反模式。
+- assets 资源轻量加密方案（`docs/assets-encryption-plan.md`）与强制 R8 按变体细化模板（`docs/force-r8-variant-template.md`）。
 
 ### Fixed
 

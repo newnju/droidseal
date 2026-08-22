@@ -225,6 +225,7 @@ export interface StepState {
   title: string
   description: string
   skippable: boolean
+  phase: "prepare" | "audit" | "harden" | "release"
   status: StepStatus
   result?: StepResult
 }
