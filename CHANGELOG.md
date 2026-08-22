@@ -191,7 +191,13 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
   - 长期（边界兼容）：动态分析外部衔接指南；平台支持矩阵；恶意指标轻量提示（`MALICIOUS_INDICATOR`）。
   - 缺口补强：隐私数据收集清单（`PRIVACY_DATA_COLLECTION`/`PRIVACY_API_USAGE`）；证书固定缺失检测（`SOURCE_NO_CERT_PINNING`）；SQLite 明文存储审计（`SOURCE_UNENCRYPTED_STORAGE`）；反编译导出工具（`scripts/export-decompiled.ts`）。
 - **仍缺（边界项——明确不实现）**：iOS/Windows 多平台（大工程——见 `docs/platform-matrix.md`）；内置动态分析（本地优先边界——见 `docs/dynamic-analysis-bridge.md`）；恶意软件沙箱/反病毒（偏离发布安全定位）。
-- **下一竞争者（Quark-Engine——活跃，恶意行为加权评分）差距**：① 行为规则引擎（DEX API 调用组合的规则匹配，区别于通用正则）；② 加权恶意评分（行为权值累计——恶意度打分）；③ 内置恶意行为规则库（短信劫持/键盘记录/设备管理滥用等）。均为静态可实现的深化，与 `MALICIOUS_INDICATOR` 互补。
+- **下一竞争者（Quark-Engine——活跃，恶意行为加权评分）差距与设计**：
+  - ① DEX 调用图提取（`dex-callgraph.ts`）：解析 code_item 的 invoke-kind 指令 → 调用方 → 被调 类.方法（有界、失败关闭）——当前扫描仅字符串池级，无方法调用引用。
+  - ② 行为规则引擎（`behavior-rules.ts`）：规则 JSON `{ crimer, className, methodName, score, label }`——调用图匹配（区别于通用正则）。
+  - ③ 加权恶意评分：命中规则 score 累计 → 恶意度 0-100——报告字段（当前恶意指标是权限组合清单，无评分）。
+  - ④ 内置恶意行为规则库：内置 8-10 条常见恶意行为规则（短信劫持/键盘记录/设备管理滥用/截屏/权限滥用等）。
+  - ⑤ 行为报告节：报告新增「行为分析」节（命中行为标签 + 关联 API 证据）。
+  - ⑥ 反混淆辅助（可选）：字符串解混淆后匹配——依赖混淆器知识，深，列为可选。
 
 ### 边界说明（能力方向）
 
