@@ -20,7 +20,7 @@ import { extractCalledMethods, extractCallGraph, callersOf } from "./dex-callgra
 import { matchBehaviorRules, maliciousScore, buildBehaviorFindings, matchDeobfuscatedRules, type BehaviorRule, BUILTIN_BEHAVIOR_RULES, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
 import { estimateEncryptableStrings } from "./dex-string-crypto.ts"
 import { buildEndpointFindings } from "./endpoint-extract.ts"
-import { buildPackerFindings } from "./packers.ts"
+import { buildPackerFindings, type PackerFingerprint, KNOWN_PACKERS } from "./packers.ts"
 import { analyzeElf, buildSoFindings } from "./elf-scan.ts"
 import { compareKnownVulnerabilities } from "./known-vulnerabilities.ts"
 import type {
@@ -964,6 +964,7 @@ async function scanDexFiles(
   onProgress?: (message: string) => void,
   rules: readonly BehaviorRule[] = BUILTIN_BEHAVIOR_RULES,
   thresholds: MaliciousScoreThresholds = DEFAULT_SCORE_THRESHOLDS,
+  fingerprints: readonly PackerFingerprint[] = KNOWN_PACKERS,
 ): Promise<Finding[]> {
   if (dexFiles.length === 0) return []
   onProgress?.("扫描 DEX 字符串池（密钥、弱加密、动态加载等启发式）")
@@ -1042,7 +1043,7 @@ async function scanDexFiles(
       evidence: sdks.join(", "),
     })
     findings.push(...compareKnownVulnerabilities(sdks))
-    findings.push(...buildPackerFindings(combined))
+    findings.push(...buildPackerFindings(combined, fingerprints))
     findings.push(...buildEndpointFindings(combined))
     const encryptable = estimateEncryptableStrings(combined)
     if (encryptable.length > 0) {
@@ -1386,6 +1387,7 @@ export async function auditApk(
   onProgress?: (message: string) => void,
   rules: readonly BehaviorRule[] = BUILTIN_BEHAVIOR_RULES,
   thresholds: MaliciousScoreThresholds = DEFAULT_SCORE_THRESHOLDS,
+  fingerprints: readonly PackerFingerprint[] = KNOWN_PACKERS,
 ): Promise<SecurityAudit> {
   onProgress?.("读取 APK ZIP 中央目录")
   const entries = await parseZipEntries(apkPath)
@@ -1488,7 +1490,7 @@ export async function auditApk(
     findings.push(clipboardFinding("HYBRID_SENSITIVE_PLUGIN_CLIPBOARD"))
   }
 
-  findings.push(...(await scanDexFiles(apkPath, summary.dexFiles, onProgress, rules, thresholds)))
+  findings.push(...(await scanDexFiles(apkPath, summary.dexFiles, onProgress, rules, thresholds, fingerprints)))
   findings.push(...(await scanNativeLibraries(apkPath, summary.nativeLibraries, onProgress)))
   findings.push(...(await scanEmbeddedAssets(apkPath, entries, onProgress)))
 

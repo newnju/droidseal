@@ -23,6 +23,7 @@ import { scanProjectPrivacyApis } from "./privacy-collection.ts"
 import { scanProjectStorageSecurity } from "./storage-security.ts"
 import { scanProjectSslBypass } from "./ssl-bypass.ts"
 import { loadBehaviorRules, mergeBehaviorRules, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
+import { loadPackerFingerprints, mergePackerFingerprints, KNOWN_PACKERS } from "./packers.ts"
 import { writeReports } from "./report.ts"
 import { selectedMissingTools } from "./tool-installer.ts"
 import { discoverToolchain } from "./toolchain.ts"
@@ -917,7 +918,10 @@ export class Pipeline {
       high: this.config.maliciousScoreThresholds?.high ?? DEFAULT_SCORE_THRESHOLDS.high,
       medium: this.config.maliciousScoreThresholds?.medium ?? DEFAULT_SCORE_THRESHOLDS.medium,
     }
-    const audit = await auditApk(artifact, toolchain, (message) => this.progress("apk-audit", message), mergeBehaviorRules(customBehaviorRules), scoreThresholds)
+    const packerFingerprints = this.config.packerFingerprintsFile
+      ? mergePackerFingerprints(await loadPackerFingerprints(this.config.packerFingerprintsFile))
+      : KNOWN_PACKERS
+    const audit = await auditApk(artifact, toolchain, (message) => this.progress("apk-audit", message), mergeBehaviorRules(customBehaviorRules), scoreThresholds, packerFingerprints)
     this.context.audit.findings.push(...audit.findings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [
