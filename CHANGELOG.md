@@ -104,6 +104,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 反编译核验建议（中期）：复杂发现（SOURCE_/DEX_/PACKER_ 等）提示 JADX/apktool 反编译人工核验，报告新增 JSON 字段与 Markdown 节。
 - HTML 报告生成器（中期）：`scripts/generate-html-report.ts` 从报告 JSON 生成自包含 HTML（门禁横幅/发现表格/步骤/加固成效/MASTG/反编译建议/上次对比——TUI 视觉）。
 - 多扫描历史趋势（中期）：最近 10 次运行的门禁/发现数序列，报告新增 JSON `historyTrend` 与 Markdown「历史趋势」表。
+- 动态分析外部衔接指南（长期）：`docs/dynamic-analysis-bridge.md`——Frida/drozer/模拟器配合静态审计的按发现类型验证建议（保持本地优先，不内置动态）。
+- 平台支持矩阵（长期）：`docs/platform-matrix.md`——当前 Android 矩阵 + iOS/Windows 扩展规划与决策建议。
+- 恶意指标轻量提示（长期）：`MALICIOUS_INDICATOR`——危险权限组合（短信劫持/屏幕覆盖+无障碍/设备管理+短信）清单级提示（info，失败关闭，不判定恶意）。
 
 #### 文档
 
