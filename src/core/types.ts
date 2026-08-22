@@ -89,6 +89,8 @@ export interface PipelineConfig {
   keepIntermediates?: boolean
   // 加固覆盖度门禁阈值:核心审计/防护/验证步骤成功数低于该值给 review 提示(默认 3)。
   minimumHardeningCoverage?: number
+  // 自定义规则文件(JSON 数组:{ code, title, severity, pattern, scope })——source/dex 规则审计时应用。
+  customRulesFile?: string
   signing: SigningConfig
   protection: ProtectionConfig
 }
