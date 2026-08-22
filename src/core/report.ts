@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises"
 import { EDITION } from "../brand.ts"
 import { writeRemediationBundle } from "./remediation.ts"
 import { mappedMastgFindings, decompileSuggestions } from "./mastg-map.ts"
+import { buildPocCommands } from "./poc-commands.ts"
 import { writeReleaseEvidence, type ReleaseEvidenceResult } from "./release-evidence.ts"
 import {
   buildControlCoverage,
@@ -518,6 +519,7 @@ export async function writeReports(
     behaviorAnalysis: sortedFindings
       .filter((f) => f.code === "MALICIOUS_BEHAVIOR" || f.code === "MALICIOUS_SCORE")
       .map((f) => ({ code: f.code, title: f.title, evidence: f.evidence })),
+    pocCommands: buildPocCommands(sortedFindings, context.audit.apkMetadata?.packageName),
     steps: context.stepResults.map(resultForReport),
   }
 
@@ -589,6 +591,17 @@ ${(() => {
   return behaviors.length > 0
     ? behaviors.map((f) => `- **${f.title}**：${f.evidence}`).join("\n")
     : "- 未检测到恶意行为特征（调用图/解码匹配均未命中内置规则）。"
+})()}
+
+## POC 验证命令建议
+
+以下高风险发现可执行 adb/drozer 命令验证（本地设备/模拟器——详见 docs/dynamic-analysis-bridge.md）：
+
+${(() => {
+  const poc = buildPocCommands(sortedFindings, context.audit.apkMetadata?.packageName)
+  return poc.length > 0
+    ? poc.map((p) => `- ${p.code} ${p.title}（可验证）：${p.command} —— ${p.explanation}`).join("\n")
+    : "- 无高风险可自动验证发现。"
 })()}
 
 ## 执行步骤
