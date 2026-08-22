@@ -432,6 +432,7 @@ export function auditManifestAxml(bytes: Uint8Array): AxmlManifestAudit {
     parseCustomPermissions(xmlTree),
     "MANIFEST",
   ))
+  findings.push(...detectMaliciousIndicators(parseUsesPermissions(xmlTree)))
   findings.push(...metaDataSecretFindings(parseMetaDataValues(xmlTree), "MANIFEST"))
   return { findings, metadata, tree, xmlTree }
 }
@@ -485,6 +486,34 @@ export function parseUsesPermissions(xmlTree: string): string[] {
     .filter((element) => element.tag === "uses-permission" || element.tag === "uses-permission-sdk-23")
     .map((element) => element.attrs.get("android:name"))
     .filter((name): name is string => typeof name === "string" && name.length > 0)
+}
+
+// 恶意指标轻量提示(长期③——MobSF 缺口):危险权限组合检测,info 级,失败关闭
+// (仅清单级提示,不判定恶意;未命中不输出)。
+const MALICIOUS_PERMISSION_SETS: ReadonlyArray<{ label: string; permissions: readonly string[]; required: number }> = [
+  { label: "短信劫持组合", permissions: ["android.permission.RECEIVE_SMS", "android.permission.SEND_SMS"], required: 2 },
+  { label: "短信+录音+通话状态组合", permissions: ["android.permission.RECEIVE_SMS", "android.permission.RECORD_AUDIO", "android.permission.READ_PHONE_STATE"], required: 2 },
+  { label: "屏幕覆盖+无障碍组合", permissions: ["android.permission.SYSTEM_ALERT_WINDOW", "android.permission.BIND_ACCESSIBILITY_SERVICE"], required: 2 },
+  { label: "设备管理+短信组合", permissions: ["android.permission.BIND_DEVICE_ADMIN", "android.permission.RECEIVE_SMS"], required: 2 },
+]
+
+export function detectMaliciousIndicators(permissions: readonly string[]): Finding[] {
+  const findings: Finding[] = []
+  const granted = new Set(permissions)
+  for (const set of MALICIOUS_PERMISSION_SETS) {
+    const matched = set.permissions.filter((permission) => granted.has(permission))
+    if (matched.length >= set.required) {
+      findings.push({
+        severity: "info",
+        code: "MALICIOUS_INDICATOR",
+        title: `权限组合符合常见恶意应用特征：${set.label}`,
+        detail: `同时申请了 ${matched.join("、")}——常见于恶意/广告应用组合，需人工核验（仅清单级提示，不判定恶意）。`,
+        recommendation: "人工核验应用来源与行为；若为正规功能（如短信验证码），确认用途后忽略。",
+        evidence: matched.join(", "),
+      })
+    }
+  }
+  return findings
 }
 
 const PROTECTION_LEVEL_BY_HEX: Record<string, string> = {

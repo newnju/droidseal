@@ -100,6 +100,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 新增弱加密算法检测（`SOURCE_WEAK_CRYPTO`）：AES 默认 ECB / AES-ECB / DES / 3DES / 硬编码 IV 的源码模式匹配（失败关闭）。
 - 签名审计新增证书有效期提示（`SIGNING_CERT_EXPIRED`/`SIGNING_CERT_EXPIRING`）：证书过期（medium）与临近 30 天（low）提示。
 - 新增自定义规则文件加载（`customRulesFile` 配置）：JSON 正则规则（source/dex/all scope），审计时应用（失败关闭）。
+- OWASP MASTG 规则映射（中期）：常见发现映射到 MASTG 类别参考，报告新增 JSON `mastg` 字段与 Markdown「OWASP MASTG 参考」节。
+- 反编译核验建议（中期）：复杂发现（SOURCE_/DEX_/PACKER_ 等）提示 JADX/apktool 反编译人工核验，报告新增 JSON 字段与 Markdown 节。
+- HTML 报告生成器（中期）：`scripts/generate-html-report.ts` 从报告 JSON 生成自包含 HTML（门禁横幅/发现表格/步骤/加固成效/MASTG/反编译建议/上次对比——TUI 视觉）。
+- 多扫描历史趋势（中期）：最近 10 次运行的门禁/发现数序列，报告新增 JSON `historyTrend` 与 Markdown「历史趋势」表。
 
 #### 文档
 
