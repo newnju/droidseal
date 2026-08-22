@@ -177,6 +177,13 @@ function resultRole(result: StepResult): MessageRole {
   return "system"
 }
 
+const PHASE_LABELS: Record<"prepare" | "audit" | "harden" | "release", string> = {
+  prepare: "准备",
+  audit: "审计",
+  harden: "加固",
+  release: "发布",
+}
+
 export function skipKindLabel(kind: SkipKind | undefined): string {
   const labels: Record<SkipKind, string> = {
     "not-applicable": t("skipNotApplicable"),
@@ -1494,19 +1501,29 @@ export function App() {
             <scrollbox ref={(el: ScrollBoxRenderable) => { progressScrollBox = el }} flexGrow={1} minHeight={0}>
               <For each={steps()}>
                 {(step, index) => (
-                  <box flexDirection="column" flexShrink={0} paddingBottom={1}>
-                    <text fg={stepColor(step.status)} selectable={false}>
-                      {statusGlyph(step.status)} {String(index() + 1).padStart(2, "0")} · <b>{tStep(step.id)}</b>
-                    </text>
-                    <Show when={step.status === "processing"}>
-                      <text fg={theme.ice}>
-                        <span style={{ fg: theme.ice }}>{SPINNER[spinnerIndex()]}</span> processing…
+                  <>
+                    <Show when={index() === 0 || steps()[index() - 1]?.phase !== step.phase}>
+                      <text fg={theme.borderActive} selectable={false}>
+                        ── {PHASE_LABELS[step.phase]} ──
                       </text>
                     </Show>
-                    <Show when={step.result}>
-                      {(result) => <text fg={theme.textMuted} wrapMode="word">  {translateSummary(result().summary)}</text>}
-                    </Show>
-                  </box>
+                    <box flexDirection="column" flexShrink={0} paddingBottom={1}>
+                      <text fg={stepColor(step.status)} selectable={false}>
+                        {statusGlyph(step.status)} {String(index() + 1).padStart(2, "0")} · <b>{tStep(step.id)}</b>
+                      </text>
+                      <Show when={step.status === "skipped" && step.result?.skipKind}>
+                        {(kind) => <text fg={theme.borderActive}>  ↳ {skipKindLabel(kind())}</text>}
+                      </Show>
+                      <Show when={step.status === "processing"}>
+                        <text fg={theme.ice}>
+                          <span style={{ fg: theme.ice }}>{SPINNER[spinnerIndex()]}</span> processing…
+                        </text>
+                      </Show>
+                      <Show when={step.result}>
+                        {(result) => <text fg={theme.textMuted} wrapMode="word">  {translateSummary(result().summary)}</text>}
+                      </Show>
+                    </box>
+                  </>
                 )}
               </For>
             </scrollbox>

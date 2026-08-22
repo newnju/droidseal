@@ -49,23 +49,24 @@ interface StepDefinition {
   title: string
   description: string
   skippable: boolean
+  phase: "prepare" | "audit" | "harden" | "release"
 }
 
 export const STEP_DEFINITIONS: readonly StepDefinition[] = [
-  { id: "doctor", title: "环境诊断", description: "检查本次流程需要的 JDK、Android Build Tools 与 Gradle Wrapper", skippable: true },
-  { id: "prepare", title: "准备工作区", description: "检查输入并创建工作副本，原文件保持不变", skippable: false },
-  { id: "keystore", title: "签名库", description: "签名前先验证现有 JKS/PKCS12 或创建新签名库，尽早发现密码/别名问题", skippable: true },
-  { id: "source-audit", title: "源码安全审计", description: "检查 release、R8、Manifest 与明文签名密码", skippable: true },
-  { id: "build", title: "构建 Release APK", description: "使用项目自己的 Gradle Wrapper 生成 APK", skippable: false },
-  { id: "apk-audit", title: "APK 安全审计", description: "检查 ZIP 结构、Manifest、DEX、SO 与元数据", skippable: true },
-  { id: "protect", title: "本地安全防护", description: "核验 R8、DEX、反调试与完整性证据，确定商业加固前可安全执行的边界", skippable: true },
-  { id: "harden", title: "Release 归一化", description: "强制 debuggable=false，保证最终产物为安全 Release 状态", skippable: true },
-  { id: "web-assets", title: "Web JS 发布处理", description: "可选：压缩混淆混合应用 JavaScript 并移除 source map，签名前生成新包", skippable: true },
-  { id: "arsc-obfuscate", title: "资源名混淆", description: "可选有损：重命名 resources.arsc 资源名并扁平化资源路径，签名前生成新包", skippable: true },
-  { id: "align", title: "ZIP 对齐", description: "签名前用 zipalign 生成独立的对齐 APK", skippable: true },
-  { id: "sign", title: "APK 签名", description: "使用 apksigner 和内存中的密码生成已签名 APK", skippable: true },
-  { id: "verify", title: "最终验证", description: "验证 zipalign、签名方案、证书并计算 SHA-256", skippable: true },
-  { id: "report", title: "生成报告", description: "保存最终 APK，并生成 JSON/Markdown、发布证据、SBOM 与修复资料", skippable: true },
+  { id: "doctor", title: "环境诊断", description: "检查本次流程需要的 JDK、Android Build Tools 与 Gradle Wrapper", skippable: true, phase: "prepare" },
+  { id: "prepare", title: "准备工作区", description: "检查输入并创建工作副本，原文件保持不变", skippable: false, phase: "prepare" },
+  { id: "keystore", title: "签名库", description: "签名前先验证现有 JKS/PKCS12 或创建新签名库，尽早发现密码/别名问题", skippable: true, phase: "prepare" },
+  { id: "source-audit", title: "源码安全审计", description: "检查 release、R8、Manifest 与明文签名密码", skippable: true, phase: "audit" },
+  { id: "build", title: "构建 Release APK", description: "使用项目自己的 Gradle Wrapper 生成 APK", skippable: false, phase: "audit" },
+  { id: "apk-audit", title: "APK 安全审计", description: "检查 ZIP 结构、Manifest、DEX、SO 与元数据", skippable: true, phase: "audit" },
+  { id: "protect", title: "本地安全防护", description: "核验 R8、DEX、反调试与完整性证据，确定商业加固前可安全执行的边界", skippable: true, phase: "audit" },
+  { id: "harden", title: "Release 归一化", description: "强制 debuggable=false，保证最终产物为安全 Release 状态", skippable: true, phase: "harden" },
+  { id: "web-assets", title: "Web JS 发布处理", description: "可选：压缩混淆混合应用 JavaScript 并移除 source map，签名前生成新包", skippable: true, phase: "harden" },
+  { id: "arsc-obfuscate", title: "资源名混淆", description: "可选有损：重命名 resources.arsc 资源名并扁平化资源路径，签名前生成新包", skippable: true, phase: "harden" },
+  { id: "align", title: "ZIP 对齐", description: "签名前用 zipalign 生成独立的对齐 APK", skippable: true, phase: "release" },
+  { id: "sign", title: "APK 签名", description: "使用 apksigner 和内存中的密码生成已签名 APK", skippable: true, phase: "release" },
+  { id: "verify", title: "最终验证", description: "验证 zipalign、签名方案、证书并计算 SHA-256", skippable: true, phase: "release" },
+  { id: "report", title: "生成报告", description: "保存最终 APK，并生成 JSON/Markdown、发布证据、SBOM 与修复资料", skippable: true, phase: "release" },
 ] as const
 
 export function stepGuidance(stepId: StepId, config: PipelineConfig): string[] {
