@@ -42,6 +42,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 新增修复包复测闭环（`scripts/re-test.ts`）：修复后重跑流水线，`--before` 对比消除/新增/剩余 findings。
 - 供应链离线漏洞快照扩充至 8 条（新增 gson CVE-2022-25647 / commons-compress CVE-2021-36090 / okio CVE-2023-3635）；打包器指纹扩充至 12 个（新增顶象/APKProtect/通付盾）。
 - 新增强制 R8 按变体细化模板（`docs/force-r8-variant-template.md`）：按 buildType/flavor 分支的 init-script 模板与使用说明。
+- 发布门禁新增加固覆盖度提示（`HARDENING_COVERAGE_LOW`）：核心审计/防护/验证步骤未真实执行时给 review 提示（不阻断）。
+- 新增供应链快照 / 打包器指纹一致性校验（`scripts/known-vuln-check.ts`）与数据表一致性测试（CVE/包名/marker 唯一性、字段完整性）。
+- ARSC 值级审计新增 `ARSC_VALUE_TECHNICAL` finding（key_/id_/token_ 等技术形态字符串值识别，仅审计不改写）。
+- 复测脚本 `re-test.ts` 新增 `--auto`：自动定位输入目录下最近一次运行报告并对比 findings（消除/新增/剩余）。
 
 ### Fixed
 
