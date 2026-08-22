@@ -107,6 +107,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 动态分析外部衔接指南（长期）：`docs/dynamic-analysis-bridge.md`——Frida/drozer/模拟器配合静态审计的按发现类型验证建议（保持本地优先，不内置动态）。
 - 平台支持矩阵（长期）：`docs/platform-matrix.md`——当前 Android 矩阵 + iOS/Windows 扩展规划与决策建议。
 - 恶意指标轻量提示（长期）：`MALICIOUS_INDICATOR`——危险权限组合（短信劫持/屏幕覆盖+无障碍/设备管理+短信）清单级提示（info，失败关闭，不判定恶意）。
+- DEX 调用图提取（`dex-callgraph.ts`）：解析 invoke-kind 指令 → 被调 类.方法（有界、失败关闭）。
+- 行为规则引擎（`behavior-rules.ts`）：调用图匹配内置 10 条恶意行为规则（短信劫持/键盘记录/设备管理滥用/截屏/录音等）→ `MALICIOUS_BEHAVIOR` finding + 加权恶意评分 `MALICIOUS_SCORE`（0-100，归一化）。
+- 反混淆辅助：hex/base64 编码串解码后与行为规则匹配（补充命中，失败关闭）。
+- 报告新增「行为分析（恶意行为特征）」节（JSON `behaviorAnalysis` + Markdown）。
 
 #### 文档
 
