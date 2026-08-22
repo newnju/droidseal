@@ -19,6 +19,8 @@ import { compareSignatureSelfCheckFingerprints } from "./signature-self-check.ts
 import { scanProjectDataflow } from "./taint-source.ts"
 import { scanProjectWeakCrypto } from "./weak-crypto.ts"
 import { loadCustomRules, applyCustomRulesToProject } from "./custom-rules.ts"
+import { scanProjectPrivacyApis } from "./privacy-collection.ts"
+import { scanProjectStorageSecurity } from "./storage-security.ts"
 import { writeReports } from "./report.ts"
 import { selectedMissingTools } from "./tool-installer.ts"
 import { discoverToolchain } from "./toolchain.ts"
@@ -576,6 +578,12 @@ export class Pipeline {
       const customFindings = await applyCustomRulesToProject(customRules, this.config.inputPath)
       this.context.audit.findings.push(...customFindings)
     }
+    // 源码侧隐私 API 检测(MobSF 缺口):设备标识/位置/通讯录等调用清单,失败关闭
+    const privacyFindings = await scanProjectPrivacyApis(this.config.inputPath)
+    this.context.audit.findings.push(...privacyFindings)
+    // 源码侧证书固定缺失 + 明文存储审计(MobSF 缺口):低置信度提示,失败关闭
+    const storageFindings = await scanProjectStorageSecurity(this.config.inputPath)
+    this.context.audit.findings.push(...storageFindings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [
         ...(this.context.audit.softwareComponents ?? []),

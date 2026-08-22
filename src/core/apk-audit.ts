@@ -13,6 +13,7 @@ import { auditBackupPolicy, auditBackupRulesXml } from "./backup-rules-audit.ts"
 import { resolveArscFilePath } from "./arsc-model.ts"
 import { runProcess } from "./process.ts"
 import { buildPermissionFindings, type CustomPermission } from "./permissions-catalog.ts"
+import { buildPrivacyFindings } from "./privacy-collection.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
 import { estimateEncryptableStrings } from "./dex-string-crypto.ts"
@@ -433,6 +434,7 @@ export function auditManifestAxml(bytes: Uint8Array): AxmlManifestAudit {
     "MANIFEST",
   ))
   findings.push(...detectMaliciousIndicators(parseUsesPermissions(xmlTree)))
+  findings.push(...buildPrivacyFindings(parseUsesPermissions(xmlTree)))
   findings.push(...metaDataSecretFindings(parseMetaDataValues(xmlTree), "MANIFEST"))
   return { findings, metadata, tree, xmlTree }
 }
