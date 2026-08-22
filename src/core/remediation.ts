@@ -228,10 +228,22 @@ ${R8_RULES_SUGGESTION}`,
     )
   }
   if (dexStringCodes.length > 0) {
+    const dexFindings = findings.filter((f) => dexStringCodes.includes(f.code))
+    const specifics = dexFindings
+      .map((f) => `- **${f.title}**${f.evidence ? `（${f.evidence}）` : ""}`)
+      .join("\n")
     await writeArtifact(
       "templates/dex-string-security.plan.md",
-      DEX_STRING_PLAN,
-      "DEX 字符串安全化计划（敏感字符串分类、服务端化与源码侧解密桩接入）",
+      `# DEX 字符串安全化计划
+
+## 本次审计发现
+
+${specifics || "- 无具体项"}
+
+## 通用处置指引
+
+${DEX_STRING_PLAN}`,
+      "DEX 字符串安全化计划（本次审计发现 + 敏感字符串分类、服务端化与源码侧解密桩接入）",
       dexStringCodes,
     )
   }

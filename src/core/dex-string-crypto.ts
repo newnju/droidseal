@@ -174,3 +174,20 @@ export function planStringEncryption(
     findings,
   }
 }
+
+// -- 字符串池级可加密串估计(无需完整 DexTables 的近似) ----------------------
+// 研究模块 computeEncryptableStrings(字面量集 − 标识符集)的池级近似:
+// 排除 Java 标识符形态与 DEX 类型描述符,保留含 URL/密钥格式/高熵特征的字符串。
+// 用于 apk-audit 的 DEX_STRING_SECURITY finding 与 --from-audit 加密桩衔接。
+export function estimateEncryptableStrings(strings: Iterable<string>): string[] {
+  const out: string[] = []
+  for (const s of strings) {
+    if (s.length < 8 || s.length > 512) continue
+    if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(s)) continue
+    if (/^L[a-zA-Z0-9_/$]+;$/.test(s)) continue
+    if (/https?:\/\//.test(s) || /AKIA|AIza|ghp_|-----BEGIN/.test(s) || /[A-Za-z0-9+/]{40,}={0,2}/.test(s)) {
+      out.push(s)
+    }
+  }
+  return out.sort()
+}
