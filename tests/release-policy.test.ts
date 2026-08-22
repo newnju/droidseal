@@ -78,9 +78,9 @@ function context(input: {
     audit: { findings: input.findings ?? [] },
     // 默认包含核心加固步骤的成功结果,避免 HARDENING_COVERAGE_LOW 在最小上下文误触发
     stepResults: input.steps ?? [
-      { id: "apk-audit", status: "success", title: "", summary: "", detail: [], startedAt: "2026-01-01T00:00:00.000Z", finishedAt: "2026-01-01T00:00:00.000Z", durationMs: 0 },
-      { id: "protect", status: "success", title: "", summary: "", detail: [], startedAt: "2026-01-01T00:00:00.000Z", finishedAt: "2026-01-01T00:00:00.000Z", durationMs: 0 },
-      { id: "verify", status: "success", title: "", summary: "", detail: [], startedAt: "2026-01-01T00:00:00.000Z", finishedAt: "2026-01-01T00:00:00.000Z", durationMs: 0 },
+      { id: "apk-audit", status: "success", title: "", summary: "", detail: [], startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), durationMs: 0 },
+      { id: "protect", status: "success", title: "", summary: "", detail: [], startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), durationMs: 0 },
+      { id: "verify", status: "success", title: "", summary: "", detail: [], startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), durationMs: 0 },
     ],
     ...(input.signatureVerified === undefined ? {} : { signatureVerified: input.signatureVerified }),
   }
