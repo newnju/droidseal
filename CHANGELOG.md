@@ -37,6 +37,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 新增打包器/保护器指纹识别（`PACKER_DETECTED`）：纯 TypeScript 指纹表检测常见加固壳/混淆器（腾讯乐固/梆梆/爱加密/360 加固/DexProtector/DexGuard/阿里聚安全/娜迦），并提示静态审计可见性降级、建议商业加固核验；失败关闭。
 - R8/ProGuard 规则优化建议动态化：报告修复包的 `proguard-rules.suggestion.md` 现带本次审计发现的具体项（缺失/不完整规则引用），前置于通用最小化指引。
 - 新增本地 Web UI / REST API 服务（`scripts/serve.ts`）：零依赖 Bun.serve，绑定 127.0.0.1 并支持可选 Bearer token——`POST /run` 提交配置跑完整流水线、`GET /reports/<path>` 读取报告文件、`GET /` 返回 Web UI（运行表单 + 报告浏览）；本地优先、不对外联网，面向企业/DevSecOps 集成。
+- DEX 字符串安全子集接入主线：新增 `DEX_STRING_SECURITY` finding（字符串池级可加密敏感串估计——非标识符形态且含 URL/密钥格式/高熵特征），衔接源码侧加密桩生成器 `--from-audit`；修复包的 DEX 字符串安全化计划现带本次审计发现。
 
 ### Fixed
 

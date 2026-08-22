@@ -16,6 +16,7 @@ import { gradleJvmArgsString, runProcess } from "./process.ts"
 import { auditProject, detectReleaseMinifyEnabled } from "./project-audit.ts"
 import { analyzeApksignerVerbose, analyzeCertPrint, buildSigningFindings } from "./signing-audit.ts"
 import { compareSignatureSelfCheckFingerprints } from "./signature-self-check.ts"
+import { scanProjectDataflow } from "./taint-source.ts"
 import { writeReports } from "./report.ts"
 import { selectedMissingTools } from "./tool-installer.ts"
 import { discoverToolchain } from "./toolchain.ts"
@@ -559,6 +560,9 @@ export class Pipeline {
     }
     const audit = await auditProject(this.config.inputPath, (message) => this.progress("source-audit", message))
     this.context.audit.findings.push(...audit.findings)
+    // 源码侧敏感数据流/污点跟踪(高补强③):源→汇 的轻量传播,失败关闭
+    const dataflowFindings = await scanProjectDataflow(this.config.inputPath)
+    this.context.audit.findings.push(...dataflowFindings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [
         ...(this.context.audit.softwareComponents ?? []),
