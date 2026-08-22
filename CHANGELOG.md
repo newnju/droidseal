@@ -185,9 +185,12 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ### 下一阶段（MobSF 缺口导向）
 
-- **短期（易落地、无边界冲突）**：① URL/域名/端点提取（apkleaks 式）；② 弱加密算法检测（AES-ECB/DES/硬编码 IV）；③ 证书分析深化（过期/自签名/链异常提示）；④ 自定义规则文件加载（YARA 式 JSON/正则规则）。
-- **中期（价值高、工作量中）**：OWASP MASTG 规则映射；反编译源码导出（可选，人工核验）；PDF/HTML 报告；多扫描历史趋势。
-- **长期/边界（需决策）**：动态分析（模拟器运行时/网络记录——与本地优先边界冲突，可做外部衔接建议）；iOS/Windows 多平台；恶意软件沙箱/反病毒（偏离发布安全定位）。
+- **已完成（[1.0.1]）**：
+  - 短期：URL/域名/端点提取（`ENDPOINT_INVENTORY`）；弱加密算法检测（`SOURCE_WEAK_CRYPTO`）；证书有效期提示（`SIGNING_CERT_EXPIRED`/`EXPIRING`）；自定义规则文件加载（`customRulesFile`）。
+  - 中期：OWASP MASTG 映射；反编译核验建议；HTML 报告生成器；多扫描历史趋势。
+  - 长期（边界兼容）：动态分析外部衔接指南；平台支持矩阵；恶意指标轻量提示（`MALICIOUS_INDICATOR`）。
+  - 缺口补强：隐私数据收集清单（`PRIVACY_DATA_COLLECTION`/`PRIVACY_API_USAGE`）；证书固定缺失检测（`SOURCE_NO_CERT_PINNING`）；SQLite 明文存储审计（`SOURCE_UNENCRYPTED_STORAGE`）；反编译导出工具（`scripts/export-decompiled.ts`）。
+- **仍缺（边界项——明确不实现）**：iOS/Windows 多平台（大工程——见 `docs/platform-matrix.md`）；内置动态分析（本地优先边界——见 `docs/dynamic-analysis-bridge.md`）；恶意软件沙箱/反病毒（偏离发布安全定位）。
 
 ### 边界说明（能力方向）
 
