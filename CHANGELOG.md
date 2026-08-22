@@ -55,7 +55,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 #### 工具与脚本
 
-- 本地 Web UI / REST API 服务（`scripts/serve.ts`）：127.0.0.1 + 可选 Bearer token——`POST /run` / `GET /reports/<path>` / `GET /`，本地优先。
+- 本地 REST API 服务（`scripts/serve.ts`）：127.0.0.1 + 可选 Bearer token——`POST /run` / `GET /runs` / `GET /runs/:id` / `GET /runs/:id/findings`（severity 筛选）/ `GET /reports/<path>` / `GET /health`，本地优先；Web UI 已移除，批量/CI 集成使用 REST。
 - assets 资源轻量加密工具（`scripts/encrypt-assets.ts`）：构建期加密 + `manifest.json` 生成（与字符串加密桩同模式）。
 - DEX 方法混淆设备验证清单生成器（`scripts/generate-device-checklist.ts`）：7 项真机矩阵清单。
 - 签名指纹管理脚本（`scripts/signing-fingerprints.ts`）：keytool 指纹清单 + `--expect` 多指纹校验，密码仅从环境变量读取。
