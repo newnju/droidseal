@@ -5,7 +5,7 @@
 //
 // 用法：
 //   bun scripts/encrypt-assets.ts --dir assets/raw --output assets/enc [--key <hex>]
-import { generateKey, encryptBytes, keyFingerprint } from "../src/core/dex-string-crypto.ts"
+import { generateKey, encryptBytes, decryptBytes, keyFingerprint } from "../src/core/dex-string-crypto.ts"
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 
@@ -122,6 +122,18 @@ async function main(): Promise<void> {
     await mkdir(args.genReaderDir, { recursive: true })
     await writeFile(path.join(args.genReaderDir, "AssetsReader.kt"), assetsReaderKotlin(toHex(key), fingerprint, manifest), "utf8")
     console.log(`已生成解密器：${args.genReaderDir}/AssetsReader.kt（源码接入，运行时按清单解密 .enc）`)
+  }
+  if (process.argv.includes("--verify")) {
+    // 回程验证:每个密文解密回原文,失败即整体失败(失败关闭)
+    for (const file of files) {
+      const rawPath = path.join(args.inputDir, file)
+      const encPath = path.join(args.outputDir, `${file}.enc`)
+      const [original, cipher] = await Promise.all([readFile(rawPath), readFile(encPath)])
+      const plain = decryptBytes(cipher, key)
+      const equal = original.byteLength === plain.byteLength && original.every((b, i) => b === plain[i])
+      if (!equal) throw new Error(`回程验证失败：${file} 密文无法解密回原文`)
+    }
+    console.log(`回程验证通过：${files.length} 个文件均可解密回原文`)
   }
 }
 

@@ -124,6 +124,7 @@ function emptyContext(config: PipelineConfig): RunContext {
     finalArtifact: undefined,
     toolchain: undefined,
     audit: { findings: [] },
+    config,
     stepResults: [],
   }
 }

@@ -160,11 +160,12 @@ export function evaluateReleaseDecision(context: RunContext): ReleaseDecision {
   const executedHardening = hardeningSteps.filter((id) =>
     context.stepResults.some((step) => step.id === id && step.status === "success"),
   )
-  if (executedHardening.length < hardeningSteps.length) {
+  const coverageThreshold = context.config?.minimumHardeningCoverage ?? hardeningSteps.length
+  if (executedHardening.length < coverageThreshold) {
     reasons.push({
       code: "HARDENING_COVERAGE_LOW",
       level: "review",
-      message: `加固覆盖度不足：核心审计/防护/验证步骤仅 ${executedHardening.length}/${hardeningSteps.length} 真实执行（${hardeningSteps.filter((id) => !executedHardening.includes(id)).join("、")} 未成功）。`,
+      message: `加固覆盖度不足：核心审计/防护/验证步骤仅 ${executedHardening.length}/${coverageThreshold} 真实执行（${hardeningSteps.filter((id) => !executedHardening.includes(id)).join("、")} 未成功）。`,
       stepId: "verify",
     })
   }

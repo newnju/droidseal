@@ -41,6 +41,27 @@ function main(): void {
   } else {
     console.log(`一致性校验通过：快照 ${KNOWN_VULNERABILITIES.length} 条、指纹 ${KNOWN_PACKERS.length} 个`)
   }
+  if (process.argv.includes("--suggest")) {
+    console.log(`\n新条目格式模板：
+
+新增快照条目：
+{
+  package: "组件名",
+  cve: "CVE-YYYY-NNNNN",
+  severity: "critical | high | medium | low | info",
+  note: "漏洞说明",
+  affected: "受影响版本区间（可选）",
+  fixedIn: "修复版本（可选）",
+}
+
+新增指纹条目：
+{
+  name: "厂商名（英文名）",
+  marker: "类名/包名特征（小写）",
+  note: "说明",
+}
+补充后运行本脚本校验（CVE/包名/marker 唯一性、字段完整性）。`)
+  }
 }
 
 try {
