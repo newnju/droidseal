@@ -2,6 +2,7 @@ import path from "node:path"
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises"
 import { EDITION } from "../brand.ts"
 import { writeRemediationBundle } from "./remediation.ts"
+import { mappedMastgFindings, decompileSuggestions } from "./mastg-map.ts"
 import { writeReleaseEvidence, type ReleaseEvidenceResult } from "./release-evidence.ts"
 import {
   buildControlCoverage,
@@ -139,6 +140,23 @@ async function previousRunMarkdown(context: RunContext): Promise<string> {
 - 消除：${join(previousRun.eliminated)}
 - 新增：${join(previousRun.added)}
 - 剩余：${join(previousRun.remaining)}`
+}
+
+// 多扫描历史趋势（中期④——MobSF 缺口）：最近 10 次运行的门禁/发现数序列。
+async function buildHistoryTrend(context: RunContext): Promise<Array<{ runId: string; gate?: string; findingsCount: number }> | null> {
+  const runsRoot = path.join(context.config?.outputDirectory ?? "", ".droidseal", "runs")
+  const ids = await readdir(runsRoot).catch(() => [] as string[])
+  ids.sort()
+  const trend: Array<{ runId: string; gate?: string; findingsCount: number }> = []
+  for (const id of ids.slice(-10)) {
+    const reportPath = path.join(runsRoot, id, "reports", "droidseal-report.json")
+    const content = await readFile(reportPath, "utf8").catch(() => null)
+    if (!content) continue
+    const report = JSON.parse(content) as { releaseDecision?: { status?: string }; audit?: { findings?: unknown[] } }
+    const gate = report.releaseDecision?.status
+    trend.push({ runId: id, ...(gate ? { gate } : {}), findingsCount: report.audit?.findings?.length ?? 0 })
+  }
+  return trend.length > 0 ? trend : null
 }
 
 async function hardeningEffectivenessMarkdown(context: RunContext): Promise<string> {
@@ -436,6 +454,7 @@ export async function writeReports(
   const sortedFindings = sortFindingsBySeverity(context.audit.findings)
     .map((finding) => ({ ...finding, confidence: effectiveFindingConfidence(finding) }))
   const remediation = await writeRemediationBundle(context.reportDirectory, sortedFindings)
+  const historyTrend = await buildHistoryTrend(context)
 
   const json = {
     schemaVersion: 8,
@@ -470,6 +489,7 @@ export async function writeReports(
     controlCoverage,
     hardeningEffectiveness: await buildHardeningEffectiveness(context),
     previousRun: await buildPreviousRunComparison(context),
+    historyTrend: await buildHistoryTrend(context),
     audit: {
       findings: sortedFindings,
       signatureSelfChecks: (context.audit.signatureSelfChecks ?? []).map((check) => ({
@@ -493,6 +513,8 @@ export async function writeReports(
       artifacts: remediation.artifacts,
       suggestionCount: remediation.artifacts.length,
     } : null,
+    mastg: mappedMastgFindings(sortedFindings),
+    decompileSuggestions: decompileSuggestions(sortedFindings),
     steps: context.stepResults.map(resultForReport),
   }
 
@@ -524,10 +546,38 @@ ${await hardeningEffectivenessMarkdown(context)}
 
 ${await previousRunMarkdown(context)}
 
+## 历史趋势（最近 10 次运行）
+
+${(() => {
+  if (!historyTrend) return "- 无历史运行数据。"
+  return [
+    "| 运行 | 门禁 | 发现数 |",
+    "|---|---|---|",
+    ...historyTrend.map((t) => `| \`${t.runId.slice(0, 12)}…\` | ${t.gate ?? "unknown"} | ${t.findingsCount} |`),
+  ].join("\n")
+})()}
+
 ## 修复包统计
 
 - 建议数：${remediation ? remediation.artifacts.length : 0}
 ${remediation && remediation.artifacts.length > 0 ? remediation.artifacts.map((artifact) => `- \`${artifact}\``).join("\n") : "- 无修复包建议（全部通过或无需人工处置）。"}
+
+## OWASP MASTG 参考
+
+${(() => {
+  const mapped = mappedMastgFindings(sortedFindings)
+  return mapped.length > 0 ? mapped.map((m) => `- \`${m.code}\` ${m.title} → ${m.reference}`).join("\n") : "- 无映射发现。"
+})()}
+
+## 反编译核验建议
+
+${(() => {
+  const decompiled = decompileSuggestions(sortedFindings)
+  const command = "jadx -d out app.apk（或 apktool d app.apk）"
+  return decompiled.length > 0
+    ? `以下发现建议反编译人工核验（${command}）：\n${decompiled.slice(0, 10).map((d) => `- \`${d.code}\` ${d.title}`).join("\n")}${decompiled.length > 10 ? "\n- …" : ""}`
+    : "- 无需反编译核验（无可疑复杂发现）。"
+})()}
 
 ## 执行步骤
 
