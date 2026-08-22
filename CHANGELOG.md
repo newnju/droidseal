@@ -122,6 +122,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 加固壳/混淆器指纹库扩充（`packers.ts` 12 → 27 条）：新增网易易盾/百度加固/腾讯御安全/360 运行时/梆梆变体/通用壳/StringFog 字符串加密/ProGuard 混淆特征/ApkTool 重打包等。
 - 指纹规则文件加载（`packerFingerprintsFile` 配置）：外部 JSON 指纹与内置库合并（marker 去重，自定义优先，失败关闭）。
 - SO 级加壳特征检测（`SO_PACKED`）：UPX / jiagu 等加壳标记的字节级扫描（elf-scan，失败关闭）。
+- regex 型指纹支持：指纹可含 `regex`（marker 或 regex 至少一——精确匹配），外部规则文件校验 regex 合法性（失败关闭）。
+- 指纹元数据：`version`/`author`/`source` 可选字段（外部规则文件可带，finding 按需展示版本与规则作者）。
+- 混淆器覆盖扩充（`packers.ts` 27 → 33 条）：新增 AndResGuard / BlackObfuscator / Obfuscapk / Allatori / Zelix KlassMaster / DashO 等混淆器指纹。
 
 #### 文档
 
@@ -209,6 +212,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **下一竞争者（Quark-Engine——活跃，恶意行为加权评分）**：~~差距与设计~~ **已全部实现并记录于 [1.0.1]——已追平/超越（11/11 项核对无遗漏）**：DEX 调用图（含调用链）、行为规则引擎、加权评分、内置规则库（10 条）、行为报告节、反混淆辅助（hex/base64/URL）、行为规则文件加载、评分阈值配置、调用图导出——均落地；CLI/API 维度以 REST 语言无关接口超越。
 - **下一竞争者（AndroBugs——已归档，字节码语义分析代表）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：SSL 证书校验绕过语义检测（`SOURCE_SSL_BYPASS`）、语义漏洞模式库（`SOURCE_SEMANTIC_VULN`）、目录/库级批量（`batch-run --dir`）、WebView SSL 错误忽略（`WEBVIEW_SSL_ERROR_IGNORED`）——均落地；效率（3-40s/APK）与活跃维护维度已超越。
 - **下一竞争者（APKiD——活跃，打包器/保护器指纹识别）差距**：① 指纹库扩充（商业加固壳（腾讯乐固/梆梆/爱加密/360/娜迦/DexGuard 等）/混淆器/打包器的 YARA 级覆盖——当前 `packers.ts` 12 条精简指纹——中）；② 指纹规则文件加载（外部 JSON/YARA 式指纹文件，同 `behaviorRulesFile` 模式——中）；③ SO 级加壳特征检测（当前 elf-scan 为符号/密钥级——低）。
+- **下一竞争者（QARK——已停更 2019，POC 生成代表）差距**：① POC 验证命令建议（对 EXPORTED 组件/深链/备份等高风险发现生成可执行的 adb/drozer 验证命令——与 `docs/dynamic-analysis-bridge.md` 衔接——中）；② 教育性说明增强（发现的「为什么/怎么复现/怎么修」详解——低）。已停更——活跃维护与纯 TS 自研解析已超越。
 
 ### 边界说明（能力方向）
 
