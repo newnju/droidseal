@@ -125,6 +125,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - regex 型指纹支持：指纹可含 `regex`（marker 或 regex 至少一——精确匹配），外部规则文件校验 regex 合法性（失败关闭）。
 - 指纹元数据：`version`/`author`/`source` 可选字段（外部规则文件可带，finding 按需展示版本与规则作者）。
 - 混淆器覆盖扩充（`packers.ts` 27 → 33 条）：新增 AndResGuard / BlackObfuscator / Obfuscapk / Allatori / Zelix KlassMaster / DashO 等混淆器指纹。
+- POC 验证命令建议（`poc-commands.ts` + 报告 `pocCommands`/「POC 验证命令建议」节）：对高风险发现（EXPORTED 组件/备份/可调试/深链）生成可执行 adb/drozer 验证命令，带可验证性标记与教育性说明（失败关闭，衔接 `docs/dynamic-analysis-bridge.md`）。
 
 #### 文档
 
@@ -213,6 +214,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **下一竞争者（AndroBugs——已归档，字节码语义分析代表）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：SSL 证书校验绕过语义检测（`SOURCE_SSL_BYPASS`）、语义漏洞模式库（`SOURCE_SEMANTIC_VULN`）、目录/库级批量（`batch-run --dir`）、WebView SSL 错误忽略（`WEBVIEW_SSL_ERROR_IGNORED`）——均落地；效率（3-40s/APK）与活跃维护维度已超越。
 - **下一竞争者（APKiD——活跃，打包器/保护器指纹识别）差距**：① 指纹库扩充（商业加固壳（腾讯乐固/梆梆/爱加密/360/娜迦/DexGuard 等）/混淆器/打包器的 YARA 级覆盖——当前 `packers.ts` 12 条精简指纹——中）；② 指纹规则文件加载（外部 JSON/YARA 式指纹文件，同 `behaviorRulesFile` 模式——中）；③ SO 级加壳特征检测（当前 elf-scan 为符号/密钥级——低）。
 - **下一竞争者（QARK——已停更 2019，POC 生成代表）差距**：① POC 验证命令建议（对 EXPORTED 组件/深链/备份等高风险发现生成可执行的 adb/drozer 验证命令——与 `docs/dynamic-analysis-bridge.md` 衔接——中）；② 教育性说明增强（发现的「为什么/怎么复现/怎么修」详解——低）。已停更——活跃维护与纯 TS 自研解析已超越。
+- **下一竞争者（JAADAS——已停更 2017，Soot/FlowDroid 污点分析代表）差距**：① 跨函数污点传播（IFDS 级——需完整 DEX 语义分析——大/长期/学术级）；② 调用图完整性（间接调用/接口分派——中）；③ 污点源/汇库扩充（更多敏感源（设备标识/位置/剪贴板/账户）与汇——中/易补）。已停更——活跃维护已超越。
 
 ### 边界说明（能力方向）
 
