@@ -34,6 +34,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 反调试 stub 新增 `checkClockAnomaly` 时间戳异常检测信号（单调时钟与墙上时钟偏移基线、默认 30s 阈值跳变判定，只报告不阻断）。
 - 供应链离线漏洞快照新增已知修复版本提示（`fixedIn`：commons-text ≥1.10.0 / commons-io ≥2.7 / log4j-core ≥2.17.1 / jackson-databind ≥2.13.0），`SUPPLYCHAIN_KNOWN_VULNERABILITY` 的建议自动带上修复版本。
 - 新增非交互流水线测试 runner（`scripts/test-runner.ts`）：`droidseal doctor` 之外的程序化运行方式（apk/project × skip/existing 组合，`--web`/`--arsc` 开启可选步骤，`--test-learning` 保留中间产物），CI 可用。
+- 新增打包器/保护器指纹识别（`PACKER_DETECTED`）：纯 TypeScript 指纹表检测常见加固壳/混淆器（腾讯乐固/梆梆/爱加密/360 加固/DexProtector/DexGuard/阿里聚安全/娜迦），并提示静态审计可见性降级、建议商业加固核验；失败关闭。
+- R8/ProGuard 规则优化建议动态化：报告修复包的 `proguard-rules.suggestion.md` 现带本次审计发现的具体项（缺失/不完整规则引用），前置于通用最小化指引。
 
 ### Fixed
 
