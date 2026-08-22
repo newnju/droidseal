@@ -35,10 +35,18 @@ export interface ElfHardening {
   unstripped: boolean
   debugInfo: boolean
   credentialMarkers: string[]
+  packed?: string
 }
 
 // 凭据格式前缀(字节级扫描,与现有 bytesContainAscii 启发式一致)
 const CREDENTIAL_MARKERS = ["AKIA", "AIza", "ghp_", "-----BEGIN"]
+
+// 加壳特征标记(字节级扫描——APKiD 差距③):UPX 魔数 + 常见加固/加壳字符串
+const PACKED_MARKERS: ReadonlyArray<{ marker: string; name: string }> = [
+  { marker: "UPX!", name: "UPX 加壳" },
+  { marker: "upx ", name: "UPX 加壳" },
+  { marker: "jiagu", name: "加固壳（jiagu 命名）" },
+]
 
 function bytesContainAscii(bytes: Uint8Array, needle: string): boolean {
   const target = new TextEncoder().encode(needle)
@@ -140,6 +148,7 @@ export function analyzeElf(bytes: Uint8Array): ElfHardening {
   const unstripped = bytesContainAscii(bytes, ".symtab")
   const debugInfo = bytesContainAscii(bytes, ".debug_info") || bytesContainAscii(bytes, ".debug_line")
   const credentialMarkers = CREDENTIAL_MARKERS.filter((marker) => bytesContainAscii(bytes, marker))
+  const packed = detectPacked(bytes)
 
   return {
     bits: is64 ? 64 : 32,
@@ -151,12 +160,31 @@ export function analyzeElf(bytes: Uint8Array): ElfHardening {
     unstripped,
     debugInfo,
     credentialMarkers,
+    ...(packed ? { packed } : {}),
   }
+}
+
+// 加壳特征检测(字节级扫描——失败关闭,未命中即 undefined)。
+function detectPacked(bytes: Uint8Array): string | undefined {
+  for (const entry of PACKED_MARKERS) {
+    if (bytesContainAscii(bytes, entry.marker)) return entry.name
+  }
+  return undefined
 }
 
 // Map hardening gaps of a single native library to findings.
 export function buildSoFindings(library: string, hardening: ElfHardening): Finding[] {
   const findings: Finding[] = []
+  if (hardening.packed) {
+    findings.push({
+      severity: "info",
+      code: "SO_PACKED",
+      title: `检测到 SO 加壳：${hardening.packed}`,
+      detail: `库 ${library} 含加壳特征（${hardening.packed}）。加壳会降低静态可见性，建议配合加固商文档与真机验证核验。`,
+      recommendation: "确认加固版本与配置；对加壳 SO 的静态结论按可见性降级。",
+      evidence: library,
+    })
+  }
   if (hardening.executableStack) {
     findings.push({
       severity: "medium",

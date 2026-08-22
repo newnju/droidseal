@@ -2,12 +2,38 @@
 // 纯 TypeScript 指纹表(无 YARA 依赖),匹配 DEX 类描述符/字符串中的特征标记,
 // 识别常见加固壳/混淆器并提示"降低静态审计可见性,建议配合商业加固核验"。
 // 只做清单级提示,不联网、失败关闭;未命中即不输出结论。
+import { readFile } from "node:fs/promises"
 import type { Finding } from "./types.ts"
 
 export interface PackerFingerprint {
   name: string
   marker: string
   note: string
+}
+
+// 外部指纹文件加载(APKiD 差距②):JSON 数组 { name, marker, note }——校验失败关闭。
+export function parsePackerFingerprints(text: string): PackerFingerprint[] {
+  const parsed = JSON.parse(text) as unknown
+  if (!Array.isArray(parsed)) throw new Error("指纹文件应为 JSON 数组")
+  const rules: PackerFingerprint[] = []
+  for (const [index, raw] of parsed.entries()) {
+    const rule = raw as Partial<PackerFingerprint>
+    if (!rule.name || !rule.marker) throw new Error(`指纹 #${index + 1} 缺 name/marker`)
+    rules.push({ name: rule.name, marker: rule.marker, note: rule.note ?? "" })
+  }
+  return rules
+}
+
+export async function loadPackerFingerprints(file: string): Promise<PackerFingerprint[]> {
+  return parsePackerFingerprints(await readFile(file, "utf8"))
+}
+
+// 合并指纹:内置 + 外部(marker 去重——外部优先)。
+export function mergePackerFingerprints(custom: readonly PackerFingerprint[] = []): PackerFingerprint[] {
+  const merged = new Map<string, PackerFingerprint>()
+  for (const rule of KNOWN_PACKERS) merged.set(rule.marker, rule)
+  for (const rule of custom) merged.set(rule.marker, rule)
+  return [...merged.values()]
 }
 
 // 常见 Android 加固壳/混淆器的类名/包名特征(小写匹配)。
@@ -68,17 +94,97 @@ export const KNOWN_PACKERS: readonly PackerFingerprint[] = [
     marker: "com.tongfudun",
     note: "通付盾加固的特征包。",
   },
+  {
+    name: "网易易盾(NetEase Shield)",
+    marker: "com.netease.nis.shield",
+    note: "网易易盾通过 Shield 加载器保护 DEX。",
+  },
+  {
+    name: "百度加固(Baidu Protect)",
+    marker: "com.baidu.protect",
+    note: "百度加固通过 Protect 加载器保护。",
+  },
+  {
+    name: "腾讯御安全(Tencent Shield)",
+    marker: "com.tencent.tshield",
+    note: "腾讯御安全提供 DEX 加固。",
+  },
+  {
+    name: "360 加固运行时(com.qihoo.util)",
+    marker: "com.qihoo.util",
+    note: "360 加固的运行时工具类。",
+  },
+  {
+    name: "梆梆变体(com.secneo)",
+    marker: "com.secneo",
+    note: "梆梆 Secneo 的通用包前缀。",
+  },
+  {
+    name: "通用加固壳特征(com.shell.)",
+    marker: "com.shell.",
+    note: "常见加固壳的加载器命名模式(爱加密/其他壳变体)。",
+  },
+  {
+    name: "jiagu 加固(com.jiagu)",
+    marker: "com.jiagu",
+    note: "常见 jiagu 命名的加固壳。",
+  },
+  {
+    name: "StringFog 字符串加密",
+    marker: "com.github.megatronking.stringfog",
+    note: "StringFog 是开源的字符串加密库(混淆敏感字符串)。",
+  },
+  {
+    name: "华为应用市场加固",
+    marker: "com.huawei.appgallery",
+    note: "华为应用市场加固保护。",
+  },
+  {
+    name: "阿里聚安全变体(com.alibaba.security)",
+    marker: "com.alibaba.security",
+    note: "阿里聚安全的通用包前缀。",
+  },
+  {
+    name: "ProGuard 混淆特征",
+    marker: "proguard",
+    note: "检测到 ProGuard 混淆标识(类名/字符串含 proguard)。",
+  },
+  {
+    name: "ApkTool 重打包特征",
+    marker: "apktool",
+    note: "检测到 ApkTool 重打包标识(需人工核验是否重打包)。",
+  },
+  {
+    name: "通用 Stub 壳(com.stub.)",
+    marker: "com.stub.",
+    note: "通用 com.stub 前缀——常见壳的 Stub 加载器命名模式。",
+  },
+  {
+    name: "通付盾变体(com.tongfudun.security)",
+    marker: "com.tongfudun.security",
+    note: "通付盾的 security 子包变体。",
+  },
+  {
+    name: "梆梆类变体(com.secneo.a)",
+    marker: "com.secneo.a",
+    note: "梆梆的加密类子包。",
+  },
+  {
+    name: "腾讯加固变体(com.tencent.jg)",
+    marker: "com.tencent.jg",
+    note: "腾讯加固(jiagu)的类名变体。",
+  },
 ]
 
 // 从 DEX 字符串/类描述符集合中匹配已知加固指纹,返回命中的指纹列表。
-export function detectPackers(strings: Iterable<string>): PackerFingerprint[] {
+export function detectPackers(strings: Iterable<string>, fingerprints: readonly PackerFingerprint[] = KNOWN_PACKERS): PackerFingerprint[] {
   const haystack = [...strings].join("\n").toLowerCase()
-  return KNOWN_PACKERS.filter((fingerprint) => haystack.includes(fingerprint.marker))
+  return fingerprints.filter((fingerprint) => haystack.includes(fingerprint.marker))
 }
 
 // 命中的指纹转 finding(清单级提示,失败关闭)。
-export function buildPackerFindings(strings: Iterable<string>): Finding[] {
-  const packers = detectPackers(strings)
+export function buildPackerFindings(strings: Iterable<string>, fingerprints: readonly PackerFingerprint[] = KNOWN_PACKERS): Finding[] {
+  const packers = detectPackers(strings, fingerprints)
   if (packers.length === 0) return []
   return [
     {
