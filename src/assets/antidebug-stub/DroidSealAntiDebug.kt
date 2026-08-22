@@ -7,6 +7,7 @@ import android.os.Debug
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import java.io.File
 import java.io.FileInputStream
 import java.net.NetworkInterface
 import java.security.MessageDigest
@@ -311,6 +312,19 @@ object DroidSealAntiDebug {
     }
 
     /**
+     * Frida 注入分层检测（`/proc/self/maps` 特征）：扫描映射区中的 frida-agent/gadget/
+     * frida-server/libfrida 特征片段。只报告信号，不阻断；读取失败或未命中即 false（失败关闭）。
+     */
+    fun checkFridaInjection(): Boolean {
+        return try {
+            val maps = File("/proc/self/maps").readText()
+            maps.contains("frida")
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    /**
      * 服务端协作上报：把当前检测信号汇总为 JSON 字符串（只报告，不阻断）。
      * 字段含 inspect() 快照、完整性、签名、模拟器、VPN/代理、时钟异常；宿主上报后由服务端决策。
      */
@@ -336,7 +350,8 @@ object DroidSealAntiDebug {
             append("\"signatureOk\":").append(signature).append(",")
             append("\"emulator\":").append(checkEmulator()).append(",")
             append("\"vpnOrProxy\":").append(checkVpnProxy(contentResolver)).append(",")
-            append("\"clockAnomaly\":").append(checkClockAnomaly())
+            append("\"clockAnomaly\":").append(checkClockAnomaly()).append(",")
+            append("\"fridaInjection\":").append(checkFridaInjection())
             append("}")
         }
     }
