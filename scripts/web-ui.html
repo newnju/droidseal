@@ -37,7 +37,10 @@ body {
   font-family: var(--sans);
   min-height: 100vh;
 }
-.wrap { max-width: 1000px; margin: 0 auto; padding: 28px 24px 60px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 60px; }
+.layout { display: flex; gap: 18px; align-items: flex-start; }
+.sidebar { width: 300px; flex-shrink: 0; position: sticky; top: 24px; }
+.main { flex: 1; min-width: 0; }
 header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 24px;
@@ -108,6 +111,7 @@ tr:hover td { background: rgba(255,255,255,0.04); }
 .stream-item { background: var(--card-solid); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); }
 .stream-item .t { color: var(--muted); font-size: 11px; margin-right: 8px; font-family: var(--mono); }
 .phase-head { font-size: 11.5px; color: var(--muted); margin: 12px 0 6px; letter-spacing: .5px; text-transform: uppercase; }
+.hint { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
 .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .filters button { padding: 6px 14px; font-size: 12px; background: var(--card-solid); border: 1px solid var(--border); color: var(--text); border-radius: 20px; }
 .filters button.active { background: var(--cyan); color: #061521; border-color: var(--cyan); }
@@ -130,6 +134,21 @@ footer { margin-top: 26px; text-align: center; font-size: 11.5px; color: var(--m
     </div>
     <div class="status"><span class="dot"></span> 服务运行中 · 127.0.0.1</div>
   </header>
+
+  <div class="layout">
+  <div class="sidebar">
+    <div class="card">
+      <h2>步骤 <span class="tag">TUI 侧栏镜像</span></h2>
+      <div id="sidebarSteps"><div class="empty">运行后显示</div></div>
+    </div>
+    <div class="card">
+      <h2>产物与提示</h2>
+      <div id="artifact" class="empty">尚未生成</div>
+      <div class="hint">失败不覆盖 · 本地处理</div>
+      <div class="hint">Enter 重试失败步骤 · Ctrl+C 复制（不退出）</div>
+    </div>
+  </div>
+  <div class="main">
 
   <div class="card">
     <h2>运行流水线 <span class="tag">审计 → 加固 → 签名 → 验证</span></h2>
@@ -165,8 +184,6 @@ footer { margin-top: 26px; text-align: center; font-size: 11.5px; color: var(--m
   <div class="card" id="resultCard" style="display:none">
     <h2>运行结果</h2>
     <div class="metrics" id="metrics"></div>
-    <h2 style="font-size:13px">步骤状态（阶段分组）</h2>
-    <div id="steps"></div>
     <h2 style="font-size:13px; margin-top:18px">发现（<span id="fcount">0</span>）</h2>
     <div class="filters" id="filters"></div>
     <table>
@@ -183,6 +200,9 @@ footer { margin-top: 26px; text-align: center; font-size: 11.5px; color: var(--m
   <div class="card">
     <h2>运行历史 <span class="tag">点击查看 · 最多 10 条</span></h2>
     <div class="hist" id="runs"><div class="empty">加载中…</div></div>
+  </div>
+
+  </div>
   </div>
 
   <footer>DroidSeal Web · 本地优先（127.0.0.1）· 失败不覆盖 · 报告与门禁由 DroidSeal 流水线生成</footer>
@@ -254,6 +274,9 @@ async function loadRun(id) {
   $('resultCard').style.display = 'block';
   showBanner(detailJson.status || 'pass', '运行 ' + id + ' · 门禁 ' + (detailJson.status || 'unknown'));
   appendStream('运行 ' + id.slice(0, 12) + '… · 门禁 ' + (detailJson.status || 'unknown') + ' · ' + detailJson.findingsCount + ' 发现');
+  const artifactEl = $('artifact');
+  artifactEl.textContent = '.droidseal/runs/' + id + '/reports';
+  artifactEl.className = 'code';
   $('metrics').innerHTML = [
     ['门禁状态', '<span class="v ' + (detailJson.status || 'pass') + '">' + (detailJson.status || 'unknown') + '</span>'],
     ['发现数', '<span class="v">' + detailJson.findingsCount + '</span>'],
@@ -291,7 +314,7 @@ async function loadSteps(id) {
     ['加固', ['harden', 'web-assets', 'arsc-obfuscate']],
     ['发布', ['align', 'sign', 'verify', 'report']],
   ];
-  $('steps').innerHTML = PHASES.map(ph => {
+  $('sidebarSteps').innerHTML = PHASES.map(ph => {
     const pills = ph[1].map(sid => {
       const s = byId[sid];
       return s ? '<span class="step-pill ' + s.status + '">' + s.id + ' · ' + s.status + '</span>' : '<span class="step-pill">' + sid + ' · 未执行</span>';
