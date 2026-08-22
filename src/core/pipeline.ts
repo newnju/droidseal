@@ -21,6 +21,7 @@ import { scanProjectWeakCrypto } from "./weak-crypto.ts"
 import { loadCustomRules, applyCustomRulesToProject } from "./custom-rules.ts"
 import { scanProjectPrivacyApis } from "./privacy-collection.ts"
 import { scanProjectStorageSecurity } from "./storage-security.ts"
+import { loadBehaviorRules, mergeBehaviorRules, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
 import { writeReports } from "./report.ts"
 import { selectedMissingTools } from "./tool-installer.ts"
 import { discoverToolchain } from "./toolchain.ts"
@@ -905,7 +906,14 @@ export class Pipeline {
     }
     const toolchain = this.context.toolchain ?? (await discoverToolchain(this.config))
     this.context.toolchain = toolchain
-    const audit = await auditApk(artifact, toolchain, (message) => this.progress("apk-audit", message))
+    const customBehaviorRules = this.config.behaviorRulesFile
+      ? await loadBehaviorRules(this.config.behaviorRulesFile)
+      : []
+    const scoreThresholds: MaliciousScoreThresholds = {
+      high: this.config.maliciousScoreThresholds?.high ?? DEFAULT_SCORE_THRESHOLDS.high,
+      medium: this.config.maliciousScoreThresholds?.medium ?? DEFAULT_SCORE_THRESHOLDS.medium,
+    }
+    const audit = await auditApk(artifact, toolchain, (message) => this.progress("apk-audit", message), mergeBehaviorRules(customBehaviorRules), scoreThresholds)
     this.context.audit.findings.push(...audit.findings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [

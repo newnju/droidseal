@@ -91,6 +91,10 @@ export interface PipelineConfig {
   minimumHardeningCoverage?: number
   // 自定义规则文件(JSON 数组:{ code, title, severity, pattern, scope })——source/dex 规则审计时应用。
   customRulesFile?: string
+  // 外部行为规则文件(JSON 数组:{ crimer, className, methodName, score, label })——调用图行为匹配时与内置合并(自定义优先)。
+  behaviorRulesFile?: string
+  // 恶意行为评分分级阈值(默认 high 60 / medium 30——score >= high 为 medium 严重度, >= medium 为 low)。
+  maliciousScoreThresholds?: { high?: number; medium?: number }
   signing: SigningConfig
   protection: ProtectionConfig
 }
