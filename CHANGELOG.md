@@ -36,6 +36,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 新增非交互流水线测试 runner（`scripts/test-runner.ts`）：`droidseal doctor` 之外的程序化运行方式（apk/project × skip/existing 组合，`--web`/`--arsc` 开启可选步骤，`--test-learning` 保留中间产物），CI 可用。
 - 新增打包器/保护器指纹识别（`PACKER_DETECTED`）：纯 TypeScript 指纹表检测常见加固壳/混淆器（腾讯乐固/梆梆/爱加密/360 加固/DexProtector/DexGuard/阿里聚安全/娜迦），并提示静态审计可见性降级、建议商业加固核验；失败关闭。
 - R8/ProGuard 规则优化建议动态化：报告修复包的 `proguard-rules.suggestion.md` 现带本次审计发现的具体项（缺失/不完整规则引用），前置于通用最小化指引。
+- 新增本地 Web UI / REST API 服务（`scripts/serve.ts`）：零依赖 Bun.serve，绑定 127.0.0.1 并支持可选 Bearer token——`POST /run` 提交配置跑完整流水线、`GET /reports/<path>` 读取报告文件、`GET /` 返回 Web UI（运行表单 + 报告浏览）；本地优先、不对外联网，面向企业/DevSecOps 集成。
 
 ### Fixed
 

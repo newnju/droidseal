@@ -15,6 +15,7 @@ import { runProcess } from "./process.ts"
 import { buildPermissionFindings, type CustomPermission } from "./permissions-catalog.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
+import { estimateEncryptableStrings } from "./dex-string-crypto.ts"
 import { buildPackerFindings } from "./packers.ts"
 import { analyzeElf, buildSoFindings } from "./elf-scan.ts"
 import { compareKnownVulnerabilities } from "./known-vulnerabilities.ts"
@@ -970,6 +971,19 @@ async function scanDexFiles(
     })
     findings.push(...compareKnownVulnerabilities(sdks))
     findings.push(...buildPackerFindings(combined))
+    const encryptable = estimateEncryptableStrings(combined)
+    if (encryptable.length > 0) {
+      findings.push({
+        severity: "info",
+        code: "DEX_STRING_SECURITY",
+        title: `DEX 字符串池含 ${encryptable.length} 个疑似可加密敏感串`,
+        detail:
+          `字符串池级估计（非标识符形态且含 URL/密钥格式/高熵特征）：${encryptable.slice(0, 6).join("、")}${encryptable.length > 6 ? "…" : ""}。` +
+          "确认真实性后可在源码侧加密（字符串加密桩生成器），避免敏感明文进入 DEX 池。",
+        recommendation: "用 generate-string-crypto-stub.ts --from-audit 自动生成加密桩计划（源码侧接入）；或移入服务端/构建期注入。",
+        evidence: encryptable.slice(0, 5).join(", "),
+      })
+    }
   }
   if (malformedDex > 0) {
     findings.push({
