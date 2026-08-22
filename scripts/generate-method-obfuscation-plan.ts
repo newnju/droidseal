@@ -8,7 +8,9 @@
 //   bun scripts/generate-method-obfuscation-plan.ts \
 //     --method "com.example.auth.TokenManager#computeToken" \
 //     --method "com.example.auth.TokenManager#refresh" \
-//     --output plans/method-obfuscation
+//     --output plans/method-obfuscation \
+//     [--from-audit droidseal-report.json]  # 从报告自动建议疑似反射/注解类白名单（#* 整类保留）
+//     [--verify]                            # 校验生成的映射文件格式（失败关闭）
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 

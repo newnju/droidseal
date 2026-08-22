@@ -666,8 +666,12 @@ export function App() {
       ...(skipped.length > 0
         ? [t("gateBannerSkipped", { reasons: skipped.map((step) => `${step.title}（${skipKindLabel(step.result?.skipKind)}）`).join("、") })]
         : []),
-      finalArtifact ? `最终 APK：${finalArtifact}` : "没有生成最终 APK，请根据失败步骤解释修复后重试。",
-      active.context.signatureVerified === true ? "签名状态：apksigner 验证通过。" : active.context.signatureVerified === false ? "签名状态：未签名或签名无效。" : "签名状态：未验证。",
+      finalArtifact ? t("gateBannerFinalArtifact", { path: finalArtifact }) : t("gateBannerNoArtifact"),
+      active.context.signatureVerified === true
+        ? t("gateBannerSignatureVerified")
+        : active.context.signatureVerified === false
+          ? t("gateBannerSignatureInvalid")
+          : t("gateBannerSignatureUnverified"),
       `运行记录：${active.context.runDirectory}`,
     ])
   }

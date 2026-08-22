@@ -85,6 +85,12 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 报告 schemaVersion 升版至 8（`previousRun`/`previousGate` 字段的结构版本化）。
 - `known-vuln-check.ts` 输出严重度分布统计。
 - 报告加固成效新增 `nativeAudit` 覆盖维度（6 → 7 维）。
+- TUI 完成消息 i18n 补全：已处理/跳过原因消息中英文键（`gateBannerSummary`/`gateBannerSkipped`）。
+- `preflight.ts --json` 输出失败门禁的错误尾部（`tail` 字段，CI 消费）。
+- `generate-method-obfuscation-plan.ts` 新增 `--verify`：映射文件格式校验（失败关闭）。
+- 报告 remediation 新增 `suggestionCount`（修复包建议数统计）。
+- 新增服务端协作上报协议规范（`docs/server-report-protocol.md`：字段表/决策矩阵/抗滥用/接入示例）。
+- TUI 底部新增快捷键提示（Enter 重试失败步骤 · Ctrl+C 复制不退出）。
 
 #### 文档
 
