@@ -119,6 +119,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - SSL 证书校验绕过语义检测（`SOURCE_SSL_BYPASS`）：自定义 TrustManager / 空 `checkServerTrusted` / ALLOW_ALL 主机名校验器（失败关闭）。
 - 语义漏洞模式库（`SOURCE_SEMANTIC_VULN`）：敏感数据流入 SQL 注入（execSQL/rawQuery/compileStatement）/ 命令执行（Runtime.exec/ProcessBuilder）汇的检测（medium，区别于 `SOURCE_DATAFLOW`）。
 - 目录/库级批量（`batch-run --dir`）：扫描目录下 `*.apk` 自动建清单批量运行。
+- 加固壳/混淆器指纹库扩充（`packers.ts` 12 → 27 条）：新增网易易盾/百度加固/腾讯御安全/360 运行时/梆梆变体/通用壳/StringFog 字符串加密/ProGuard 混淆特征/ApkTool 重打包等。
+- 指纹规则文件加载（`packerFingerprintsFile` 配置）：外部 JSON 指纹与内置库合并（marker 去重，自定义优先，失败关闭）。
+- SO 级加壳特征检测（`SO_PACKED`）：UPX / jiagu 等加壳标记的字节级扫描（elf-scan，失败关闭）。
 
 #### 文档
 
