@@ -102,6 +102,10 @@ tr:hover td { background: rgba(255,255,255,0.04); }
 .hist-item:hover { background: rgba(255,255,255,0.04); }
 .hist-item .id { font-family: var(--mono); font-size: 12px; }
 .hist-item .meta { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+.stream { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; padding-right: 4px; }
+.stream-item { background: var(--card-solid); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); }
+.stream-item .t { color: var(--muted); font-size: 11px; margin-right: 8px; font-family: var(--mono); }
+.phase-head { font-size: 11.5px; color: var(--muted); margin: 12px 0 6px; letter-spacing: .5px; text-transform: uppercase; }
 .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .filters button { padding: 6px 14px; font-size: 12px; background: var(--card-solid); border: 1px solid var(--border); color: var(--text); border-radius: 20px; }
 .filters button.active { background: var(--cyan); color: #04222e; border-color: var(--cyan); }
@@ -159,14 +163,19 @@ footer { margin-top: 26px; text-align: center; font-size: 11.5px; color: var(--m
   <div class="card" id="resultCard" style="display:none">
     <h2>运行结果</h2>
     <div class="metrics" id="metrics"></div>
-    <h2 style="font-size:13px">步骤状态</h2>
-    <div class="steps" id="steps"></div>
+    <h2 style="font-size:13px">步骤状态（阶段分组）</h2>
+    <div id="steps"></div>
     <h2 style="font-size:13px; margin-top:18px">发现（<span id="fcount">0</span>）</h2>
     <div class="filters" id="filters"></div>
     <table>
       <thead><tr><th>严重度</th><th>代码</th><th>标题</th><th>置信度</th><th>证据</th></tr></thead>
       <tbody id="findings"></tbody>
     </table>
+  </div>
+
+  <div class="card">
+    <h2>消息流 <span class="tag">TUI 消息区镜像 · 每次运行的门禁与步骤消息</span></h2>
+    <div class="stream" id="stream"><div class="empty">暂无消息</div></div>
   </div>
 
   <div class="card">
@@ -210,7 +219,9 @@ async function run() {
     showError(data.error && data.error.message ? data.error.message : '运行失败');
     return;
   }
-  showBanner('pass', '流水线完成：' + (data.steps ? data.steps.filter(s => s.status === 'success').length : 0) + ' 步成功');
+  const okSteps = data.steps ? data.steps.filter(s => s.status === 'success').length : 0;
+  showBanner('pass', '流水线完成：' + okSteps + ' 步成功');
+  appendStream('流水线完成：' + okSteps + ' 步成功 · ' + data.finalArtifact || '');
   loadRuns();
   const runs = await (await fetch('/runs')).json();
   if (runs.runs && runs.runs.length > 0) loadRun(runs.runs[0].runId);
@@ -240,6 +251,7 @@ async function loadRun(id) {
   const findings = findingJson.findings || [];
   $('resultCard').style.display = 'block';
   showBanner(detailJson.status || 'pass', '运行 ' + id + ' · 门禁 ' + (detailJson.status || 'unknown'));
+  appendStream('运行 ' + id.slice(0, 12) + '… · 门禁 ' + (detailJson.status || 'unknown') + ' · ' + detailJson.findingsCount + ' 发现');
   $('metrics').innerHTML = [
     ['门禁状态', '<span class="v ' + (detailJson.status || 'pass') + '">' + (detailJson.status || 'unknown') + '</span>'],
     ['发现数', '<span class="v">' + detailJson.findingsCount + '</span>'],
@@ -269,7 +281,32 @@ async function loadSteps(id) {
   if (!report) return;
   const json = await report.json();
   const steps = json.steps || [];
-  $('steps').innerHTML = steps.length === 0 ? '<span class="empty">无步骤信息</span>' : steps.map(s => '<span class="step-pill ' + s.status + '">' + (s.id || '') + ' · ' + s.status + '</span>').join('');
+  const byId = {};
+  steps.forEach(s => { byId[s.id] = s; });
+  const PHASES = [
+    ['准备', ['doctor', 'prepare', 'keystore']],
+    ['审计', ['source-audit', 'build', 'apk-audit', 'protect']],
+    ['加固', ['harden', 'web-assets', 'arsc-obfuscate']],
+    ['发布', ['align', 'sign', 'verify', 'report']],
+  ];
+  $('steps').innerHTML = PHASES.map(ph => {
+    const pills = ph[1].map(sid => {
+      const s = byId[sid];
+      return s ? '<span class="step-pill ' + s.status + '">' + s.id + ' · ' + s.status + '</span>' : '<span class="step-pill">' + sid + ' · 未执行</span>';
+    }).join('');
+    return '<div class="phase-head">' + ph[0] + '</div><div class="steps">' + pills + '</div>';
+  }).join('') || '<span class="empty">无步骤信息</span>';
+}
+
+function appendStream(msg) {
+  const stream = $('stream');
+  const empty = stream.querySelector('.empty');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = 'stream-item';
+  div.innerHTML = '<span class="t">' + new Date().toLocaleTimeString() + '</span>' + msg;
+  stream.appendChild(div);
+  stream.scrollTop = stream.scrollHeight;
 }
 
 loadRuns();
