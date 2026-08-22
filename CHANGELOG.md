@@ -38,6 +38,10 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - R8/ProGuard 规则优化建议动态化：报告修复包的 `proguard-rules.suggestion.md` 现带本次审计发现的具体项（缺失/不完整规则引用），前置于通用最小化指引。
 - 新增本地 Web UI / REST API 服务（`scripts/serve.ts`）：零依赖 Bun.serve，绑定 127.0.0.1 并支持可选 Bearer token——`POST /run` 提交配置跑完整流水线、`GET /reports/<path>` 读取报告文件、`GET /` 返回 Web UI（运行表单 + 报告浏览）；本地优先、不对外联网，面向企业/DevSecOps 集成。
 - DEX 字符串安全子集接入主线：新增 `DEX_STRING_SECURITY` finding（字符串池级可加密敏感串估计——非标识符形态且含 URL/密钥格式/高熵特征），衔接源码侧加密桩生成器 `--from-audit`；修复包的 DEX 字符串安全化计划现带本次审计发现。
+- Manifest 权限/导出组件建议动态化：修复包 `manifest-permissions.suggestion.md` 现带本次审计发现（与 R8/DEX 建议一致）。
+- 新增修复包复测闭环（`scripts/re-test.ts`）：修复后重跑流水线，`--before` 对比消除/新增/剩余 findings。
+- 供应链离线漏洞快照扩充至 8 条（新增 gson CVE-2022-25647 / commons-compress CVE-2021-36090 / okio CVE-2023-3635）；打包器指纹扩充至 12 个（新增顶象/APKProtect/通付盾）。
+- 新增强制 R8 按变体细化模板（`docs/force-r8-variant-template.md`）：按 buildType/flavor 分支的 init-script 模板与使用说明。
 
 ### Fixed
 

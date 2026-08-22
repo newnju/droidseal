@@ -275,3 +275,16 @@ export function obfuscateValueRepresentations(
   if (changed) markPoolDirty(pool)
   return { churned, mapping }
 }
+
+// 技术形态字符串值检测(ARSC 值级审计——"值混淆保守子集"的审计形态,不改写)。
+// 识别 key_/id_/token_/api_/secret_ 前缀或路径类字符串值(内部标识符类,非显示文本)。
+export function detectTechnicalStringValues(table: ArscTable): string[] {
+  const out: string[] = []
+  for (const s of table.globalStrings.strings) {
+    if (s.length > 80) continue
+    if (/^(key|id|token|api|secret)[_-]/i.test(s) || /(?:^|\/)[a-z0-9_-]+\.[a-z0-9]+$/i.test(s)) {
+      out.push(s)
+    }
+  }
+  return [...new Set(out)].sort().slice(0, 20)
+}

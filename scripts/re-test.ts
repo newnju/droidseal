@@ -57,9 +57,10 @@ async function main(): Promise<void> {
   const [kind, inputPath, mode, keystorePath, alias] = argv
   const beforeIndex = argv.indexOf("--before")
   const beforeReport = beforeIndex >= 0 ? argv[beforeIndex + 1] : undefined
+  const auto = argv.includes("--auto")
   const webEnabled = argv.includes("--web")
   const arscEnabled = argv.includes("--arsc")
-  if (!kind || !inputPath || !mode) throw new Error("用法: re-test <apk|project> <输入路径> <skip|existing> [keystore] [alias] [--before <报告json>] [--web] [--arsc]")
+  if (!kind || !inputPath || !mode) throw new Error("用法: re-test <apk|project> <输入路径> <skip|existing> [keystore] [alias] [--before <报告json> | --auto] [--web] [--arsc]")
 
   const outputDirectory = `${kind === "project" ? path.resolve(inputPath) : path.dirname(path.resolve(inputPath))}/droidseal-retest-${Date.now()}`
   const config: PipelineConfig = {
@@ -93,18 +94,32 @@ async function main(): Promise<void> {
   if (!reportPath) throw new Error("未找到复测报告")
   const after = await findingCodes(reportPath)
 
+  let effectiveBefore = beforeReport
+  if (!effectiveBefore && auto) {
+    // --auto:自动定位输入目录下最近一次 droidseal-* 运行的报告
+    const parent = kind === "project" ? path.resolve(inputPath) : path.dirname(path.resolve(inputPath))
+    const { readdir } = await import("node:fs/promises")
+    const dirs = (await readdir(parent)).filter((d) => d.startsWith("droidseal-"))
+    for (const dir of dirs) {
+      const found = await findLatestReport(path.join(parent, dir))
+      if (found && (!effectiveBefore || found > effectiveBefore)) effectiveBefore = found
+    }
+  }
+
   console.log(`复测完成：${reportPath}`)
   console.log(`当前 findings：${after.size} 个 code`)
 
-  if (beforeReport) {
-    const before = await findingCodes(beforeReport)
+  if (effectiveBefore) {
+    const before = await findingCodes(effectiveBefore)
     const eliminated = [...before].filter((c) => !after.has(c))
     const added = [...after].filter((c) => !before.has(c))
     const remaining = [...before].filter((c) => after.has(c))
-    console.log(`\n===== 复测对比 =====`)
+    console.log(`\n===== 复测对比（${effectiveBefore}） =====`)
     console.log(`消除 ${eliminated.length} 个：${eliminated.join("、") || "无"}`)
     console.log(`新增 ${added.length} 个：${added.join("、") || "无"}`)
     console.log(`剩余 ${remaining.length} 个：${remaining.join("、") || "无"}`)
+  } else if (auto) {
+    console.log("--auto：未找到上一次运行报告，跳过对比。")
   }
 }
 
