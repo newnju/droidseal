@@ -16,7 +16,7 @@ import { buildPermissionFindings, type CustomPermission } from "./permissions-ca
 import { buildPrivacyFindings } from "./privacy-collection.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
-import { extractCalledMethods } from "./dex-callgraph.ts"
+import { extractCalledMethods, extractCallGraph, callersOf } from "./dex-callgraph.ts"
 import { matchBehaviorRules, maliciousScore, buildBehaviorFindings, matchDeobfuscatedRules, type BehaviorRule, BUILTIN_BEHAVIOR_RULES, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
 import { estimateEncryptableStrings } from "./dex-string-crypto.ts"
 import { buildEndpointFindings } from "./endpoint-extract.ts"
@@ -969,6 +969,7 @@ async function scanDexFiles(
   onProgress?.("扫描 DEX 字符串池（密钥、弱加密、动态加载等启发式）")
   const combined = new Set<string>()
   const calledMethods = new Set<string>()
+  let firstDexBytes: Uint8Array | undefined
   let truncated = false
   let failed = 0
   let malformedDex = 0
@@ -994,6 +995,7 @@ async function scanDexFiles(
       failed += 1
     }
     if (isDex) {
+      if (!firstDexBytes) firstDexBytes = bytes
       try {
         const called = extractCalledMethods(bytes)
         for (const method of called) calledMethods.add(method)
@@ -1009,7 +1011,24 @@ async function scanDexFiles(
   )
   const allHits = [...behaviorHits, ...deobfuscatedHits]
   if (allHits.length > 0) {
-    findings.push(...buildBehaviorFindings(allHits, maliciousScore(allHits), thresholds))
+    const behaviorFindings = buildBehaviorFindings(allHits, maliciousScore(allHits), thresholds)
+    // 调用链关联(剩余①):用调用方证据丰富行为 finding 的 detail(失败关闭——图提取失败则跳过)
+    if (firstDexBytes) {
+      try {
+        const graph = extractCallGraph(firstDexBytes)
+        for (const finding of behaviorFindings) {
+          if (finding.code === "MALICIOUS_BEHAVIOR" && finding.evidence) {
+            const callers = callersOf(graph, finding.evidence)
+            if (callers.length > 0) {
+              finding.detail = `${finding.detail ?? ""} 调用方：${callers.slice(0, 2).join("、")}。`
+            }
+          }
+        }
+      } catch {
+        // 调用链提取失败关闭:保留无调用方证据的 finding
+      }
+    }
+    findings.push(...behaviorFindings)
   }
   const sdks = detectSdkPackages(combined)
   if (sdks.length > 0) {

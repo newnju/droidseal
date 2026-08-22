@@ -84,3 +84,109 @@ export function extractCalledMethods(bytes: Uint8Array): Set<string> {
 export function buildCallgraphFindings(_called: Set<string>): Finding[] {
   return []
 }
+
+// -- 调用链关联(剩余①):调用方 → 被调 映射 ----------------------------------
+// 解析 class_defs → class_data(方法表的 code_off)→ code_item 的 insns 指令区,
+// 提取每个方法内的 invoke 指令 → 被调方法,构建 调用方方法 → 被调方法 的映射。
+// 有界(限制方法数/调用数),失败关闭(解析异常跳过)。
+interface DexHeaderFull extends DexHeader {
+  classDefsSize: number
+  classDefsOff: number
+}
+
+function readUleb128(bytes: Uint8Array, start: number): { value: number; next: number } {
+  let p = start
+  let result = 0
+  let shift = 0
+  for (let i = 0; i < 5; i += 1) {
+    const b = bytes[p++]!
+    result |= (b & 0x7f) << shift
+    if ((b & 0x80) === 0) break
+    shift += 7
+  }
+  return { value: result >>> 0, next: p }
+}
+
+export function extractCallGraph(bytes: Uint8Array): Map<string, Set<string>> {
+  const header = parseHeader(bytes) as DexHeaderFull
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const u32 = (o: number) => view.getUint32(o, true)
+  header.classDefsSize = u32(0x60)
+  header.classDefsOff = u32(0x64)
+
+  const strings: string[] = []
+  for (let i = 0; i < header.stringIdsSize && i < 4096; i += 1) {
+    const off = u32(header.stringIdsOff + i * 4)
+    strings.push(readStringAt(bytes, off))
+  }
+  const methodClasses: string[] = []
+  const methodNames: string[] = []
+  for (let i = 0; i < header.methodIdsSize && i < 4096; i += 1) {
+    const base = header.methodIdsOff + i * 8
+    const classIdx = view.getUint16(base, true)
+    const nameIdx = u32(base + 4)
+    const descriptorIdx = u32(header.typeIdsOff + classIdx * 4)
+    const descriptor = strings[descriptorIdx] ?? ""
+    const className = descriptor.startsWith("L") && descriptor.endsWith(";")
+      ? descriptor.slice(1, -1).replaceAll("/", ".")
+      : descriptor
+    methodClasses.push(className)
+    methodNames.push(strings[nameIdx] ?? "")
+  }
+  const methodId = (idx: number): string => `${methodClasses[idx] ?? "?"}.${methodNames[idx] ?? "?"}`
+
+  const graph = new Map<string, Set<string>>()
+  const MAX_METHODS = 1500
+  let processed = 0
+  for (let c = 0; c < header.classDefsSize && processed < MAX_METHODS; c += 1) {
+    const classDataOff = u32(header.classDefsOff + c * 32 + 24)
+    if (classDataOff === 0) continue
+    let p = classDataOff
+    const counts: number[] = []
+    for (let i = 0; i < 4; i += 1) {
+      const read = readUleb128(bytes, p)
+      counts.push(read.value)
+      p = read.next
+    }
+    let methodIdx = 0
+    for (const methodCount of [counts[2]!, counts[3]!]) {
+      for (let m = 0; m < methodCount && processed < MAX_METHODS; m += 1) {
+        const diff = readUleb128(bytes, p)
+        methodIdx += diff.value
+        p = diff.next
+        const access = readUleb128(bytes, p)
+        p = access.next
+        const code = readUleb128(bytes, p)
+        p = code.next
+        if (code.value === 0) continue
+        // code_item:registers(2)/ins(2)/outs(2)/tries(2)/debug(4)/insns_size(4) 后为指令
+        const insnsSize = view.getUint32(code.value + 12, true)
+        const insnsStart = code.value + 16
+        const caller = methodId(methodIdx)
+        const called = new Set<string>()
+        for (let i = 0; i < insnsSize * 2 - 2 && called.size < 50; i += 1) {
+          const opcode = bytes[insnsStart + i]!
+          if (opcode >= 0x6e && opcode <= 0x7a) {
+            const methodIndex = bytes[insnsStart + i + 1]! | (bytes[insnsStart + i + 2]! << 8)
+            if (methodIndex < header.methodIdsSize) called.add(methodId(methodIndex))
+          }
+        }
+        if (called.size > 0) graph.set(caller, called)
+        processed += 1
+      }
+    }
+  }
+  return graph
+}
+
+// 命中行为的调用方证据(剩余①):从调用图反向找调用被调方法的方法——返回最多 2 个调用方。
+export function callersOf(graph: Map<string, Set<string>>, calledMethod: string): string[] {
+  const callers: string[] = []
+  for (const [caller, called] of graph) {
+    if (called.has(calledMethod)) {
+      callers.push(caller)
+      if (callers.length >= 2) break
+    }
+  }
+  return callers
+}

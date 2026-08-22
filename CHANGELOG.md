@@ -111,6 +111,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 行为规则引擎（`behavior-rules.ts`）：调用图匹配内置 10 条恶意行为规则（短信劫持/键盘记录/设备管理滥用/截屏/录音等）→ `MALICIOUS_BEHAVIOR` finding + 加权恶意评分 `MALICIOUS_SCORE`（0-100，归一化）。
 - 反混淆辅助：hex/base64 编码串解码后与行为规则匹配（补充命中，失败关闭）。
 - 报告新增「行为分析（恶意行为特征）」节（JSON `behaviorAnalysis` + Markdown）。
+- 行为规则文件加载（`behaviorRulesFile` 配置）：外部 JSON 行为规则与内置库合并（自定义优先，失败关闭）。
+- 恶意行为评分分级阈值可配置（`maliciousScoreThresholds`：high/medium，默认 60/30）。
 
 #### 文档
 
