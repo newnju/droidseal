@@ -10,7 +10,7 @@
 //   GET  /              返回 Web UI（运行表单 + 报告浏览）
 import { Pipeline } from "../src/core/pipeline.ts"
 import type { PipelineConfig, StepId } from "../src/core/types.ts"
-import { readFile } from "node:fs/promises"
+import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 
 const STEP_IDS: StepId[] = [
@@ -85,6 +85,42 @@ async function runPipeline(config: PipelineConfig): Promise<Record<string, unkno
   return { steps, finalArtifact: config.outputDirectory }
 }
 
+interface RunReport {
+  releaseDecision?: { status?: string }
+  audit?: { findings?: Array<{ severity?: string }> }
+}
+
+// 运行历史:输出目录 runs 下的最近报告摘要(最新在前,最多 10 条)
+async function listRuns(outputDir: string): Promise<Array<{ runId: string; status?: string; findingsCount: number }>> {
+  const runsRoot = path.join(outputDir, ".droidseal", "runs")
+  const ids = await readdir(runsRoot).catch(() => [] as string[])
+  ids.sort()
+  const runs: Array<{ runId: string; status?: string; findingsCount: number }> = []
+  for (const id of ids) {
+    const reportPath = path.join(runsRoot, id, "reports", "droidseal-report.json")
+    const content = await readFile(reportPath, "utf8").catch(() => null)
+    if (!content) continue
+    const report = JSON.parse(content) as RunReport
+    const status = report.releaseDecision?.status
+    runs.push({ runId: id, findingsCount: report.audit?.findings?.length ?? 0, ...(status ? { status } : {}) })
+  }
+  return runs.slice(-10).reverse()
+}
+
+async function readRunReport(outputDir: string, runId: string): Promise<RunReport | null> {
+  const reportPath = path.join(outputDir, ".droidseal", "runs", runId, "reports", "droidseal-report.json")
+  const content = await readFile(reportPath, "utf8").catch(() => null)
+  return content ? (JSON.parse(content) as RunReport) : null
+}
+
+// 结构化错误响应:{ ok: false, error: { code, message } }
+function errorResponse(code: string, message: string, status: number): Response {
+  return Response.json({ ok: false, error: { code, message } }, { status })
+}
+
+// 运行串行化:同一时刻只允许一个流水线运行
+let running = false
+
 const WEB_UI = `<!doctype html>
 <html lang="zh"><head><meta charset="utf-8"><title>DroidSeal Web</title>
 <style>body{font-family:system-ui;max-width:860px;margin:24px auto;padding:0 16px;color:#222}
@@ -102,8 +138,17 @@ button{padding:8px 18px;cursor:pointer}</style></head><body>
 <label><input type="checkbox" id="learning"> 测试与学习模式(保留中间产物)</label>
 <button type="submit">运行流水线</button></form>
 <h3>结果</h3><pre id="out">等待运行…</pre>
+<h3>运行历史（点击查看详情，可筛选严重度）</h3>
+<div id="filters">
+  <button onclick="loadRunWithFilter('')">全部</button>
+  <button onclick="loadRunWithFilter('critical')">critical</button>
+  <button onclick="loadRunWithFilter('high')">high</button>
+  <button onclick="loadRunWithFilter('medium')">medium</button>
+</div>
+<div id="runs">加载中…</div>
 <script>
 const form = document.getElementById('f');
+let currentRun = null;
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const body = {
@@ -120,7 +165,30 @@ form.addEventListener('submit', async (e) => {
   document.getElementById('out').textContent = '运行中…';
   const res = await fetch('/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   document.getElementById('out').textContent = JSON.stringify(await res.json(), null, 2);
+  loadRuns();
 });
+async function loadRuns() {
+  const res = await fetch('/runs');
+  const data = await res.json();
+  const list = document.getElementById('runs');
+  list.innerHTML = (data.runs || []).map(r =>
+    '<div style="cursor:pointer;margin:2px 0" onclick="loadRun(\'' + r.runId + '\')">' + r.runId + ' — 门禁 ' + (r.status || 'unknown') + ' — ' + r.findingsCount + ' 发现</div>'
+  ).join('') || '暂无运行历史';
+}
+async function loadRun(id) {
+  currentRun = id;
+  await loadRunWithFilter('');
+}
+async function loadRunWithFilter(severity) {
+  if (!currentRun) return;
+  const url = '/runs/' + currentRun + '/findings' + (severity ? '?severity=' + severity : '');
+  const res = await fetch(url);
+  const data = await res.json();
+  const findings = data.findings || [];
+  const summary = findings.reduce((acc, f) => { const key = f.severity || 'unknown'; acc[key] = (acc[key] || 0) + 1; return acc; }, {});
+  document.getElementById('out').textContent = '运行 ' + currentRun + '（' + (severity || '全部') + '）：' + findings.length + ' 个发现\n严重度分布：' + JSON.stringify(summary, null, 2) + '\n\n' + JSON.stringify(findings, null, 2);
+}
+loadRuns();
 </script></body></html>`
 
 async function main(): Promise<void> {
@@ -141,25 +209,56 @@ async function main(): Promise<void> {
       if (token) {
         const auth = request.headers.get("authorization")
         if (auth !== `Bearer ${token}`) {
-          return Response.json({ error: "unauthorized" }, { status: 401 })
+          return errorResponse("UNAUTHORIZED", "未授权", 401)
         }
       }
       if (request.method === "POST" && url.pathname === "/run") {
+        if (running) {
+          return errorResponse("RUN_IN_PROGRESS", "已有运行在进行中，请等待完成", 409)
+        }
+        running = true
         try {
           const body = (await request.json()) as RunRequest
           const config = buildConfig(body, outputDir)
           const result = await runPipeline(config)
           return Response.json({ ok: true, ...result })
         } catch (error) {
-          return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 400 })
+          return errorResponse("RUN_FAILED", error instanceof Error ? error.message : String(error), 400)
+        } finally {
+          running = false
         }
+      }
+      if (request.method === "GET" && url.pathname === "/health") {
+        return Response.json({ ok: true, service: "DroidSeal Web", outputDirectory: outputDir })
+      }
+      if (request.method === "GET" && url.pathname === "/runs") {
+        const runs = await listRuns(outputDir)
+        return Response.json({ ok: true, runs })
+      }
+      if (request.method === "GET" && url.pathname.startsWith("/runs/")) {
+        const id = url.pathname.slice("/runs/".length).split("/")[0]
+        if (!id) return errorResponse("RUN_NOT_FOUND", "run not found", 404)
+        const report = await readRunReport(outputDir, id)
+        if (!report) return errorResponse("RUN_NOT_FOUND", "run not found", 404)
+        if (url.pathname.includes("/findings")) {
+          const severity = url.searchParams.get("severity")
+          const findings = (report.audit?.findings ?? []).filter((f) => !severity || f.severity === severity)
+          return Response.json({ ok: true, runId: id, findings })
+        }
+        return Response.json({
+          ok: true,
+          runId: id,
+          status: report.releaseDecision?.status ?? "unknown",
+          findingsCount: report.audit?.findings?.length ?? 0,
+          gate: report.releaseDecision ?? null,
+        })
       }
       if (request.method === "GET" && url.pathname.startsWith("/reports/")) {
         const relative = url.pathname.slice("/reports/".length)
         const target = path.resolve(outputDir, relative)
-        if (!target.startsWith(path.resolve(outputDir))) return new Response("forbidden", { status: 403 })
+        if (!target.startsWith(path.resolve(outputDir))) return errorResponse("FORBIDDEN", "forbidden", 403)
         const content = await readFile(target, "utf8").catch(() => null)
-        if (content === null) return new Response("not found", { status: 404 })
+        if (content === null) return errorResponse("NOT_FOUND", "not found", 404)
         return new Response(content, {
           headers: { "Content-Type": relative.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8" },
         })
@@ -167,7 +266,7 @@ async function main(): Promise<void> {
       if (request.method === "GET" && url.pathname === "/") {
         return new Response(WEB_UI, { headers: { "Content-Type": "text/html; charset=utf-8" } })
       }
-      return Response.json({ error: "not found" }, { status: 404 })
+      return errorResponse("NOT_FOUND", "not found", 404)
     },
   })
   console.log(`DroidSeal Web 服务：http://127.0.0.1:${server.port}（输出目录 ${outputDir}${token ? "，已启用 token 认证" : ""}）`)
