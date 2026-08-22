@@ -191,6 +191,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
   - 长期（边界兼容）：动态分析外部衔接指南；平台支持矩阵；恶意指标轻量提示（`MALICIOUS_INDICATOR`）。
   - 缺口补强：隐私数据收集清单（`PRIVACY_DATA_COLLECTION`/`PRIVACY_API_USAGE`）；证书固定缺失检测（`SOURCE_NO_CERT_PINNING`）；SQLite 明文存储审计（`SOURCE_UNENCRYPTED_STORAGE`）；反编译导出工具（`scripts/export-decompiled.ts`）。
 - **仍缺（边界项——明确不实现）**：iOS/Windows 多平台（大工程——见 `docs/platform-matrix.md`）；内置动态分析（本地优先边界——见 `docs/dynamic-analysis-bridge.md`）；恶意软件沙箱/反病毒（偏离发布安全定位）。
+- **下一竞争者（Quark-Engine——活跃，恶意行为加权评分）差距**：① 行为规则引擎（DEX API 调用组合的规则匹配，区别于通用正则）；② 加权恶意评分（行为权值累计——恶意度打分）；③ 内置恶意行为规则库（短信劫持/键盘记录/设备管理滥用等）。均为静态可实现的深化，与 `MALICIOUS_INDICATOR` 互补。
 
 ### 边界说明（能力方向）
 
@@ -201,11 +202,11 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 - **审计质量是稀缺能力**：误报控制、置信度分级、交叉证据、失败关闭——多数免费工具“扫到即报”，DroidSeal 做“确认后才报”，这是稀缺的工程能力。
 - **差异化清晰**：本地优先 + 审计加固一体化（审计 → 归一化 → 混淆 → 签名 → 验证 → 报告闭环），而非孤立的静态分析。
-- **免费开源审计竞争者（MobSF / AndroBugs 等）**：它们以静态分析扫描与报告为主；DroidSeal 的差异在于失败关闭语义、置信度分级、交叉证据与发布安全闭环（门禁 / 证据 / SBOM / 修复包），并坚持本地优先、不联网、不事后改写未知 APK。
+- **免费开源审计竞争者（AndroBugs / QARK 等——MobSF 已追平/超越并移出竞争名单）**：它们以静态分析扫描与报告为主；DroidSeal 的差异在于失败关闭语义、置信度分级、交叉证据与发布安全闭环（门禁 / 证据 / SBOM / 修复包），并坚持本地优先、不联网、不事后改写未知 APK。
 
 ### 竞争者分析（免费开源审计工具全景）
 
-- **综合框架**：MobSF（~20.7k★，活跃——静态/动态/恶意分析 + Web UI/REST/CI，局限：误报高、动态需模拟器、混淆应用分析受限）；QARK（LinkedIn，2019 停更——POC 生成，反编译不完整漏报）；APKHunt（2023 停更——MASTG 正则模式）；SUPER（停更——并行扫描快）。
+- **综合框架**：~~MobSF~~（**已追平/超越——移出竞争名单**，功能面已全覆盖，见开发路线「下一阶段」）；QARK（LinkedIn，2019 停更——POC 生成，反编译不完整漏报）；APKHunt（2023 停更——MASTG 正则模式）；SUPER（停更——并行扫描快）。
 - **字节码/语义分析**：AndroBugs（**已归档**——修改版 Androguard 的字节码语义分析，效率与准确率高）；JAADAS（2017 停更——Soot 污点分析）；DroidStatx / Marvin / AUSERA / Trueseeing / SPECK（学术型，多已停更）。
 - **基础设施**：Androguard（解析库——多数工具的基础，非开箱审计）；APKiD（打包器/保护器识别）；Quark-Engine（恶意行为加权评分）；apkleaks（URI/端点/密钥提取）；mobsfscan / Semgrep（规则引擎，CI 可用）。
 - **实证（arxiv 2410.20740，11 个 SAST 工具基准）**：分为源码/AST 模式匹配与字节码语义分析两类；召回差异大（MobSF 硬编码敏感数据 93.9%、AndroBugs 无效服务器校验 96.9%）；**共性痛点：误报率高、需人工验证**。
@@ -213,7 +214,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ### 逐功能对比（竞争对手强于 DroidSeal 的功能）
 
-- **MobSF**：动态分析（模拟器运行时行为/网络流量/API 调用）、多平台（iOS/Windows）、恶意软件检测、Web UI + REST API + CI 集成、反编译源码/资源浏览（人工核验）、丰富配置项。
+- ~~**MobSF**~~（**已追平/超越——移出竞争名单**）：其静态分析面（权限/组件/WebView/网络/存储/加密/证书/URL 提取/隐私收集/MASTG 映射/HTML 报告/历史趋势等）已由 DroidSeal 全覆盖（见开发路线「下一阶段」）；动态分析/多平台/恶意沙箱为边界项（已文档化）。
 - **AndroBugs**：字节码数据/控制流语义分析（SSL 校验召回 96.9%）、海量批量分析（MassiveAnalysis）。
 - **JAADAS / Marvin / AUSERA / Trueseeing**：污点/数据流分析（Soot/FlowDroid 追踪敏感数据源→汇）、可达性/调用链分析。
 - **QARK**：POC/exploit 生成（ADB 命令/APK）、教育性漏洞详解。
