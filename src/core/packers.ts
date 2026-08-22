@@ -7,19 +7,35 @@ import type { Finding } from "./types.ts"
 
 export interface PackerFingerprint {
   name: string
-  marker: string
+  marker?: string
+  regex?: string
   note: string
+  source?: string
 }
 
-// 外部指纹文件加载(APKiD 差距②):JSON 数组 { name, marker, note }——校验失败关闭。
+// 外部指纹文件加载(APKiD 差距②):JSON 数组 { name, marker?, regex?, note, source? }——校验失败关闭。
 export function parsePackerFingerprints(text: string): PackerFingerprint[] {
   const parsed = JSON.parse(text) as unknown
   if (!Array.isArray(parsed)) throw new Error("指纹文件应为 JSON 数组")
   const rules: PackerFingerprint[] = []
   for (const [index, raw] of parsed.entries()) {
     const rule = raw as Partial<PackerFingerprint>
-    if (!rule.name || !rule.marker) throw new Error(`指纹 #${index + 1} 缺 name/marker`)
-    rules.push({ name: rule.name, marker: rule.marker, note: rule.note ?? "" })
+    if (!rule.name) throw new Error(`指纹 #${index + 1} 缺 name`)
+    if (!rule.marker && !rule.regex) throw new Error(`指纹 #${index + 1}（${rule.name}）缺 marker 或 regex`)
+    if (rule.regex) {
+      try {
+        new RegExp(rule.regex, "i")
+      } catch {
+        throw new Error(`指纹 #${index + 1}（${rule.name}）regex 非法`)
+      }
+    }
+    rules.push({
+      name: rule.name,
+      ...(rule.marker ? { marker: rule.marker } : {}),
+      ...(rule.regex ? { regex: rule.regex } : {}),
+      note: rule.note ?? "",
+      ...(rule.source ? { source: rule.source } : {}),
+    })
   }
   return rules
 }
@@ -28,11 +44,11 @@ export async function loadPackerFingerprints(file: string): Promise<PackerFinger
   return parsePackerFingerprints(await readFile(file, "utf8"))
 }
 
-// 合并指纹:内置 + 外部(marker 去重——外部优先)。
+// 合并指纹:内置 + 外部(marker 或 regex 去重——外部优先)。
 export function mergePackerFingerprints(custom: readonly PackerFingerprint[] = []): PackerFingerprint[] {
   const merged = new Map<string, PackerFingerprint>()
-  for (const rule of KNOWN_PACKERS) merged.set(rule.marker, rule)
-  for (const rule of custom) merged.set(rule.marker, rule)
+  for (const rule of KNOWN_PACKERS) merged.set(rule.marker ?? rule.regex ?? rule.name, rule)
+  for (const rule of custom) merged.set(rule.marker ?? rule.regex ?? rule.name, rule)
   return [...merged.values()]
 }
 
@@ -179,7 +195,11 @@ export const KNOWN_PACKERS: readonly PackerFingerprint[] = [
 // 从 DEX 字符串/类描述符集合中匹配已知加固指纹,返回命中的指纹列表。
 export function detectPackers(strings: Iterable<string>, fingerprints: readonly PackerFingerprint[] = KNOWN_PACKERS): PackerFingerprint[] {
   const haystack = [...strings].join("\n").toLowerCase()
-  return fingerprints.filter((fingerprint) => haystack.includes(fingerprint.marker))
+  return fingerprints.filter((fingerprint) => {
+    if (fingerprint.marker) return haystack.includes(fingerprint.marker)
+    if (fingerprint.regex) return new RegExp(fingerprint.regex, "i").test(haystack)
+    return false
+  })
 }
 
 // 命中的指纹转 finding(清单级提示,失败关闭)。
@@ -192,11 +212,11 @@ export function buildPackerFindings(strings: Iterable<string>, fingerprints: rea
       code: "PACKER_DETECTED",
       title: `检测到加固壳/混淆器：${packers.map((p) => p.name).join("、")}`,
       detail:
-        `从 DEX 类描述符/字符串识别到以下加固特征：${packers.map((p) => p.marker).join("、")}。` +
+        `从 DEX 类描述符/字符串识别到以下加固特征：${packers.map((p) => p.marker ?? p.regex ?? p.name).join("、")}。` +
         packers.map((p) => p.note).join(" ") +
         " 加固壳会降低静态审计可见性（部分代码在运行时才解密），请结合加固商配置核对与商业加固核验。",
       recommendation: "确认加固版本与配置；对加壳应用需结合真机动态验证与加固商文档，静态审计结论按可见性降级。",
-      evidence: packers.map((p) => p.marker).join(", "),
+      evidence: packers.map((p) => p.marker ?? p.regex ?? p.name).join(", "),
     },
   ]
 }

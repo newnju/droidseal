@@ -25,7 +25,7 @@ describe("data tables consistency", () => {
     expect(new Set(names).size).toBe(names.length)
     for (const packer of KNOWN_PACKERS) {
       expect(packer.name.length).toBeGreaterThan(0)
-      expect(packer.marker.length).toBeGreaterThan(0)
+      expect((packer.marker ?? packer.regex ?? "").length).toBeGreaterThan(0)
       expect(packer.note.length).toBeGreaterThan(0)
     }
   })
