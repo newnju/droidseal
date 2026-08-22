@@ -1,6 +1,7 @@
 import { parseArsc, serializeArsc } from "./arsc-model.ts"
 import {
   analyzeResourceReflection,
+  detectTechnicalStringValues,
   flattenFilePaths,
   obfuscateValueRepresentations,
   scrambleResourcePaths,
@@ -133,6 +134,17 @@ export async function obfuscateArscInApk(
     }
   }
   colorsChurned = obfuscateValueRepresentations(table).churned
+  const technicalValues = detectTechnicalStringValues(table)
+  if (technicalValues.length > 0) {
+    findings.push({
+      severity: "info",
+      code: "ARSC_VALUE_TECHNICAL",
+      title: `resources.arsc 含 ${technicalValues.length} 个技术形态字符串值`,
+      detail: `识别到 key_/id_/token_/api_ 等内部标识符或路径类字符串值（仅审计，不改写）：${technicalValues.slice(0, 5).join("、")}${technicalValues.length > 5 ? "…" : ""}。这类值若为敏感数据，建议在源码侧处理。`,
+      recommendation: "确认这些值是否含敏感数据；需要保护时在源码侧接入字符串加密/服务端化。",
+      evidence: technicalValues.join(", "),
+    })
+  }
 
   if (keysRenamed === 0 && pathsRenamed === 0 && colorsChurned === 0) {
     return {

@@ -76,7 +76,12 @@ function context(input: {
     finalArtifact,
     toolchain: undefined,
     audit: { findings: input.findings ?? [] },
-    stepResults: input.steps ?? [],
+    // 默认包含核心加固步骤的成功结果,避免 HARDENING_COVERAGE_LOW 在最小上下文误触发
+    stepResults: input.steps ?? [
+      { id: "apk-audit", status: "success", title: "", summary: "", detail: [], startedAt: "2026-01-01T00:00:00.000Z", finishedAt: "2026-01-01T00:00:00.000Z", durationMs: 0 },
+      { id: "protect", status: "success", title: "", summary: "", detail: [], startedAt: "2026-01-01T00:00:00.000Z", finishedAt: "2026-01-01T00:00:00.000Z", durationMs: 0 },
+      { id: "verify", status: "success", title: "", summary: "", detail: [], startedAt: "2026-01-01T00:00:00.000Z", finishedAt: "2026-01-01T00:00:00.000Z", durationMs: 0 },
+    ],
     ...(input.signatureVerified === undefined ? {} : { signatureVerified: input.signatureVerified }),
   }
 }
@@ -146,7 +151,7 @@ describe("confidence-aware release policy", () => {
     expect(failed.blockingReasons[0]).toMatchObject({ code: "PIPELINE_STEP_FAILED", stepId: "build" })
 
     const skipped = evaluateReleaseDecision(context({
-      steps: [step("align", "skipped")],
+      steps: [step("apk-audit", "success"), step("protect", "success"), step("verify", "success"), step("align", "skipped")],
       signatureVerified: true,
     }))
     expect(skipped.status).toBe("pass")

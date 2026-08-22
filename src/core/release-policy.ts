@@ -154,6 +154,21 @@ export function evaluateReleaseDecision(context: RunContext): ReleaseDecision {
     })
   }
 
+  // 加固覆盖度提示:核心审计/防护/验证步骤未真实执行时给 review 提示(不阻断)。
+  // 可选步骤(资源混淆/Web 处理)与合法跳过不计入"期望执行"。
+  const hardeningSteps = ["apk-audit", "protect", "verify"]
+  const executedHardening = hardeningSteps.filter((id) =>
+    context.stepResults.some((step) => step.id === id && step.status === "success"),
+  )
+  if (executedHardening.length < hardeningSteps.length) {
+    reasons.push({
+      code: "HARDENING_COVERAGE_LOW",
+      level: "review",
+      message: `加固覆盖度不足：核心审计/防护/验证步骤仅 ${executedHardening.length}/${hardeningSteps.length} 真实执行（${hardeningSteps.filter((id) => !executedHardening.includes(id)).join("、")} 未成功）。`,
+      stepId: "verify",
+    })
+  }
+
   for (const finding of context.audit.findings) reasons.push(reasonForFinding(finding))
 
   const blockingReasons = reasons.filter((reason) => reason.level === "block").sort(compareReasons)
