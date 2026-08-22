@@ -133,6 +133,10 @@ async function main(): Promise<void> {
       } else if (eliminated.length > 0) {
         console.log("\n门禁建议：本次修复已消除全部对比 finding——可以继续发布流程。")
       }
+      if (process.argv.includes("--fail-on-remaining") && remaining.length > 0) {
+        console.error(`\n仍有 ${remaining.length} 个 finding 未消除——--fail-on-remaining 触发，复测失败（CI 门禁）。`)
+        process.exitCode = 1
+      }
     }
   } else if (auto && !jsonOutput) {
     console.log("--auto：未找到上一次运行报告，跳过对比。")
