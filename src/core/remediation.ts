@@ -220,10 +220,20 @@ ${R8_RULES_SUGGESTION}`,
     )
   }
   if (manifestCodes.length > 0) {
+    const manifestFindings = findings.filter((f) => manifestCodes.includes(f.code))
+    const specifics = manifestFindings.map((f) => `- **${f.title}**：${f.detail}`).join("\n")
     await writeArtifact(
       "templates/manifest-permissions.suggestion.md",
-      MANIFEST_PERMISSION_SUGGESTION,
-      "Manifest 权限与导出组件最小化人工核对清单",
+      `# Manifest 权限与导出组件最小化建议
+
+## 本次审计发现
+
+${specifics || "- 无具体项"}
+
+## 通用核对清单
+
+${MANIFEST_PERMISSION_SUGGESTION}`,
+      "Manifest 权限与导出组件最小化（本次审计发现 + 人工核对清单）",
       manifestCodes,
     )
   }
