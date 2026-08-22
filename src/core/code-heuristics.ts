@@ -98,6 +98,14 @@ export const CODE_HEURISTIC_RULES: readonly CodeHeuristicRule[] = [
     regex: /setAllowFileAccess/i,
   },
   {
+    suffix: "WEBVIEW_SSL_ERROR_IGNORED",
+    severity: "medium",
+    title: "WebView SSL 错误处理（可能忽略证书错误）",
+    detail: "为什么：onReceivedSslError / clearSslPreferences 出现在代码中——若回调中调用 proceed() 会忽略证书错误继续加载，可能被中间人攻击。开发者需自行确认：是否在 SSL 错误回调中调用了 proceed()。",
+    recommendation: "默认调用 handler.cancel() 拒绝错误证书；确需放行时限制到特定域并人工复核。",
+    regex: /onReceivedSslError|clearSslPreferences/i,
+  },
+  {
     suffix: "WEBVIEW_MIXED_CONTENT",
     severity: "medium",
     title: "WebView 允许混合内容（HTTP 资源）",

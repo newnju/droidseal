@@ -116,6 +116,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - DEX 调用链关联：`extractCallGraph`（解析 class_data 的 code_off → 调用方→被调 映射），行为 finding 证据带调用方（失败关闭）。
 - 调用图导出工具（`scripts/export-callgraph.ts`）：直接 DEX 或 `--apk` 模式导出调用图 JSON。
 - 反混淆辅助深化：URL 编码（%XX）解码匹配（与 hex/base64 并列为三编码）。
+- SSL 证书校验绕过语义检测（`SOURCE_SSL_BYPASS`）：自定义 TrustManager / 空 `checkServerTrusted` / ALLOW_ALL 主机名校验器（失败关闭）。
+- 语义漏洞模式库（`SOURCE_SEMANTIC_VULN`）：敏感数据流入 SQL 注入（execSQL/rawQuery/compileStatement）/ 命令执行（Runtime.exec/ProcessBuilder）汇的检测（medium，区别于 `SOURCE_DATAFLOW`）。
+- 目录/库级批量（`batch-run --dir`）：扫描目录下 `*.apk` 自动建清单批量运行。
 
 #### 文档
 
