@@ -37,6 +37,12 @@ const en = {
   sidebarNotGenerated: "Not generated yet",
   sidebarOpenFolder: "▸ Open containing folder",
   sidebarNoOverwrite: "Failure never overwrites · local only",
+  // 阶段分组与可选步骤提示
+  phasePrepare: "Prepare",
+  phaseAudit: "Audit",
+  phaseHarden: "Harden",
+  phaseRelease: "Release",
+  stepOptionalOff: "optional, off",
 
   // 输入区
   composerPlaceholder: "Type a message or /help · or drag a file here",
@@ -434,6 +440,12 @@ const zh: Record<keyof typeof en, string> = {
   sidebarNotGenerated: "尚未生成",
   sidebarOpenFolder: "▸ 打开所在目录",
   sidebarNoOverwrite: "失败不覆盖 · 本地处理",
+  // 阶段分组与可选步骤提示
+  phasePrepare: "准备",
+  phaseAudit: "审计",
+  phaseHarden: "加固",
+  phaseRelease: "发布",
+  stepOptionalOff: "可选未开启",
 
   composerPlaceholder: "输入消息或 /help · 或拖动文件到此处",
   secretPlaceholder: "请输入后确认",

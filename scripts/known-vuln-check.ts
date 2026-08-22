@@ -21,6 +21,9 @@ function main(): void {
     if (entry.affected !== undefined && (typeof entry.affected !== "string" || entry.affected.trim() === "")) {
       errors.push(`affected 格式异常: ${entry.package}（应为非空字符串或省略）`)
     }
+    if (entry.fixedIn !== undefined && (typeof entry.fixedIn !== "string" || entry.fixedIn.trim() === "")) {
+      errors.push(`fixedIn 格式异常: ${entry.package}（应为非空字符串或省略）`)
+    }
     if (cves.has(entry.cve)) errors.push(`重复 CVE: ${entry.cve}`)
     cves.add(entry.cve)
     if (packages.has(entry.package)) errors.push(`重复包名: ${entry.package}`)

@@ -111,6 +111,7 @@ async function main(): Promise<void> {
   let added: string[] = []
   let remaining: string[] = []
   let gateSuggestion: string | null = null
+  let gateStatus: string | null = null
 
   if (!jsonOutput) {
     console.log(`复测完成：${reportPath}`)
@@ -123,6 +124,7 @@ async function main(): Promise<void> {
     added = [...after].filter((c) => !before.has(c))
     remaining = [...before].filter((c) => after.has(c))
     gateSuggestion = remaining.length > 0 ? "fix-and-retest" : eliminated.length > 0 ? "ready" : "no-change"
+    gateStatus = remaining.length > 0 ? "block" : "pass"
     if (!jsonOutput) {
       console.log(`\n===== 复测对比（${effectiveBefore}） =====`)
       console.log(`消除 ${eliminated.length} 个：${eliminated.join("、") || "无"}`)
@@ -132,6 +134,9 @@ async function main(): Promise<void> {
         console.log(`\n门禁建议：仍有 ${remaining.length} 个 finding 未消除——建议修复后复测；修复包见报告 remediation 目录。`)
       } else if (eliminated.length > 0) {
         console.log("\n门禁建议：本次修复已消除全部对比 finding——可以继续发布流程。")
+      }
+      if (gateStatus) {
+        console.log(`门禁状态：${gateStatus}（复测门禁——剩余 finding 为 block，否则 pass）`)
       }
       if (process.argv.includes("--fail-on-remaining") && remaining.length > 0) {
         console.error(`\n仍有 ${remaining.length} 个 finding 未消除——--fail-on-remaining 触发，复测失败（CI 门禁）。`)
@@ -153,6 +158,7 @@ async function main(): Promise<void> {
           added,
           remaining,
           gateSuggestion,
+          gateStatus,
         },
         null,
         2,
