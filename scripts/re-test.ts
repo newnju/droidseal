@@ -118,6 +118,12 @@ async function main(): Promise<void> {
     console.log(`消除 ${eliminated.length} 个：${eliminated.join("、") || "无"}`)
     console.log(`新增 ${added.length} 个：${added.join("、") || "无"}`)
     console.log(`剩余 ${remaining.length} 个：${remaining.join("、") || "无"}`)
+    // 复测门禁建议:剩余 finding → 建议继续修复;全部消除 → 可发布
+    if (remaining.length > 0) {
+      console.log(`\n门禁建议：仍有 ${remaining.length} 个 finding 未消除——建议修复后复测；修复包见报告 remediation 目录。`)
+    } else if (eliminated.length > 0) {
+      console.log("\n门禁建议：本次修复已消除全部对比 finding——可以继续发布流程。")
+    }
   } else if (auto) {
     console.log("--auto：未找到上一次运行报告，跳过对比。")
   }

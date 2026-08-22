@@ -46,6 +46,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 新增供应链快照 / 打包器指纹一致性校验（`scripts/known-vuln-check.ts`）与数据表一致性测试（CVE/包名/marker 唯一性、字段完整性）。
 - ARSC 值级审计新增 `ARSC_VALUE_TECHNICAL` finding（key_/id_/token_ 等技术形态字符串值识别，仅审计不改写）。
 - 复测脚本 `re-test.ts` 新增 `--auto`：自动定位输入目录下最近一次运行报告并对比 findings（消除/新增/剩余）。
+- 反调试 stub 新增 `signalsToJson`：把全部检测信号（inspect 快照 + 完整性/签名/模拟器/VPN·代理/时钟异常）汇总为 JSON，供服务端协作上报（只报告不阻断）。
+- 新增 assets 资源轻量加密方案设计（`docs/assets-encryption-plan.md`）：源码接入模式（构建期加密、运行期解密，与字符串加密桩同模式，不事后改写 APK）。
 
 ### Fixed
 
