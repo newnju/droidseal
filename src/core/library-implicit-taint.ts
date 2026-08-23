@@ -34,7 +34,7 @@ export function scanLibraryTaint(source: string): Array<{ line: number; method: 
     // 库方法调用赋值:val = sdk.method(...)
     const libMatch = LIBRARY_SENSITIVE_METHODS.find((m) => lower.includes(m.method))
     if (libMatch) {
-      const assign = /(?:^|\s)([A-Za-z_][A-Za-z0-9_]{2,})\s*=\s*[^;]*/.exec(line)
+      const assign = /(?:^|\s)([A-Za-z_][A-Za-z0-9_]{0,})\s*=\s*[^;]*/.exec(line)
       if (assign) taintedVars.set(assign[1]!, libMatch.note || libMatch.method)
       continue
     }
