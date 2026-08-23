@@ -68,29 +68,50 @@ async function main(): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
   if (token) headers["Authorization"] = `Bearer ${token}`
 
+  // 并发池（SUPER 差距①）：--parallel N——最多 N 个请求同时进行（默认 1 串行）
+  let parallel = 1
+  for (let i = 1; i < argv.length; i += 1) {
+    if (argv[i] === "--parallel") {
+      const value = Number.parseInt(argv[++i] ?? "1", 10)
+      parallel = Number.isFinite(value) && value > 0 ? value : 1
+    }
+  }
+
   const results: Array<{ name: string; ok: boolean; seconds?: number; stepsOk?: number; stepsSkipped?: number; error?: string }> = []
   const startedAt = Date.now()
-  for (const [index, item] of items.entries()) {
+
+  const runOne = async (index: number): Promise<void> => {
+    const item = items[index]!
     const itemStarted = Date.now()
     process.stdout.write(`[${index + 1}/${items.length}] ${item.name} ... `)
     const res = await fetch(`${base}/run`, { method: "POST", headers, body: JSON.stringify(item) }).catch(() => null)
     if (!res) {
       console.log("请求失败")
-      results.push({ name: item.name, ok: false, error: "请求失败" })
-      continue
+      results[index] = { name: item.name, ok: false, error: "请求失败" }
+      return
     }
     const data = (await res.json().catch(() => null)) as RunResponse | null
     const seconds = (Date.now() - itemStarted) / 1000
     if (!data || data.ok !== true) {
       console.log(`失败（${seconds.toFixed(1)}s）`)
-      results.push({ name: item.name, ok: false, seconds, error: data?.error?.message ?? `HTTP ${res.status}` })
-      continue
+      results[index] = { name: item.name, ok: false, seconds, error: data?.error?.message ?? `HTTP ${res.status}` }
+      return
     }
     const stepsOk = data.steps?.filter((s) => s.status === "success").length ?? 0
     const stepsSkipped = data.steps?.filter((s) => s.status === "skipped").length ?? 0
     console.log(`完成（${seconds.toFixed(1)}s，成功 ${stepsOk} 步${stepsSkipped > 0 ? `，跳过 ${stepsSkipped} 步` : ""}）`)
-    results.push({ name: item.name, ok: true, seconds, stepsOk, stepsSkipped })
+    results[index] = { name: item.name, ok: true, seconds, stepsOk, stepsSkipped }
   }
+
+  let next = 0
+  const workers = Array.from({ length: Math.min(parallel, items.length) }, async () => {
+    while (true) {
+      const index = next++
+      if (index >= items.length) return
+      await runOne(index)
+    }
+  })
+  await Promise.all(workers)
 
   const ok = results.filter((r) => r.ok).length
   console.log(`\n===== 批量汇总 =====`)

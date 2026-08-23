@@ -121,8 +121,7 @@ function errorResponse(code: string, message: string, status: number): Response 
   return Response.json({ ok: false, error: { code, message } }, { status })
 }
 
-// 运行串行化:同一时刻只允许一个流水线运行
-let running = false
+// 运行并发（SUPER 差距①）：允许并发运行——每个 run 使用独立目录（.droidseal/runs/<id>）
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
@@ -146,10 +145,6 @@ async function main(): Promise<void> {
         }
       }
       if (request.method === "POST" && url.pathname === "/run") {
-        if (running) {
-          return errorResponse("RUN_IN_PROGRESS", "已有运行在进行中，请等待完成", 409)
-        }
-        running = true
         try {
           const body = (await request.json()) as RunRequest
           const config = buildConfig(body, outputDir)
@@ -157,8 +152,6 @@ async function main(): Promise<void> {
           return Response.json({ ok: true, ...result })
         } catch (error) {
           return errorResponse("RUN_FAILED", error instanceof Error ? error.message : String(error), 400)
-        } finally {
-          running = false
         }
       }
       if (request.method === "GET" && url.pathname === "/health") {

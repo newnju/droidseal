@@ -3,6 +3,7 @@
 // 弱加密（MD5/SHA1）。失败关闭。
 import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
+import { decodeObfuscated } from "./obfuscation-decode.ts"
 import type { Finding } from "./types.ts"
 
 interface JsPattern {
@@ -68,7 +69,9 @@ export async function scanProjectJsAudit(projectRoot: string): Promise<Finding[]
   const findings: Finding[] = []
   for (const file of jsFiles.slice(0, 300)) {
     const source = await readFile(file, "utf8").catch(() => "")
-    const matches = scanJsFile(source)
+    // 自动反混淆(SUPER 差距③):先解码混淆层(atob/eval——解码后扫描)
+    const { decoded, layers } = decodeObfuscated(source)
+    const matches = scanJsFile(decoded)
     const relative = path.relative(projectRoot, file).replaceAll("\\", "/")
     for (const match of matches.slice(0, 3)) {
       const pattern = JS_PATTERNS.find((p) => p.code === match.code)!
