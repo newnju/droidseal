@@ -7,8 +7,8 @@ import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 import type { Finding } from "./types.ts"
 
-// 敏感形态字符串字面量（硬编码值——键/口令/令牌/URL 形态——标识符赋值与引号键两种形态）
-const SENSITIVE_LITERAL = /(?:["'](?:api[_-]?key|apikey|password|passwd|secret|token|access[_-]?key|client[_-]?secret|private[_-]?key)["']?\s*[:=]\s*["'][^"']{8,}["'])|((?:api[_-]?key|apikey|password|passwd|secret|token|access[_-]?key|client[_-]?secret|private[_-]?key)\s*=\s*["'][^"']{8,}["'])/i
+// 敏感形态字符串字面量（硬编码值——键/口令/令牌/URL 形态——标识符赋值、引号键与凭据值三种形态）
+const SENSITIVE_LITERAL = /(?:["'](?:api[_-]?key|apikey|password|passwd|secret|token|access[_-]?key|client[_-]?secret|private[_-]?key)["']?\s*[:=]\s*["'][^"']{8,}["'])|((?:api[_-]?key|apikey|password|passwd|secret|token|access[_-]?key|client[_-]?secret|private[_-]?key)\s*=\s*["'][^"']{8,}["'])|(["'][A-Za-z0-9_-]{0,20}(?:AIzaSy|ghp_|AKIA|eyJ)[A-Za-z0-9_.-]{8,}["'])/i
 
 const OBJECT_FIELD_SOURCES = ["getdeviceid(", "getimei(", "getsimserialnumber(", "getsubscriberid(", "getline1number(", "getstringextra(", "getqueryparameter(", "getsharedpreferences", "getlastknownlocation(", "getprimaryclip(", "getaccounts(", "getintent(", "getdata(", "getserial(", "getstring(", "getextra("]
 const OBJECT_FIELD_SINKS = ["log.d(", "log.e(", "log.i(", "log.w(", "loadurl(", "execsql(", "sendtextmessage(", "startactivity(", "settext(", "openfileoutput(", "writeexternalstorage(", "runtime.exec(", "processbuilder("]

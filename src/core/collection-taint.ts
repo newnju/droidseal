@@ -17,13 +17,13 @@ export function scanCollectionTaint(source: string): Array<{ line: number; conta
     const line = lines[i]!
     const lower = line.toLowerCase()
     // 容器放入敏感源:map.put(key, src) / list.add(src) / map["k"] = src
-    const putMatch = /([A-Za-z_][A-Za-z0-9_]{2,})\.(?:put|add|set)\([^)]*/.exec(line)
+    const putMatch = /([A-Za-z_][A-Za-z0-9_]{0,})\.(?:put|add|set)\([^)]*/.exec(line)
     if (putMatch && COLLECTION_SOURCES.some((s) => lower.includes(s))) {
       taintedContainers.add(putMatch[1]!)
       continue
     }
     // 容器取出 + 汇:val = map.get(k) / list.get(i) → 后续行含 val + 汇
-    const getMatch = /(?:^|\s)([A-Za-z_][A-Za-z0-9_]{2,})\s*=\s*[^;]*\.get\(/.exec(line)
+    const getMatch = /(?:^|\s)([A-Za-z_][A-Za-z0-9_]{0,})\s*=\s*[^;]*\.get\(/.exec(line)
     if (getMatch && taintedContainers.size > 0) {
       const varName = getMatch[1]!
       for (let j = i; j < lines.length && j < i + 10; j += 1) {
