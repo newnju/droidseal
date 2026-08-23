@@ -1370,8 +1370,8 @@ export function App() {
             </Show>
 
             <Show when={screen() === "welcome" && !toolRecovery()}>
-              <Button shortcut="1" label="分步处理" detail="每一步执行前确认" tone="accent" onPress={() => startWizard("guided")} />
-              <Button shortcut="2" label="一键处理" detail="失败自动回退并继续" onPress={() => startWizard("one-click")} />
+              <Button shortcut="1" label="一键处理" detail="失败自动回退并继续" onPress={() => startWizard("one-click")} />
+              <Button shortcut="2" label="分步处理" detail="每一步执行前确认" tone="accent" onPress={() => startWizard("guided")} />
               <Button shortcut="3" label="环境诊断" detail="检查 JDK 与 Android SDK" onPress={() => void runDoctor()} />
             </Show>
 
