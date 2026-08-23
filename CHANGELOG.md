@@ -134,6 +134,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - Androguard 剩余差距（②③）：任意 DEX 修改 API（`dex-patch.ts`——invoke 方法索引 / const-string 字符串索引的指令级补丁——真 DEX 字节修改验证）；资源条目对象模型（`buildArscResourceModel`——resources.arsc 的 type chunk 解析 → 类型/条目树——真 ARSC 解析出 146 类型）。
 - Semgrep 新差距 5 项：声明式污点规则（`taintRulesFile`——自定义 source/sink/sanitizer 合并到扫描）；autofix 自动修复（`autofix.ts` + `scripts/apply-autofix.ts`——安全替换 + 备份 .autofix.bak——失败关闭）；suppression 注释忽略（`droidseal-ignore` 行级忽略——集成核心扫描）；规则测试框架（`scripts/test-rules.ts`——正/负用例验证 + CI 退出码）；PR 注释生成（`scripts/generate-pr-comment.ts`——报告 → PR 评论 Markdown——CI 发布）。
 - Semgrep 剩余差距 4 项：SARIF 2.1.0 报告导出（`scripts/generate-sarif.ts`——CI 生态标准——GitHub Code Scanning 可导入）；自定义规则精确模式（`exact: true`——词边界整词匹配——降误报）；JS 资源审计（`js-audit.ts`——混合应用 JS 的硬编码密钥/危险 API（innerHTML/eval/动态脚本）/弱加密（MD5/SHA1）——`SOURCE_JS_*`）；规则生态示例集（`docs/rule-examples.md`——社区规则风格 7 条示例）。
+- SUPER 差距 3 项：并行扫描（服务端允许并发运行（每个 run 独立目录）+ `batch-run --parallel N` 并发池）；Web/混合应用审计（`web-audit.ts`——HTML 明文表单/内联 XSS 事件处理器/Web 存储敏感数据——`SOURCE_WEB_*`）；自动反混淆（`obfuscation-decode.ts`——eval/atob 编码层自动解码——JS 审计前预处理）。
 
 #### 文档
 
