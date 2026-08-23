@@ -22,6 +22,9 @@ import { loadCustomRules, applyCustomRulesToProject } from "./custom-rules.ts"
 import { scanProjectPrivacyApis } from "./privacy-collection.ts"
 import { scanProjectStorageSecurity } from "./storage-security.ts"
 import { scanProjectSslBypass } from "./ssl-bypass.ts"
+import { scanProjectSdkMismatch } from "./sdk-model.ts"
+import { scanProjectStaticTaint } from "./static-taint.ts"
+import { scanProjectCollectionTaint } from "./collection-taint.ts"
 import { loadBehaviorRules, mergeBehaviorRules, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
 import { loadPackerFingerprints, mergePackerFingerprints, KNOWN_PACKERS } from "./packers.ts"
 import { writeReports } from "./report.ts"
@@ -590,6 +593,15 @@ export class Pipeline {
     // 源码侧 SSL 证书校验绕过检测(AndroBugs 差距①):失败关闭
     const sslFindings = await scanProjectSslBypass(this.config.inputPath)
     this.context.audit.findings.push(...sslFindings)
+    // 源码侧 SDK 版本化 API 模型(⑯):API 引入版本 vs minSdk 对比——失败关闭
+    const sdkFindings = await scanProjectSdkMismatch(this.config.inputPath)
+    this.context.audit.findings.push(...sdkFindings)
+    // 源码侧静态字段污点(⑪):static 字段存敏感数据并被使用——失败关闭
+    const staticFindings = await scanProjectStaticTaint(this.config.inputPath)
+    this.context.audit.findings.push(...staticFindings)
+    // 源码侧集合元素污点(⑫):容器 put/add → get → 汇——失败关闭
+    const collectionFindings = await scanProjectCollectionTaint(this.config.inputPath)
+    this.context.audit.findings.push(...collectionFindings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [
         ...(this.context.audit.softwareComponents ?? []),

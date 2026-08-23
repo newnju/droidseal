@@ -23,6 +23,13 @@ const SOURCE_PATTERNS = [
   "getprimaryclip(",
   "getaccounts(",
   "getline1number(",
+  // 接收侧源(⑭ Android 数据接收源建模——Intent/广播/ContentProvider 接收数据)
+  "getintent(",
+  "getdata(",
+  "onreceive(",
+  "getclipdata(",
+  "query(",
+  "getcursor(",
 ]
 
 // 高风险汇
@@ -54,6 +61,19 @@ const SANITIZER_PATTERNS = ["encrypt(", "encode(", "digest(", "base64", "obfusca
 // 生命周期回调入口（JAADAS 差距①——生命周期入口点建模）。
 const LIFECYCLE_METHODS = ["oncreate(", "onresume(", "onstart(", "ondestroy(", "onpaused(", "onstop("]
 
+// 动态回调注册（⑱ 动态回调注册建模——ClickListener/KeyListener/Handler/AsyncTask/接口回调）。
+const CALLBACK_REGISTRATION_PATTERNS = [
+  "setonclicklistener(",
+  "setonkeylistener(",
+  "setonfocuschangelistener(",
+  "setonlongclicklistener(",
+  "setontouchlistener(",
+  "setonitemclicklistener(",
+  "postdelayed(",
+  "handler.post(",
+  "asynctask(",
+]
+
 export interface DataflowMatch {
   line: number
   source: string
@@ -61,6 +81,7 @@ export interface DataflowMatch {
   snippet: string
   vuln?: boolean
   lifecycle?: boolean
+  callback?: boolean
 }
 
 // 简化数据流：逐行扫描，源调用赋值给变量（记录变量→源），后续行中该变量出现在
@@ -71,12 +92,17 @@ export function scanTaintFlow(source: string): DataflowMatch[] {
   const lines = source.split(/\r?\n/)
   const tainted = new Map<string, string>()
   let inLifecycle = false
+  let inCallback = false
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!
     const lower = line.toLowerCase()
     // 生命周期回调入口:签名行进入生命周期上下文(JAADAS 差距①)
     if (LIFECYCLE_METHODS.some((method) => lower.includes(method)) && /(?:void|protected|public|override)\s+on[A-Z]/.test(line)) {
       inLifecycle = true
+    }
+    // 动态回调注册:注册行进入回调上下文(⑱——回调体内的源使用)
+    if (CALLBACK_REGISTRATION_PATTERNS.some((pattern) => lower.includes(pattern))) {
+      inCallback = true
     }
     // 源赋值：`xxx = ...getStringExtra(...)` 或 `val xxx = ...getStringExtra(...)`
     const assign = /(?:^|\s)([A-Za-z_][A-Za-z0-9_]{2,})\s*=\s*[^;]*/.exec(line)
@@ -97,7 +123,7 @@ export function scanTaintFlow(source: string): DataflowMatch[] {
       if (!line.includes(varName)) continue
       const sink = SINK_PATTERNS.find((s) => lower.includes(s))
       if (sink) {
-        matches.push({ line: i + 1, source: src, sink, snippet: line.trim().slice(0, 120), vuln: SEMANTIC_VULN_SINKS.includes(sink), lifecycle: inLifecycle })
+        matches.push({ line: i + 1, source: src, sink, snippet: line.trim().slice(0, 120), vuln: SEMANTIC_VULN_SINKS.includes(sink), lifecycle: inLifecycle, callback: inCallback })
         break
       }
     }
@@ -136,15 +162,23 @@ export async function scanProjectDataflow(projectRoot: string): Promise<Finding[
     const relative = path.relative(projectRoot, file).replaceAll("\\", "/")
     for (const match of matches.slice(0, 3)) {
       findings.push({
-        severity: match.vuln ? "medium" : match.lifecycle ? "medium" : "low",
+        severity: match.vuln ? "medium" : match.lifecycle || match.callback ? "medium" : "low",
         confidence: "medium",
-        code: match.vuln ? "SOURCE_SEMANTIC_VULN" : match.lifecycle ? "SOURCE_LIFECYCLE_ENTRY" : "SOURCE_DATAFLOW",
+        code: match.vuln
+          ? "SOURCE_SEMANTIC_VULN"
+          : match.lifecycle
+            ? "SOURCE_LIFECYCLE_ENTRY"
+            : match.callback
+              ? "SOURCE_CALLBACK_ENTRY"
+              : "SOURCE_DATAFLOW",
         title: match.vuln
           ? "敏感数据可能流入漏洞型汇（注入/命令执行）"
           : match.lifecycle
             ? "敏感数据流出现在生命周期回调（污点入口点）"
-            : "敏感数据可能流向高风险汇",
-        detail: `${relative}:${match.line} 中 ${match.source} 获取的数据可能流入 ${match.sink}（同函数内变量传播，启发式${match.vuln ? "；漏洞型汇——建议优先核验注入/命令执行风险" : ""}${match.lifecycle ? "；位于生命周期回调内——生命周期是污点分析的入口点" : ""}）。`,
+            : match.callback
+              ? "敏感数据流出现在动态回调注册（回调入口点）"
+              : "敏感数据可能流向高风险汇",
+        detail: `${relative}:${match.line} 中 ${match.source} 获取的数据可能流入 ${match.sink}（同函数内变量传播，启发式${match.vuln ? "；漏洞型汇——建议优先核验注入/命令执行风险" : ""}${match.lifecycle ? "；位于生命周期回调内——生命周期是污点分析的入口点" : ""}${match.callback ? "；位于动态回调（ClickListener/Handler/AsyncTask 等）内——回调是污点入口点" : ""}）。`,
         recommendation: "核对数据流向；敏感数据应避免写入日志/明文网络/WebView，必要时脱敏或移入服务端处理。",
         evidence: `${relative}:${match.line} ${match.snippet}`,
       })
