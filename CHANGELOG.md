@@ -130,6 +130,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 污点分析完整版（JAADAS 差距）：接收侧源（Intent/广播/ContentProvider 的 `getIntent`/`getData`/`query` 等）；动态回调注册入口（`SOURCE_CALLBACK_ENTRY`——ClickListener/Handler/AsyncTask 等 9 类）；SDK 版本化 API 模型（`SDK_LEVEL_API_MISMATCH`——API 引入版本 vs minSdk）；静态字段污点（`SOURCE_STATIC_TAINT`——项目级跨文件追踪）；集合元素污点（`SOURCE_COLLECTION_TAINT`——put/add → get → 汇）。
 - 污点分析进阶（JAADAS 差距 9 项）：跨组件/跨进程 Intent 数据流（`SOURCE_CROSS_COMPONENT_TAINT`——putExtra 源 → 组件/服务/广播/绑定）；反射调用静态解析（`SOURCE_REFLECTION_TARGET`——Class.forName/getMethod 目标提取）；跨函数污点传播（`SOURCE_CROSS_FUNCTION_TAINT`——参数边界）；常量值分析 + 对象字段污点（`SOURCE_CONSTANT_VALUE`/`SOURCE_OBJECT_FIELD_TAINT`——敏感字面量间接持有 + 实例字段）；库间污点 + 隐式流（`SOURCE_LIBRARY_TAINT`/`SOURCE_IMPLICIT_FLOW`——库方法返回值 + 控制流污点）；可编程 IR（`scripts/export-ir.ts`——JSON IR 导出供第三方分析）。
 - JAADAS 差距 19 项全量实现并实效验证：污点/数据流/语义/建模四大功能面穷尽核对无遗漏；新增检测器逐项冒烟验证（修复正则大小写/单字符变量/单行分支/off-by-one 等 7 处后全部命中合成样本——确认实际发挥作用）。
+- Androguard 深度可编程解析（⑤⑥⑦⑧⑨）：指令迭代器 API（`dex-instructions.ts`——逐指令 opcode/mnemonic/operands——关键指令助记符）；内置反汇编器（`dex-disassembler.ts`——smali-like 方法级输出——行为 finding 附反汇编片段——替代外部 jadx 的内置形态）；XREF 交叉引用（`xref.ts`——方法/字段被引用映射——`referencesOf`）；类级对象模型（`dex-class-model.ts`——类→方法→指令对象树——export-ir 的 `classes` 深化（schemaVersion 2））；交互式分析 REPL（`scripts/analyze-repl.ts`——load/classes/method/xref/exit）。
 
 #### 文档
 
