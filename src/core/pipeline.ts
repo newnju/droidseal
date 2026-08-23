@@ -25,6 +25,11 @@ import { scanProjectSslBypass } from "./ssl-bypass.ts"
 import { scanProjectSdkMismatch } from "./sdk-model.ts"
 import { scanProjectStaticTaint } from "./static-taint.ts"
 import { scanProjectCollectionTaint } from "./collection-taint.ts"
+import { scanProjectCrossComponentTaint } from "./cross-component-taint.ts"
+import { scanProjectReflectionTargets } from "./reflection-target.ts"
+import { scanProjectCrossFunctionTaint } from "./cross-function-taint.ts"
+import { scanProjectValueAndFieldTaint } from "./value-field-taint.ts"
+import { scanProjectLibraryAndImplicitTaint } from "./library-implicit-taint.ts"
 import { loadBehaviorRules, mergeBehaviorRules, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
 import { loadPackerFingerprints, mergePackerFingerprints, KNOWN_PACKERS } from "./packers.ts"
 import { writeReports } from "./report.ts"
@@ -602,6 +607,21 @@ export class Pipeline {
     // 源码侧集合元素污点(⑫):容器 put/add → get → 汇——失败关闭
     const collectionFindings = await scanProjectCollectionTaint(this.config.inputPath)
     this.context.audit.findings.push(...collectionFindings)
+    // 源码侧跨组件/跨进程 Intent 数据流(⑤⑲):putExtra 源 → 组件/服务/广播——失败关闭
+    const crossFindings = await scanProjectCrossComponentTaint(this.config.inputPath)
+    this.context.audit.findings.push(...crossFindings)
+    // 源码侧反射调用静态解析(⑥):Class.forName/getMethod 目标提取——失败关闭
+    const reflectionFindings = await scanProjectReflectionTargets(this.config.inputPath)
+    this.context.audit.findings.push(...reflectionFindings)
+    // 源码侧跨函数污点传播(⑦):参数/返回值边界——失败关闭
+    const crossFunctionFindings = await scanProjectCrossFunctionTaint(this.config.inputPath)
+    this.context.audit.findings.push(...crossFunctionFindings)
+    // 源码侧常量值分析 + 对象字段污点(⑧⑩):敏感字面量间接持有 + 实例字段——失败关闭
+    const valueFieldFindings = await scanProjectValueAndFieldTaint(this.config.inputPath)
+    this.context.audit.findings.push(...valueFieldFindings)
+    // 源码侧库间污点 + 隐式流(⑬⑰):库方法返回值 + 控制流污点——失败关闭
+    const libraryImplicitFindings = await scanProjectLibraryAndImplicitTaint(this.config.inputPath)
+    this.context.audit.findings.push(...libraryImplicitFindings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [
         ...(this.context.audit.softwareComponents ?? []),

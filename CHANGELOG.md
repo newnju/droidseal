@@ -126,6 +126,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 指纹元数据：`version`/`author`/`source` 可选字段（外部规则文件可带，finding 按需展示版本与规则作者）。
 - 混淆器覆盖扩充（`packers.ts` 27 → 33 条）：新增 AndResGuard / BlackObfuscator / Obfuscapk / Allatori / Zelix KlassMaster / DashO 等混淆器指纹。
 - POC 验证命令建议（`poc-commands.ts` + 报告 `pocCommands`/「POC 验证命令建议」节）：对高风险发现（EXPORTED 组件/备份/可调试/深链）生成可执行 adb/drozer 验证命令，带可验证性标记与教育性说明（失败关闭，衔接 `docs/dynamic-analysis-bridge.md`）。
+- 污点分析深化（JAADAS 差距）：污点源/汇库扩充（设备标识/位置/剪贴板/账户源、文件写入汇——源 6→14、汇 13→15）；生命周期回调入口点（`SOURCE_LIFECYCLE_ENTRY`）；sanitizer 清理建模（加密/编码后污点清除——降误报）；调用图接口分派近似（`expandInterfaceDispatch`）；污点路径报告（报告 `taintPaths`/「污点数据流路径」节）。
+- 污点分析完整版（JAADAS 差距）：接收侧源（Intent/广播/ContentProvider 的 `getIntent`/`getData`/`query` 等）；动态回调注册入口（`SOURCE_CALLBACK_ENTRY`——ClickListener/Handler/AsyncTask 等 9 类）；SDK 版本化 API 模型（`SDK_LEVEL_API_MISMATCH`——API 引入版本 vs minSdk）；静态字段污点（`SOURCE_STATIC_TAINT`——项目级跨文件追踪）；集合元素污点（`SOURCE_COLLECTION_TAINT`——put/add → get → 汇）。
 
 #### 文档
 
