@@ -17,6 +17,7 @@ import { auditProject, detectReleaseMinifyEnabled } from "./project-audit.ts"
 import { analyzeApksignerVerbose, analyzeCertPrint, buildSigningFindings, buildCertValidityFindings } from "./signing-audit.ts"
 import { compareSignatureSelfCheckFingerprints } from "./signature-self-check.ts"
 import { scanProjectDataflow } from "./taint-source.ts"
+import { loadTaintRules, mergeTaintRules } from "./taint-source.ts"
 import { scanProjectWeakCrypto } from "./weak-crypto.ts"
 import { loadCustomRules, applyCustomRulesToProject } from "./custom-rules.ts"
 import { scanProjectPrivacyApis } from "./privacy-collection.ts"
@@ -578,7 +579,9 @@ export class Pipeline {
     const audit = await auditProject(this.config.inputPath, (message) => this.progress("source-audit", message))
     this.context.audit.findings.push(...audit.findings)
     // 源码侧敏感数据流/污点跟踪(高补强③):源→汇 的轻量传播,失败关闭
-    const dataflowFindings = await scanProjectDataflow(this.config.inputPath)
+    // (Semgrep 差距⑤:声明式污点规则——自定义 source/sink/sanitizer 合并)
+    const taintRules = this.config.taintRulesFile ? mergeTaintRules(await loadTaintRules(this.config.taintRulesFile)) : undefined
+    const dataflowFindings = await scanProjectDataflow(this.config.inputPath, taintRules)
     this.context.audit.findings.push(...dataflowFindings)
     // 源码侧弱加密算法检测(短期②):AES-ECB/DES/硬编码 IV,失败关闭
     const weakCryptoFindings = await scanProjectWeakCrypto(this.config.inputPath)

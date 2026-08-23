@@ -3,6 +3,7 @@
 // ALLOW_ALL 主机名校验器等证书校验绕过模式——失败关闭（未命中不输出）。
 import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
+import { isIgnoredLine } from "./suppression.ts"
 import type { Finding } from "./types.ts"
 
 interface SslBypassPattern {
@@ -52,6 +53,7 @@ export function scanSslBypass(source: string): SslBypassMatch[] {
   const lines = source.split(/\r?\n/)
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!
+    if (isIgnoredLine(line)) continue // suppression 注释忽略(⑦)
     for (const pattern of SSL_BYPASS_PATTERNS) {
       if (pattern.regex.test(line)) {
         matches.push({ line: i + 1, key: pattern.key, title: pattern.title, snippet: line.trim().slice(0, 120) })

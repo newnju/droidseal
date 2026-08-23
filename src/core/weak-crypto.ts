@@ -3,6 +3,7 @@
 // （命中即清单级提示，不阻断；未命中不输出）。
 import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
+import { isIgnoredLine } from "./suppression.ts"
 import type { Finding } from "./types.ts"
 
 interface WeakCryptoPattern {
@@ -58,6 +59,7 @@ export function scanWeakCrypto(source: string): WeakCryptoMatch[] {
   const lines = source.split(/\r?\n/)
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!
+    if (isIgnoredLine(line)) continue // suppression 注释忽略(⑦)
     for (const pattern of WEAK_PATTERNS) {
       if (pattern.regex.test(line)) {
         matches.push({ line: i + 1, key: pattern.key, title: pattern.title, snippet: line.trim().slice(0, 120) })
