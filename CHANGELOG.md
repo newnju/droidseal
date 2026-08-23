@@ -131,6 +131,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 污点分析进阶（JAADAS 差距 9 项）：跨组件/跨进程 Intent 数据流（`SOURCE_CROSS_COMPONENT_TAINT`——putExtra 源 → 组件/服务/广播/绑定）；反射调用静态解析（`SOURCE_REFLECTION_TARGET`——Class.forName/getMethod 目标提取）；跨函数污点传播（`SOURCE_CROSS_FUNCTION_TAINT`——参数边界）；常量值分析 + 对象字段污点（`SOURCE_CONSTANT_VALUE`/`SOURCE_OBJECT_FIELD_TAINT`——敏感字面量间接持有 + 实例字段）；库间污点 + 隐式流（`SOURCE_LIBRARY_TAINT`/`SOURCE_IMPLICIT_FLOW`——库方法返回值 + 控制流污点）；可编程 IR（`scripts/export-ir.ts`——JSON IR 导出供第三方分析）。
 - JAADAS 差距 19 项全量实现并实效验证：污点/数据流/语义/建模四大功能面穷尽核对无遗漏；新增检测器逐项冒烟验证（修复正则大小写/单字符变量/单行分支/off-by-one 等 7 处后全部命中合成样本——确认实际发挥作用）。
 - Androguard 深度可编程解析（⑤⑥⑦⑧⑨）：指令迭代器 API（`dex-instructions.ts`——逐指令 opcode/mnemonic/operands——关键指令助记符）；内置反汇编器（`dex-disassembler.ts`——smali-like 方法级输出——行为 finding 附反汇编片段——替代外部 jadx 的内置形态）；XREF 交叉引用（`xref.ts`——方法/字段被引用映射——`referencesOf`）；类级对象模型（`dex-class-model.ts`——类→方法→指令对象树——export-ir 的 `classes` 深化（schemaVersion 2））；交互式分析 REPL（`scripts/analyze-repl.ts`——load/classes/method/xref/exit）。
+- Androguard 剩余差距（②③）：任意 DEX 修改 API（`dex-patch.ts`——invoke 方法索引 / const-string 字符串索引的指令级补丁——真 DEX 字节修改验证）；资源条目对象模型（`buildArscResourceModel`——resources.arsc 的 type chunk 解析 → 类型/条目树——真 ARSC 解析出 146 类型）。
 
 #### 文档
 
@@ -217,10 +218,11 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **仍缺（边界项——明确不实现）**：iOS/Windows 多平台（大工程——见 `docs/platform-matrix.md`）；内置动态分析（本地优先边界——见 `docs/dynamic-analysis-bridge.md`）；恶意软件沙箱/反病毒（偏离发布安全定位）。
 - **下一竞争者（Quark-Engine——活跃，恶意行为加权评分）**：~~差距与设计~~ **已全部实现并记录于 [1.0.1]——已追平/超越（11/11 项核对无遗漏）**：DEX 调用图（含调用链）、行为规则引擎、加权评分、内置规则库（10 条）、行为报告节、反混淆辅助（hex/base64/URL）、行为规则文件加载、评分阈值配置、调用图导出——均落地；CLI/API 维度以 REST 语言无关接口超越。
 - **下一竞争者（AndroBugs——已归档，字节码语义分析代表）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：SSL 证书校验绕过语义检测（`SOURCE_SSL_BYPASS`）、语义漏洞模式库（`SOURCE_SEMANTIC_VULN`）、目录/库级批量（`batch-run --dir`）、WebView SSL 错误忽略（`WEBVIEW_SSL_ERROR_IGNORED`）——均落地；效率（3-40s/APK）与活跃维护维度已超越。
-- **下一竞争者（APKiD——活跃，打包器/保护器指纹识别）差距**：① 指纹库扩充（商业加固壳（腾讯乐固/梆梆/爱加密/360/娜迦/DexGuard 等）/混淆器/打包器的 YARA 级覆盖——当前 `packers.ts` 12 条精简指纹——中）；② 指纹规则文件加载（外部 JSON/YARA 式指纹文件，同 `behaviorRulesFile` 模式——中）；③ SO 级加壳特征检测（当前 elf-scan 为符号/密钥级——低）。
-- **下一竞争者（QARK——已停更 2019，POC 生成代表）差距**：① POC 验证命令建议（对 EXPORTED 组件/深链/备份等高风险发现生成可执行的 adb/drozer 验证命令——与 `docs/dynamic-analysis-bridge.md` 衔接——中）；② 教育性说明增强（发现的「为什么/怎么复现/怎么修」详解——低）。已停更——活跃维护与纯 TS 自研解析已超越。
+- **下一竞争者（APKiD——活跃，打包器/保护器指纹识别）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：指纹库扩充（`packers.ts` 33 条——商业加固壳/混淆器/打包器）、指纹规则文件加载（`packerFingerprintsFile`——regex 型 + 元数据）、SO 级加壳特征检测（`SO_PACKED`）——均落地。
+- **下一竞争者（QARK——已停更 2019，POC 生成代表）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：POC 验证命令建议（`poc-commands.ts` + 报告节——EXPORTED 组件/深链/备份等生成 adb/drozer 验证命令——与 `docs/dynamic-analysis-bridge.md` 衔接）——均落地；已停更——活跃维护与纯 TS 自研解析已超越。
 - **下一竞争者（JAADAS——已停更 2017，Soot/FlowDroid 污点分析代表）**：~~差距（19 项）~~ **已全部实现并记录于 [1.0.1]——已追平/超越（四大功能面穷尽核对无遗漏 + 实效冒烟验证通过）**：生命周期入口/污点路径/源汇扩充、调用图完整性/跨组件/反射/跨函数/常量值/对象字段/库间/隐式流/可编程 IR 等 19 项——均落地；已停更——活跃维护已超越。
-- **下一竞争者（Androguard——活跃，通用可编程解析库）差距**：① 深度可编程 API（字节码级读写——超越只读 JSON IR 导出（⑨）——供第三方任意 DEX 解析/修改——中/大）；② 任意 DEX 分析/修改 API（读取/修改指令——当前仅 `apply-method-obfuscation` 方法名改写——中/大）；③ 资源/Manifest 可编程解析 API（低）；④ 库形态的第三方复用生态（中）。单一解析库（非开箱审计）——审计+加固+发布闭环已超越。
+- **下一竞争者（Androguard——活跃，通用可编程解析库）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：深度可编程解析（指令迭代器/内置反汇编/XREF/类级对象模型/交互 REPL/DEX 修改 API/资源条目对象模型）——均落地；单一解析库（非开箱审计）——审计+加固+发布闭环已超越。
+- **下一竞争者（Semgrep——活跃，通用规则引擎 SAST）差距**：① SARIF 报告导出（CI 生态标准——GitHub Code Scanning 等——中/易补）；② AST 级模式匹配（语法精确匹配——降误报——中/大）；③ JS 源码审计（混合应用的 JS 资源审计——中）；④ 规则生态（社区规则——跨语言——低/边界）。CI 集成（REST/batch/门禁）与活跃维护已同级。
 
 ### 边界说明（能力方向）
 
@@ -231,13 +233,13 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 - **审计质量是稀缺能力**：误报控制、置信度分级、交叉证据、失败关闭——多数免费工具“扫到即报”，DroidSeal 做“确认后才报”，这是稀缺的工程能力。
 - **差异化清晰**：本地优先 + 审计加固一体化（审计 → 归一化 → 混淆 → 签名 → 验证 → 报告闭环），而非孤立的静态分析。
-- **免费开源审计竞争者（QARK / APKHunt / SUPER / JAADAS 等——MobSF / AndroBugs 已追平/超越并移出竞争名单）**：它们以静态分析扫描与报告为主；DroidSeal 的差异在于失败关闭语义、置信度分级、交叉证据与发布安全闭环（门禁 / 证据 / SBOM / 修复包），并坚持本地优先、不联网、不事后改写未知 APK。
+- **免费开源审计竞争者（APKHunt / SUPER / JAADAS 等——MobSF / AndroBugs / Quark-Engine / JAADAS / Androguard / APKiD / QARK 已追平/超越并移出竞争名单）**：它们以静态分析扫描与报告为主；DroidSeal 的差异在于失败关闭语义、置信度分级、交叉证据与发布安全闭环（门禁 / 证据 / SBOM / 修复包），并坚持本地优先、不联网、不事后改写未知 APK。
 
 ### 竞争者分析（免费开源审计工具全景）
 
-- **综合框架**：~~MobSF~~（**已追平/超越——移出竞争名单**，功能面已全覆盖，见开发路线「下一阶段」）；QARK（LinkedIn，2019 停更——POC 生成，反编译不完整漏报）；APKHunt（2023 停更——MASTG 正则模式）；SUPER（停更——并行扫描快）。
+- **综合框架**：~~MobSF~~（**已追平/超越——移出竞争名单**，功能面已全覆盖，见开发路线「下一阶段」）；~~QARK~~（**已追平/超越——移出竞争名单**——POC 验证命令建议已实现）；APKHunt（2023 停更——MASTG 正则模式）；SUPER（停更——并行扫描快）。
 - **字节码/语义分析**：~~AndroBugs~~（**已追平/超越——移出竞争名单**，见开发路线「下一阶段」）；JAADAS（2017 停更——Soot 污点分析）；DroidStatx / Marvin / AUSERA / Trueseeing / SPECK（学术型，多已停更）。
-- **基础设施**：Androguard（解析库——多数工具的基础，非开箱审计）；APKiD（打包器/保护器识别）；~~Quark-Engine~~（**已追平/超越——移出竞争名单**，见开发路线「下一阶段」）；apkleaks（URI/端点/密钥提取）；mobsfscan / Semgrep（规则引擎，CI 可用）。
+- **基础设施**：~~Androguard~~（**已追平/超越——移出竞争名单**——深度可编程解析已实现）；~~APKiD~~（**已追平/超越——移出竞争名单**——指纹库 33 条/规则加载/SO 加壳已实现）；~~Quark-Engine~~（**已追平/超越——移出竞争名单**，见开发路线「下一阶段」）；apkleaks（URI/端点/密钥提取）；mobsfscan / Semgrep（规则引擎，CI 可用）。
 - **实证（arxiv 2410.20740，11 个 SAST 工具基准）**：分为源码/AST 模式匹配与字节码语义分析两类；召回差异大（MobSF 硬编码敏感数据 93.9%、AndroBugs 无效服务器校验 96.9%）；**共性痛点：误报率高、需人工验证**。
 - **DroidSeal 差异**：误报控制/置信度分级/交叉证据/失败关闭（正是免费工具的共同短板）；活跃维护（AndroBugs 已归档、QARK/APKHunt/JAADAS 停更）；本地优先 + 纯 TypeScript 自研解析；审计加固一体化 + 发布安全闭环。
 
@@ -246,9 +248,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - ~~**MobSF**~~（**已追平/超越——移出竞争名单**）：其静态分析面（权限/组件/WebView/网络/存储/加密/证书/URL 提取/隐私收集/MASTG 映射/HTML 报告/历史趋势等）已由 DroidSeal 全覆盖（见开发路线「下一阶段」）；动态分析/多平台/恶意沙箱为边界项（已文档化）。
 - ~~**AndroBugs**~~（**已追平/超越——移出竞争名单**）：字节码数据/控制流语义分析（SSL 语义检测已由 `SOURCE_SSL_BYPASS` 覆盖）、海量批量分析（已由 `batch-run --dir` 覆盖）。
 - **JAADAS / Marvin / AUSERA / Trueseeing**：污点/数据流分析（Soot/FlowDroid 追踪敏感数据源→汇）、可达性/调用链分析。
-- **QARK**：POC/exploit 生成（ADB 命令/APK）、教育性漏洞详解。
-- **APKiD**：打包器/保护器指纹识别（YARA 规则——检测壳/混淆器）。
-- **Androguard / ~~Quark-Engine~~ / apkleaks / mobsfscan / Semgrep / APKHunt**：通用可编程解析库、~~行为加权评分（已追平/超越——移出）~~、专项密钥提取工具、规则引擎生态、规则与 OWASP MASTG 对齐。
+- ~~**QARK**~~（**已追平/超越——移出竞争名单**）：POC/exploit 验证命令已由 `poc-commands.ts` + 报告节实现。
+- ~~**APKiD**~~（**已追平/超越——移出竞争名单**）：打包器/保护器指纹已由 `packers.ts`（33 条 + regex/元数据 + 规则文件加载）+ SO 加壳检测实现。
+- ~~**Androguard**~~（**已追平/超越——移出竞争名单**——深度可编程解析已实现）/ apkleaks / mobsfscan / Semgrep / APKHunt：专项密钥提取工具、规则引擎生态、规则与 OWASP MASTG 对齐。
 - **汇总（12 项）**：动态分析、多平台、恶意检测、Web/REST 平台化、反编译浏览、数据流/污点分析、POC 生成、打包器指纹、规则生态、标准对齐、海量批量、教育性说明。
 - **平衡补充**：误报控制/置信度/交叉证据/失败关闭、审计加固一体化、发布安全闭环（门禁/证据/SBOM/修复包）、本地优先/纯 TS/活跃维护——竞争对手不具备；**最值得补的差距：① 数据流/污点跟踪 ② 打包器指纹识别 ③ Web/REST 平台化**。
 
