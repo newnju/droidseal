@@ -9,6 +9,9 @@ import { matchCustomRules, parseCustomRules } from "../src/core/custom-rules.ts"
 import { buildPermissionRiskFindings, linkPermissionDataflow } from "../src/core/permission-risk.ts"
 import { buildMastgChecklist, mastgComplianceSummary } from "../src/core/mastg-checklist.ts"
 import { buildHardeningSuggestions } from "../src/core/report.ts"
+import { matchBehaviorRules } from "../src/core/behavior-rules.ts"
+import { compareKnownVulnerabilities } from "../src/core/known-vulnerabilities.ts"
+import { scanCollectionTaint } from "../src/core/collection-taint.ts"
 
 interface Case {
   name: string
@@ -88,6 +91,55 @@ const cases: Case[] = [
     run: () => {
       const suggestions = buildHardeningSuggestions([{ code: "SOURCE_SSL_BYPASS", severity: "high", title: "t", detail: "d", recommendation: "r" }])
       return { hit: suggestions.length === 0, detail: `误报 ${suggestions.length} 条（应 0——非敏感串发现）` }
+    },
+  },
+  {
+    name: "行为规则命中(正——短信劫持)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.telephony.SmsManager.sendTextMessage"]))
+      return { hit: hits.some((h) => h.rule.crimer === "sms-hijack"), detail: `命中 ${hits.length} 条（应含 sms-hijack）` }
+    },
+  },
+  {
+    name: "行为规则命中(正——勒索加密)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["javax.crypto.Cipher.doFinal"]))
+      return { hit: hits.some((h) => h.rule.crimer === "ransom-encrypt"), detail: `命中 ${hits.length} 条（应含 ransom-encrypt）` }
+    },
+  },
+  {
+    name: "行为规则不命中(负——正常调用)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.widget.TextView.setText"]))
+      return { hit: hits.length === 0, detail: `误报 ${hits.length} 条（应 0——正常 UI 调用）` }
+    },
+  },
+  {
+    name: "供应链快照比对(正——okhttp)",
+    run: () => {
+      const findings = compareKnownVulnerabilities(["com.squareup.okhttp3:okhttp"])
+      return { hit: findings.some((f) => f.code === "SUPPLYCHAIN_KNOWN_VULNERABILITY"), detail: `命中 ${findings.length} 条（应含 okhttp CVE-2021-0341）` }
+    },
+  },
+  {
+    name: "供应链快照比对(负——未知组件)",
+    run: () => {
+      const findings = compareKnownVulnerabilities(["com.example:custom-sdk"])
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 条（应 0——未知组件）` }
+    },
+  },
+  {
+    name: "集合污点命中(正——put→get→汇)",
+    run: () => {
+      const flows = scanCollectionTaint("String d = getDeviceId(); list.put(\"k\", d);\nString v = list.get(\"k\"); Log.d(\"t\", v);")
+      return { hit: flows.length > 0, detail: `流 ${flows.length} 条（应有——put 敏感 → get → 汇）` }
+    },
+  },
+  {
+    name: "集合污点不命中(负——put 但无汇)",
+    run: () => {
+      const flows = scanCollectionTaint("String d = getDeviceId(); list.put(\"k\", d);")
+      return { hit: flows.length === 0, detail: `误报 ${flows.length} 条（应 0——put 但无 get→汇）` }
     },
   },
 ]

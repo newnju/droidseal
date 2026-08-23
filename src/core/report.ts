@@ -602,7 +602,8 @@ ${releaseDecisionMarkdown(releaseDecision)}
 ${(() => {
   const suggestions = buildHardeningSuggestions(sortedFindings)
   return suggestions.length > 0
-    ? suggestions.map((s) => `- **${s.type}**：${s.action}\n  - 命令：\`${s.command}\``).join("\n")
+    ? suggestions.map((s) => `- **${s.type}**：${s.action}\n  - 命令：\`${s.command}\``).join("\n") +
+      "\n\n**应用后复测**：加固动作应用后重跑 DroidSeal 流水线，并用 `bun scripts/re-test.ts --before <上次报告> --auto` 复测闭环确认消除/新增/剩余。"
     : "未检测到敏感串类发现——暂无自动加固建议。"
 })()}
 
