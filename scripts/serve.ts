@@ -75,17 +75,25 @@ function buildConfig(body: RunRequest, defaultOutput: string): PipelineConfig {
   }
 }
 
-async function runPipeline(config: PipelineConfig): Promise<Record<string, unknown>> {
+// 运行中状态（③——REST 进度/取消）：runId → 步骤进度 + 取消标志
+const runningRuns = new Map<string, { steps: string[]; cancelled: boolean; status: string }>()
+
+async function runPipeline(config: PipelineConfig, runId?: string): Promise<Record<string, unknown>> {
   const pipeline = new Pipeline(config)
   for (const stepId of STEP_IDS) {
+    if (runId && runningRuns.get(runId)?.cancelled) break // 取消——提前停止后续步骤
     await pipeline.runStep(stepId).catch(() => undefined)
+    if (runId) {
+      const run = runningRuns.get(runId)
+      if (run) run.steps.push(stepId)
+    }
   }
   const steps = pipeline.getSteps().map((step) => ({
     id: step.id,
     status: step.status,
     skipKind: step.result?.skipKind ?? null,
   }))
-  return { steps, finalArtifact: config.outputDirectory }
+  return { steps, finalArtifact: config.outputDirectory, ...(pipeline.getReleaseGate() ? { gate: pipeline.getReleaseGate() } : {}) }
 }
 
 interface RunReport {
@@ -148,11 +156,35 @@ async function main(): Promise<void> {
         try {
           const body = (await request.json()) as RunRequest
           const config = buildConfig(body, outputDir)
+          // 异步模式（③）：?async=true——后台运行——立即返回 runId（GET /runs/:id 查询进度 / POST /runs/:id/cancel 取消）
+          if (url.searchParams.get("async") === "true") {
+            const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+            runningRuns.set(runId, { steps: [], cancelled: false, status: "running" })
+            void runPipeline(config, runId)
+              .then(() => {
+                const run = runningRuns.get(runId)
+                if (run) run.status = run.cancelled ? "cancelled" : "done"
+              })
+              .catch(() => {
+                const run = runningRuns.get(runId)
+                if (run) run.status = "failed"
+              })
+            return Response.json({ ok: true, runId, async: true })
+          }
           const result = await runPipeline(config)
           return Response.json({ ok: true, ...result })
         } catch (error) {
           return errorResponse("RUN_FAILED", error instanceof Error ? error.message : String(error), 400)
         }
+      }
+      if (request.method === "POST" && url.pathname.startsWith("/runs/") && url.pathname.endsWith("/cancel")) {
+        const id = url.pathname.slice("/runs/".length).split("/")[0]
+        if (!id) return errorResponse("RUN_NOT_FOUND", "run not found", 404)
+        const run = runningRuns.get(id)
+        if (!run) return errorResponse("RUN_NOT_FOUND", "run not found", 404)
+        run.cancelled = true
+        run.status = "cancelled"
+        return Response.json({ ok: true, runId: id, status: "cancelled" })
       }
       if (request.method === "GET" && url.pathname === "/health") {
         return Response.json({ ok: true, service: "DroidSeal Web", outputDirectory: outputDir })
@@ -164,6 +196,11 @@ async function main(): Promise<void> {
       if (request.method === "GET" && url.pathname.startsWith("/runs/")) {
         const id = url.pathname.slice("/runs/".length).split("/")[0]
         if (!id) return errorResponse("RUN_NOT_FOUND", "run not found", 404)
+        // 运行中——返回进度（③）
+        const running = runningRuns.get(id)
+        if (running) {
+          return Response.json({ ok: true, runId: id, status: running.status, cancelled: running.cancelled, progress: running.steps.length / STEP_IDS.length, steps: running.steps })
+        }
         const report = await readRunReport(outputDir, id)
         if (!report) return errorResponse("RUN_NOT_FOUND", "run not found", 404)
         if (url.pathname.includes("/findings")) {

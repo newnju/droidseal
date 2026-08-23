@@ -271,6 +271,7 @@ export class Pipeline {
   readonly context: RunContext
   private readonly listeners = new Set<(event: PipelineEvent) => void>()
   private readonly states = new Map<StepId, StepState>()
+  private releaseGate: string | undefined
 
   constructor(config: PipelineConfig) {
     this.config = config
@@ -287,6 +288,11 @@ export class Pipeline {
 
   getSteps(): StepState[] {
     return STEP_DEFINITIONS.map((definition) => this.states.get(definition.id)!)
+  }
+
+  // 发布门禁状态（⑤——批量门禁阻断：任一条目 block 时调用方非零退出）
+  getReleaseGate(): string | undefined {
+    return this.releaseGate
   }
 
   getStep(stepId: StepId): StepState {
@@ -1984,6 +1990,7 @@ export class Pipeline {
         this.context.finalArtifact ? `最终 APK：${this.context.finalArtifact}` : "最终 APK：无",
       ],
     }
+    this.releaseGate = reports.releaseDecisionStatus
     if (artifact !== undefined) result.artifactAfter = artifact
     return result
   }
