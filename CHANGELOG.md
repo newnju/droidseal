@@ -105,7 +105,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - HTML 报告生成器（中期）：`scripts/generate-html-report.ts` 从报告 JSON 生成自包含 HTML（门禁横幅/发现表格/步骤/加固成效/MASTG/反编译建议/上次对比——TUI 视觉）。
 - 多扫描历史趋势（中期）：最近 10 次运行的门禁/发现数序列，报告新增 JSON `historyTrend` 与 Markdown「历史趋势」表。
 - 动态分析外部衔接指南（长期）：`docs/dynamic-analysis-bridge.md`——Frida/drozer/模拟器配合静态审计的按发现类型验证建议（保持本地优先，不内置动态）。
-- 平台支持矩阵（长期）：`docs/platform-matrix.md`——当前 Android 矩阵 + iOS/Windows 扩展规划与决策建议。
+- 平台支持矩阵（长期）：`docs/platform-matrix.md`——当前 Android 矩阵 + Windows 扩展规划与决策建议。
 - 恶意指标轻量提示（长期）：`MALICIOUS_INDICATOR`——危险权限组合（短信劫持/屏幕覆盖+无障碍/设备管理+短信）清单级提示（info，失败关闭，不判定恶意）。
 - DEX 调用图提取（`dex-callgraph.ts`）：解析 invoke-kind 指令 → 被调 类.方法（有界、失败关闭）。
 - 行为规则引擎（`behavior-rules.ts`）：调用图匹配内置 10 条恶意行为规则（短信劫持/键盘记录/设备管理滥用/截屏/录音等）→ `MALICIOUS_BEHAVIOR` finding + 加权恶意评分 `MALICIOUS_SCORE`（0-100，归一化）。
@@ -217,7 +217,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
   - 中期：OWASP MASTG 映射；反编译核验建议；HTML 报告生成器；多扫描历史趋势。
   - 长期（边界兼容）：动态分析外部衔接指南；平台支持矩阵；恶意指标轻量提示（`MALICIOUS_INDICATOR`）。
   - 缺口补强：隐私数据收集清单（`PRIVACY_DATA_COLLECTION`/`PRIVACY_API_USAGE`）；证书固定缺失检测（`SOURCE_NO_CERT_PINNING`）；SQLite 明文存储审计（`SOURCE_UNENCRYPTED_STORAGE`）；反编译导出工具（`scripts/export-decompiled.ts`）。
-- **仍缺（边界项——明确不实现）**：iOS/Windows 多平台（大工程——见 `docs/platform-matrix.md`）；内置动态分析（本地优先边界——见 `docs/dynamic-analysis-bridge.md`）；恶意软件沙箱/反病毒（偏离发布安全定位）。
+- **仍缺（边界项——明确不实现）**：Windows 多平台（大工程——见 `docs/platform-matrix.md`）；内置动态分析（本地优先边界——见 `docs/dynamic-analysis-bridge.md`）；恶意软件沙箱/反病毒（偏离发布安全定位）。
 - **下一竞争者（Quark-Engine——活跃，恶意行为加权评分）**：~~差距与设计~~ **已全部实现并记录于 [1.0.1]——已追平/超越（11/11 项核对无遗漏）**：DEX 调用图（含调用链）、行为规则引擎、加权评分、内置规则库（10 条）、行为报告节、反混淆辅助（hex/base64/URL）、行为规则文件加载、评分阈值配置、调用图导出——均落地；CLI/API 维度以 REST 语言无关接口超越。
 - **下一竞争者（AndroBugs——已归档，字节码语义分析代表）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：SSL 证书校验绕过语义检测（`SOURCE_SSL_BYPASS`）、语义漏洞模式库（`SOURCE_SEMANTIC_VULN`）、目录/库级批量（`batch-run --dir`）、WebView SSL 错误忽略（`WEBVIEW_SSL_ERROR_IGNORED`）——均落地；效率（3-40s/APK）与活跃维护维度已超越。
 - **下一竞争者（APKiD——活跃，打包器/保护器指纹识别）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：指纹库扩充（`packers.ts` 33 条——商业加固壳/混淆器/打包器）、指纹规则文件加载（`packerFingerprintsFile`——regex 型 + 元数据）、SO 级加壳特征检测（`SO_PACKED`）——均落地。
@@ -260,7 +260,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 ### 差距分析（竞争对手有而 DroidSeal 不具备）
 
 - **高补强价值**：① Web UI / REST API（企业/DevSecOps 平台化，与现有报告/门禁契合）；② 打包器/保护器指纹识别（APKiD 式——检测壳/混淆器并提示“建议配合商业加固核验”）；③ 敏感数据流/污点跟踪（数据流分析深度——把交叉证据升级为数据流证据，纯 TS 自研、失败关闭）。
-- **中价值**：多平台（iOS/Windows——工作量巨大）；反编译可读源码/资源浏览（供人工核验）；规则生态/自定义规则文件加载；POC 生成（仅生成 ADB 验证命令、不生成 APK）。
+- **中价值**：多平台（Windows——工作量巨大）；反编译可读源码/资源浏览（供人工核验）；规则生态/自定义规则文件加载；POC 生成（仅生成 ADB 验证命令、不生成 APK）。
 - **边界内不做（故意）**：动态分析（需模拟器/联网，与本地优先冲突）；恶意软件检测（偏离发布安全定位）；在线/共享分析平台（本地优先冲突）。
 
 ### 可持续性准则（从停更项目汲取的教训）
