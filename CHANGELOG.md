@@ -72,11 +72,6 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 - 入口按钮（一键/分步/诊断——一键置首）/ 门禁横幅（发现数 + 严重度统计 + 原因 code）/ 阶段分组侧栏（可选步骤「可选未开启」标注）/ 快捷键提示 / i18n 完整中英文键（`t()` 参数化——语言切换即时生效）。
 
-#### 文档
-
-- R8/ProGuard 规则模板库（`docs/r8-rule-templates.md`）：Retrofit/Room/协程/序列化 keep 模板与反模式。
-- assets 资源轻量加密方案（`docs/assets-encryption-plan.md`）与强制 R8 按变体细化模板（`docs/force-r8-variant-template.md`）。
-
 ### Fixed
 
 - 修复传递依赖已知漏洞：`brace-expansion` 升级至 `^2.1.4`（GHSA-rgw5-rvv9-x895，无界中间数组 DoS）、`@babel/core` 升级至 `^7.29.1`（GHSA-4x5r-pxfx-6jf8，sourceMappingURL 注释任意文件读）；`bun audit` 现报告无已知漏洞，release-check 的依赖覆盖断言同步更新。
@@ -139,7 +134,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 ### 边界说明（能力方向）
 
 - **审计质量与发布安全做到极致**：误报控制、置信度分级、交叉证据、失败关闭——把审计与发布安全做成核心竞争力。
-- **提供源码接入的加固能力**：字符串加密桩（`scripts/generate-string-crypto-stub.ts`）、反调试 stub（`src/assets/antidebug-stub`）、DEX 方法混淆受控子集（`docs/dex-method-obfuscation-plan.md`）——编译期接入、运行期生效，不对未知 APK 事后合成可执行代码。
+- **提供源码接入的加固能力**：字符串加密桩（`scripts/generate-string-crypto-stub.ts`）、反调试 stub（`src/assets/antidebug-stub`）、DEX 方法混淆受控子集（`scripts/apply-method-obfuscation.ts` + 生成器）——编译期接入、运行期生效，不对未知 APK 事后合成可执行代码。
 
 ### 可持续性准则
 
