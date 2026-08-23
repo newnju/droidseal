@@ -226,6 +226,41 @@ function severityLabel(severity: Finding["severity"]): string {
   }
   return labels[severity]
 }
+// 加固建议计划（①——审计 → 加固自动衔接）：基于审计发现的敏感串类型 → 建议的加固动作与工具命令。
+export function buildHardeningSuggestions(findings: readonly Finding[]): Array<{ type: string; action: string; command: string }> {
+  const codes = new Set(findings.map((f) => f.code))
+  const suggestions: Array<{ type: string; action: string; command: string }> = []
+  if (codes.has("SOURCE_HARDCODED_SECRET") || codes.has("SOURCE_JS_HARDCODED_SECRET") || codes.has("SOURCE_CREDENTIAL_FORMAT_AWS") || codes.has("SOURCE_CREDENTIAL_FORMAT_GITHUB")) {
+    suggestions.push({
+      type: "源码敏感串",
+      action: "源码侧字符串加密桩（编译期加密、运行期解密——DEX 池不含明文敏感串）",
+      command: "bun scripts/generate-string-crypto-stub.ts --from-audit",
+    })
+  }
+  if (codes.has("DEX_HARDCODED_SECRET") || codes.has("DEX_STRING_SECURITY")) {
+    suggestions.push({
+      type: "DEX 字符串池敏感串",
+      action: "DEX 方法/字符串混淆（新建短名串——引用完整性验证——失败关闭）",
+      command: "bun scripts/apply-method-obfuscation.ts（配合 generate-method-obfuscation-plan --from-audit）",
+    })
+  }
+  if (codes.has("ASSET_HARDCODED_SECRET")) {
+    suggestions.push({
+      type: "assets 资源敏感串",
+      action: "assets 资源轻量加密（构建期加密 + 运行期按清单解密）",
+      command: "bun scripts/encrypt-assets.ts --gen-reader",
+    })
+  }
+  if (codes.has("SO_CREDENTIAL_FORMAT") || codes.has("SO_HARDCODED_SECRET")) {
+    suggestions.push({
+      type: "Native(.so) 敏感串",
+      action: "原生层凭据/密钥建议移入服务端或商业加固核验（本地剥离不改变可读性）",
+      command: "配合商业加固 + 服务端校验",
+    })
+  }
+  return suggestions
+}
+
 function confidenceLabel(finding: Finding): string {
   const labels = {
     confirmed: "已确认（配置/结构证据）",
@@ -299,9 +334,18 @@ function findingsMarkdown(findings: Finding[]): string {
         `- 证据置信度：${confidenceLabel(finding)}\n` +
         `- 说明：${finding.detail}\n` +
         `- 建议：${finding.recommendation}\n` +
-        (finding.evidence ? `- 证据：\`${finding.evidence.replaceAll("`", "\\`")}\`\n` : ""),
+        (finding.evidence ? `- 证据：\`${finding.evidence.replaceAll("`", "\\`")}\`\n` : "") +
+        findingSemanticDepth(finding),
     )
     .join("\n")
+}
+
+// 报告语义深度（⑤）：高严重度（critical/high）发现加「影响场景/修复步骤/验证方法」——便于直接处置。
+export function findingSemanticDepth(finding: Finding): string {
+  if (finding.severity !== "critical" && finding.severity !== "high") return ""
+  const impact = finding.detail ? finding.detail.split("。")[0] + "。" : "该发现指向发布安全风险。"
+  const fix = finding.recommendation ?? "按官方文档修复对应问题。"
+  return `- 影响场景：${impact}\n- 修复步骤：${fix}\n- 验证方法：修复后重跑 DroidSeal 流水线（复测闭环 re-test 自动确认消除/新增/剩余）。\n`
 }
 
 function releaseEvidenceMarkdown(evidence: ReleaseEvidenceResult): string {
@@ -526,6 +570,8 @@ export async function writeReports(
       .filter((f) => f.code === "MALICIOUS_BEHAVIOR" || f.code === "MALICIOUS_SCORE")
       .map((f) => ({ code: f.code, title: f.title, evidence: f.evidence })),
     pocCommands: buildPocCommands(sortedFindings, context.audit.apkMetadata?.packageName),
+    // 加固建议计划（①——审计 → 加固自动衔接）
+    hardeningSuggestions: buildHardeningSuggestions(sortedFindings),
     taintPaths: sortedFindings
       .filter((f) => f.code === "SOURCE_DATAFLOW" || f.code === "SOURCE_SEMANTIC_VULN" || f.code === "SOURCE_LIFECYCLE_ENTRY")
       .slice(0, 10)
@@ -548,6 +594,17 @@ export async function writeReports(
 ## 发布门禁
 
 ${releaseDecisionMarkdown(releaseDecision)}
+
+## 加固建议计划（审计 → 加固自动衔接）
+
+基于本次审计发现的敏感串，以下加固动作可自动衔接（全部为源码接入形态——编译期生效——不事后改写未知 APK）：
+
+${(() => {
+  const suggestions = buildHardeningSuggestions(sortedFindings)
+  return suggestions.length > 0
+    ? suggestions.map((s) => `- **${s.type}**：${s.action}\n  - 命令：\`${s.command}\``).join("\n")
+    : "未检测到敏感串类发现——暂无自动加固建议。"
+})()}
 
 ## 纵深防御控制覆盖
 

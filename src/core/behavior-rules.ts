@@ -63,6 +63,27 @@ export const BUILTIN_BEHAVIOR_RULES: readonly BehaviorRule[] = [
   { crimer: "record-audio", className: "android.media.MediaRecorder", methodName: "start", score: 6, label: "录音" },
   { crimer: "camera-open", className: "android.hardware.camera2.CameraManager", methodName: "open", score: 5, label: "打开相机" },
   { crimer: "accessibility", className: "android.accessibilityservice.AccessibilityService", methodName: "onAccessibilityEvent", score: 6, label: "无障碍服务监听" },
+  // 扩充（③——10 → 30 条）：键盘记录变体/勒索/挖矿/广告欺诈/流氓推广/窃取类
+  { crimer: "keylog-input", className: "android.text.InputType", methodName: "TYPE_TEXT_VARIATION_PASSWORD", score: 7, label: "密码输入监听（键盘记录变体）" },
+  { crimer: "ransom-encrypt", className: "javax.crypto.Cipher", methodName: "doFinal", score: 10, label: "文件加密（勒索特征）" },
+  { crimer: "ransom-wipe", className: "android.app.admin.DevicePolicyManager", methodName: "wipeData", score: 10, label: "擦除数据（勒索特征）" },
+  { crimer: "ransom-lock", className: "android.app.admin.DevicePolicyManager", methodName: "setLockTaskPackages", score: 9, label: "锁定任务（勒索锁屏特征）" },
+  { crimer: "mining-pool", className: "java.net.URL", methodName: "openConnection", score: 8, label: "网络连接（挖矿池/远控特征）" },
+  { crimer: "ad-fraud-hide", className: "android.view.View", methodName: "setVisibility", score: 6, label: "隐藏视图（广告欺诈特征）" },
+  { crimer: "ad-click-fraud", className: "android.view.MotionEvent", methodName: "ACTION_DOWN", score: 7, label: "模拟点击（点击欺诈特征）" },
+  { crimer: "rogue-install", className: "android.content.pm.PackageInstaller", methodName: "install", score: 9, label: "静默安装（流氓推广特征）" },
+  { crimer: "rogue-download", className: "android.app.DownloadManager", methodName: "enqueue", score: 7, label: "静默下载（流氓推广特征）" },
+  { crimer: "sms-multipart", className: "android.telephony.SmsManager", methodName: "sendMultipartTextMessage", score: 8, label: "群发短信（短信欺诈变体）" },
+  { crimer: "ussd-run", className: "android.telephony.TelephonyManager", methodName: "sendUssdRequest", score: 9, label: "执行 USSD（扣费特征）" },
+  { crimer: "call-forward", className: "android.telephony.TelephonyManager", methodName: "setCallForwarding", score: 8, label: "呼叫转移（窃听特征）" },
+  { crimer: "clipboard-read", className: "android.content.ClipboardManager", methodName: "getPrimaryClip", score: 7, label: "剪贴板读取（凭据窃取特征）" },
+  { crimer: "account-steal", className: "android.accounts.AccountManager", methodName: "getAccounts", score: 8, label: "账户枚举（账户窃取特征）" },
+  { crimer: "contact-upload", className: "android.provider.ContactsContract", methodName: "Contacts", score: 7, label: "联系人读取（数据外传特征）" },
+  { crimer: "location-track", className: "android.location.LocationManager", methodName: "getLastKnownLocation", score: 7, label: "位置读取（跟踪特征）" },
+  { crimer: "overlay-click", className: "android.view.WindowManager", methodName: "addView", score: 7, label: "悬浮窗添加（覆盖点击/钓鱼特征）" },
+  { crimer: "dex-load", className: "dalvik.system.DexClassLoader", methodName: "loadClass", score: 8, label: "动态加载 DEX（恶意载荷特征）" },
+  { crimer: "native-exec", className: "java.lang.Runtime", methodName: "exec", score: 7, label: "运行时执行命令（远控特征）" },
+  { crimer: "call-answer", className: "android.telecom.TelecomManager", methodName: "acceptRingingCall", score: 8, label: "自动接听来电（通话欺诈/录音特征）" },
 ]
 
 export interface BehaviorHit {
