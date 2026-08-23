@@ -1,7 +1,7 @@
 // POC 验证命令建议(QARK 差距①③④——poc-commands.ts)。
 // 对高风险发现(导出组件/备份/可调试/深链)生成可执行的 adb/drozer 验证命令,
 // 带可验证性标记与教育性说明(为什么/怎么验证)。失败关闭:未命中的发现不输出。
-// 与 docs/dynamic-analysis-bridge.md 衔接(本地设备/模拟器上人工执行验证)。
+// 与本地动态验证衔接(adb 真机/模拟器上人工执行验证)。
 import type { Finding } from "./types.ts"
 
 export interface PocCommand {
