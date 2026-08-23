@@ -172,3 +172,19 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **运行时防护扩展（长期，需真机矩阵）**：模拟器/VPN/代理/时间戳检测；完整性自检定期化（复用 onResume 节流）；服务端协作上报协议（仍只报告、服务端决策）。
 - **构建期/发布工程化（中期）**：发布前自动跑完整流水线与门禁；R8 规则模板库（Retrofit/Room/协程/序列化）；签名指纹管理脚本（多签名/轮换清单生成与校验）。
 - **供应链深化（长期）**：SBOM 已知漏洞比对（对接离线漏洞库快照，如 OSV）；Gradle 坐标的已知修复版本建议。
+
+### 计划与设计文档汇总（全部 plan / 路线内容）
+
+| 文档 | 内容 | 状态 |
+|---|---|---|
+| `docs/dex-method-obfuscation-plan.md` | DEX 方法/类级混淆受控子集接入设计（长期路线 ①——含真机验证矩阵与失败关闭边界） | ✅ 已实现（`apply-method-obfuscation.ts` + 生成器） |
+| `docs/assets-encryption-plan.md` | assets 资源轻量加密方案（开发路线 ②：资源/资产层） | ✅ 已实现（`encrypt-assets.ts` + `--gen-reader`） |
+| `docs/dex-write-engine.md` | 有损加固设计（DEX 写引擎 + ARSC 资源混淆） | 🔧 设计文档（DEX 方法重命名与 ARSC 混淆已落地——写引擎其余为参考） |
+| `docs/dynamic-analysis-bridge.md` | 动态分析外部衔接指南（长期①——边界兼容：Frida/drozer/模拟器配合静态审计） | ✅ 已实现（`adb-bridge.ts` 轻量动态验证 + POC 命令衔接） |
+| `docs/platform-matrix.md` | 平台支持矩阵（长期②——Android 矩阵与决策建议） | ✅ 已实现（Android 矩阵——iOS/Windows 应用审计已明确不实现） |
+| `docs/force-r8-variant-template.md` | 强制 R8 按变体细化模板（开发路线 ⑤：构建期与报告闭环） | ✅ 已实现（模板库） |
+| `docs/r8-rule-templates.md` | R8/ProGuard 规则模板库（中期：构建期/发布工程化——Retrofit/Room/协程/序列化 keep 模板与反模式） | ✅ 已实现 |
+| `docs/rule-examples.md` | 自定义规则示例集（规则生态——社区规则风格 7 条示例 + 格式/exact/元数据/suppression） | ✅ 已实现 |
+| `docs/server-report-protocol.md` | 服务端协作上报协议（`signalsToJson`——字段表/决策矩阵/抗滥用/接入示例） | ✅ 已实现 |
+| `docs/vulnerability-snapshot-maintenance.md` | 供应链快照维护记录（快照更新流程与一致性校验） | ✅ 已实现（`known-vuln-check.ts`） |
+| `docs/open-source-commercialization-roadmap.md` | 开源与商业化实施路线（B2B 企业服务路径等） | 🔧 规划文档（非功能路线） |
