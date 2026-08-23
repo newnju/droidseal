@@ -138,6 +138,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - apkleaks 差距 4 项：密钥格式库扩充（`secret-scan.ts`——8 → 31 种多平台密钥格式（Twilio/SendGrid/Discord/OpenAI/Gemini/Anthropic/GitLab 等）+ 厂商元数据（`vendor`——报告分类与针对性提示））；端点深度提取（`endpoint-extract.ts`——`pathDepth`/`subdomainLevel` + 子域名/深路径端点统计）；apkleaks 式密钥规则集导入（`keyFormatsFile`——自定义厂商/正则文件合并到密钥格式库——校验失败关闭）。
 - APKHunt 差距 3 项：MASTG 逐项检查清单 + MASVS L1/L2 合规级别（`mastg-checklist.ts`——16 项 MASTG-* 检查项（存储/网络/加密/代码质量/平台交互）——finding 驱动的状态推导（需核验/未检查）+ 合规摘要——报告 `mastgChecklist` 字段）；PDF 报告导出（`scripts/generate-pdf-report.ts`——极简 PDF 1.4（门禁/发现统计/发现列表/MASTG 清单——纯 TS 零依赖））。
 - mobsfscan 差距 3 项：Semgrep YAML/JSON 式规则导入（`loadSemgrepRules`——`rules: - id` / `patterns: - pattern-regex` 提取 + cwe/owasp 列表解析——复用 Semgrep 生态规则）；CWE/OWASP 元数据字段（`CustomRule.cwe`/`owasp`——报告标准对齐——与 MASTG 互补）；MobSF 生态衔接（`scripts/export-mobsf-json.ts`——报告 → MobSF 兼容 JSON（应用信息/严重度统计/发现列表——供 MobSF 平台联动））。
+- DroidStatx 差距 2 项：权限风险评分 + 权限-数据流关联（`permission-risk.ts`——12 个敏感权限风险分 + 权限-源/汇映射——`PERMISSION_RISK_HIGH`（风险评分汇总）+ `PERMISSION_DATAFLOW_LINK`（交叉证据升级：声明敏感权限 + 数据流中使用——manifest 审计集成））；调用图可视化（`scripts/visualize-callgraph.ts`——调用图（含接口分派）→ Mermaid flowchart（.mmd——节点转义 + 有界 500 边——供渲染与人工核验））。
 
 #### 文档
 
@@ -234,6 +235,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **下一竞争者（APKHunt——2023 停更，OWASP MASTG 检查工具）差距**：① MASTG 逐项检查清单的覆盖（按 MASTG-* 检查项逐项对照（通过/失败/未检查标注）——当前 `mastg-map` 为「发现 → MASTG 映射」（非完整逐项清单）——中）。静态分析检查项与报告已覆盖/超越——停更——活跃维护已超越。
 - **下一竞争者（mobsfscan——MobSF 静态规则集子集，基于 Semgrep）差距**：① Semgrep YAML 式规则格式导入（mobsfscan 规则为 Semgrep YAML——当前 `customRulesFile` 为 JSON 正则——导入 YAML 规则可复用 Semgrep 生态——低/边界）。其余功能面（MobSF 静态检查子集）已覆盖（MobSF 已追平/超越——子集随之覆盖）——无实质独立差距。
 - **下一竞争者（DroidStatx——学术型，已停更，Android 静态/污点分析）差距**：**无实质独立差距**——功能面（污点/数据流、调用链/可达性、静态检查）已由 JAADAS 污点 19 项 + 审计全覆盖——学术型停更——活跃维护与功能广度已超越。
+- **下一竞争者（Marvin——学术型，已停更，与 DroidStatx 同类）差距**：**无实质独立差距**——功能面（污点/数据流、权限分析、静态检查）已由 JAADAS 污点 19 项 + 审计 + 权限风险评分全覆盖——学术型停更——活跃维护与功能广度已超越。
 
 ### 边界说明（能力方向）
 
