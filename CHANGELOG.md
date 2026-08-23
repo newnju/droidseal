@@ -135,6 +135,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - Semgrep 新差距 5 项：声明式污点规则（`taintRulesFile`——自定义 source/sink/sanitizer 合并到扫描）；autofix 自动修复（`autofix.ts` + `scripts/apply-autofix.ts`——安全替换 + 备份 .autofix.bak——失败关闭）；suppression 注释忽略（`droidseal-ignore` 行级忽略——集成核心扫描）；规则测试框架（`scripts/test-rules.ts`——正/负用例验证 + CI 退出码）；PR 注释生成（`scripts/generate-pr-comment.ts`——报告 → PR 评论 Markdown——CI 发布）。
 - Semgrep 剩余差距 4 项：SARIF 2.1.0 报告导出（`scripts/generate-sarif.ts`——CI 生态标准——GitHub Code Scanning 可导入）；自定义规则精确模式（`exact: true`——词边界整词匹配——降误报）；JS 资源审计（`js-audit.ts`——混合应用 JS 的硬编码密钥/危险 API（innerHTML/eval/动态脚本）/弱加密（MD5/SHA1）——`SOURCE_JS_*`）；规则生态示例集（`docs/rule-examples.md`——社区规则风格 7 条示例）。
 - SUPER 差距 3 项：并行扫描（服务端允许并发运行（每个 run 独立目录）+ `batch-run --parallel N` 并发池）；Web/混合应用审计（`web-audit.ts`——HTML 明文表单/内联 XSS 事件处理器/Web 存储敏感数据——`SOURCE_WEB_*`）；自动反混淆（`obfuscation-decode.ts`——eval/atob 编码层自动解码——JS 审计前预处理）。
+- apkleaks 差距 4 项：密钥格式库扩充（`secret-scan.ts`——8 → 31 种多平台密钥格式（Twilio/SendGrid/Discord/OpenAI/Gemini/Anthropic/GitLab 等）+ 厂商元数据（`vendor`——报告分类与针对性提示））；端点深度提取（`endpoint-extract.ts`——`pathDepth`/`subdomainLevel` + 子域名/深路径端点统计）；apkleaks 式密钥规则集导入（`keyFormatsFile`——自定义厂商/正则文件合并到密钥格式库——校验失败关闭）。
 
 #### 文档
 
@@ -228,6 +229,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **下一竞争者（Semgrep——活跃，通用规则引擎 SAST）差距**：① SARIF 报告导出（CI 生态标准——GitHub Code Scanning 等——中/易补）；② AST 级模式匹配（语法精确匹配——降误报——中/大）；③ JS 源码审计（混合应用的 JS 资源审计——中）；④ 规则生态（社区规则——跨语言——低/边界）。CI 集成（REST/batch/门禁）与活跃维护已同级。
 - **下一竞争者（SUPER——已停更，并行静态扫描）差距**：① 并行扫描（多 APK/多文件并发审计——当前审计串行（单 APK 14 步 + `batch-run` 逐项串行 + 服务端 409 串行化）——中）；其余功能面（源码/二进制检查、报告、插件）已覆盖——停更——活跃维护已超越。
 - **下一竞争者（apkleaks——活跃，专项密钥/端点提取）差距**：① 密钥格式库的广度（内置几十种多平台密钥正则（Amazon/Google/GitHub/Stripe/Slack 等）——当前凭据格式检测仅几种（AIzaSy/ghp_/AKIA/eyJ）——中）；② 端点深度提取（URL/子域名/路径的完整正则集——当前 ENDPOINT_INVENTORY 为 DEX 字符串 URL 提取——低）。文件级扫描与报告已覆盖/超越——活跃维护同级。
+- **下一竞争者（APKHunt——2023 停更，OWASP MASTG 检查工具）差距**：① MASTG 逐项检查清单的覆盖（按 MASTG-* 检查项逐项对照（通过/失败/未检查标注）——当前 `mastg-map` 为「发现 → MASTG 映射」（非完整逐项清单）——中）。静态分析检查项与报告已覆盖/超越——停更——活跃维护已超越。
 
 ### 边界说明（能力方向）
 
