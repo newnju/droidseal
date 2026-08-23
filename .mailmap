@@ -1,0 +1,4 @@
+# Git mailmap —— 将机器人提交的作者归并到维护者。
+# GitHub 的 contributor 图尊重 mailmap：dependabot[bot] 的提交将归并到 noontiger，
+# 不再以 bot 身份出现在 contributor 列表。
+noontiger <hidiamond@outlook.com> <49699333+dependabot[bot]@users.noreply.github.com>
