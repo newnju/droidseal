@@ -179,6 +179,56 @@ export function extractCallGraph(bytes: Uint8Array): Map<string, Set<string>> {
   return graph
 }
 
+// 接口分派近似(JAADAS 差距④——调用图完整性):从 class_defs 的 interfaces_off 提取
+// 类→接口映射;接口方法被调用时,把实现类的同名方法也加入调用图(失败关闭——解析异常跳过)。
+export function expandInterfaceDispatch(graph: Map<string, Set<string>>, bytes: Uint8Array): Map<string, Set<string>> {
+  const header = parseHeader(bytes) as DexHeaderFull
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const u32 = (o: number) => view.getUint32(o, true)
+  header.classDefsSize = u32(0x60)
+  header.classDefsOff = u32(0x64)
+  const strings: string[] = []
+  for (let i = 0; i < header.stringIdsSize && i < 4096; i += 1) {
+    const off = u32(header.stringIdsOff + i * 4)
+    strings.push(readStringAt(bytes, off))
+  }
+  // 类描述符 → 实现的接口描述符集合
+  const implementsMap = new Map<string, Set<string>>()
+  for (let c = 0; c < header.classDefsSize && c < 1500; c += 1) {
+    const classIdx = view.getUint32(header.classDefsOff + c * 32, true)
+    const interfacesOff = u32(header.classDefsOff + c * 32 + 12)
+    const classDescriptor = strings[u32(header.typeIdsOff + classIdx * 4)] ?? ""
+    if (interfacesOff === 0) continue
+    const interfaceCount = view.getUint32(interfacesOff, true)
+    for (let i = 0; i < interfaceCount && i < 20; i += 1) {
+      const ifaceIdx = view.getUint16(interfacesOff + 4 + i * 2, true)
+      const ifaceDescriptor = strings[u32(header.typeIdsOff + ifaceIdx * 4)] ?? ""
+      if (ifaceDescriptor.startsWith("L") && ifaceDescriptor.endsWith(";")) {
+        const cls = classDescriptor.startsWith("L") ? classDescriptor.slice(1, -1).replaceAll("/", ".") : classDescriptor
+        const iface = ifaceDescriptor.slice(1, -1).replaceAll("/", ".")
+        if (!implementsMap.has(cls)) implementsMap.set(cls, new Set())
+        implementsMap.get(cls)!.add(iface)
+      }
+    }
+  }
+  // 接口方法被调用 → 把实现类的同名方法加入调用图
+  const expanded = new Map<string, Set<string>>()
+  for (const [caller, called] of graph) {
+    const set = new Set(called)
+    for (const method of called) {
+      const dot = method.lastIndexOf(".")
+      if (dot <= 0) continue
+      const iface = method.slice(0, dot)
+      const methodName = method.slice(dot + 1)
+      for (const [cls, interfaces] of implementsMap) {
+        if (interfaces.has(iface)) set.add(`${cls}.${methodName}`)
+      }
+    }
+    expanded.set(caller, set)
+  }
+  return expanded
+}
+
 // 命中行为的调用方证据(剩余①):从调用图反向找调用被调方法的方法——返回最多 2 个调用方。
 export function callersOf(graph: Map<string, Set<string>>, calledMethod: string): string[] {
   const callers: string[] = []

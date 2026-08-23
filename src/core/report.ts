@@ -520,6 +520,10 @@ export async function writeReports(
       .filter((f) => f.code === "MALICIOUS_BEHAVIOR" || f.code === "MALICIOUS_SCORE")
       .map((f) => ({ code: f.code, title: f.title, evidence: f.evidence })),
     pocCommands: buildPocCommands(sortedFindings, context.audit.apkMetadata?.packageName),
+    taintPaths: sortedFindings
+      .filter((f) => f.code === "SOURCE_DATAFLOW" || f.code === "SOURCE_SEMANTIC_VULN" || f.code === "SOURCE_LIFECYCLE_ENTRY")
+      .slice(0, 10)
+      .map((f) => ({ code: f.code, title: f.title, evidence: f.evidence })),
     steps: context.stepResults.map(resultForReport),
   }
 
@@ -602,6 +606,17 @@ ${(() => {
   return poc.length > 0
     ? poc.map((p) => `- ${p.code} ${p.title}（可验证）：${p.command} —— ${p.explanation}`).join("\n")
     : "- 无高风险可自动验证发现。"
+})()}
+
+## 污点数据流路径
+
+以下数据流发现记录了源→汇 的路径（行号级——同函数内变量传播，启发式；生命周期回调内的入口点已标注）：
+
+${(() => {
+  const taint = sortedFindings.filter((f) => f.code === "SOURCE_DATAFLOW" || f.code === "SOURCE_SEMANTIC_VULN" || f.code === "SOURCE_LIFECYCLE_ENTRY")
+  return taint.length > 0
+    ? taint.slice(0, 10).map((f) => `- ${f.code} ${f.title}：${f.evidence}`).join("\n")
+    : "- 无数据流发现。"
 })()}
 
 ## 执行步骤
