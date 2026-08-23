@@ -129,6 +129,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 污点分析深化（JAADAS 差距）：污点源/汇库扩充（设备标识/位置/剪贴板/账户源、文件写入汇——源 6→14、汇 13→15）；生命周期回调入口点（`SOURCE_LIFECYCLE_ENTRY`）；sanitizer 清理建模（加密/编码后污点清除——降误报）；调用图接口分派近似（`expandInterfaceDispatch`）；污点路径报告（报告 `taintPaths`/「污点数据流路径」节）。
 - 污点分析完整版（JAADAS 差距）：接收侧源（Intent/广播/ContentProvider 的 `getIntent`/`getData`/`query` 等）；动态回调注册入口（`SOURCE_CALLBACK_ENTRY`——ClickListener/Handler/AsyncTask 等 9 类）；SDK 版本化 API 模型（`SDK_LEVEL_API_MISMATCH`——API 引入版本 vs minSdk）；静态字段污点（`SOURCE_STATIC_TAINT`——项目级跨文件追踪）；集合元素污点（`SOURCE_COLLECTION_TAINT`——put/add → get → 汇）。
 - 污点分析进阶（JAADAS 差距 9 项）：跨组件/跨进程 Intent 数据流（`SOURCE_CROSS_COMPONENT_TAINT`——putExtra 源 → 组件/服务/广播/绑定）；反射调用静态解析（`SOURCE_REFLECTION_TARGET`——Class.forName/getMethod 目标提取）；跨函数污点传播（`SOURCE_CROSS_FUNCTION_TAINT`——参数边界）；常量值分析 + 对象字段污点（`SOURCE_CONSTANT_VALUE`/`SOURCE_OBJECT_FIELD_TAINT`——敏感字面量间接持有 + 实例字段）；库间污点 + 隐式流（`SOURCE_LIBRARY_TAINT`/`SOURCE_IMPLICIT_FLOW`——库方法返回值 + 控制流污点）；可编程 IR（`scripts/export-ir.ts`——JSON IR 导出供第三方分析）。
+- JAADAS 差距 19 项全量实现并实效验证：污点/数据流/语义/建模四大功能面穷尽核对无遗漏；新增检测器逐项冒烟验证（修复正则大小写/单字符变量/单行分支/off-by-one 等 7 处后全部命中合成样本——确认实际发挥作用）。
 
 #### 文档
 
@@ -217,11 +218,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **下一竞争者（AndroBugs——已归档，字节码语义分析代表）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：SSL 证书校验绕过语义检测（`SOURCE_SSL_BYPASS`）、语义漏洞模式库（`SOURCE_SEMANTIC_VULN`）、目录/库级批量（`batch-run --dir`）、WebView SSL 错误忽略（`WEBVIEW_SSL_ERROR_IGNORED`）——均落地；效率（3-40s/APK）与活跃维护维度已超越。
 - **下一竞争者（APKiD——活跃，打包器/保护器指纹识别）差距**：① 指纹库扩充（商业加固壳（腾讯乐固/梆梆/爱加密/360/娜迦/DexGuard 等）/混淆器/打包器的 YARA 级覆盖——当前 `packers.ts` 12 条精简指纹——中）；② 指纹规则文件加载（外部 JSON/YARA 式指纹文件，同 `behaviorRulesFile` 模式——中）；③ SO 级加壳特征检测（当前 elf-scan 为符号/密钥级——低）。
 - **下一竞争者（QARK——已停更 2019，POC 生成代表）差距**：① POC 验证命令建议（对 EXPORTED 组件/深链/备份等高风险发现生成可执行的 adb/drozer 验证命令——与 `docs/dynamic-analysis-bridge.md` 衔接——中）；② 教育性说明增强（发现的「为什么/怎么复现/怎么修」详解——低）。已停更——活跃维护与纯 TS 自研解析已超越。
-- **下一竞争者（JAADAS——已停更 2017，Soot/FlowDroid 污点分析代表）差距（9 项）**：
-  - **务实可补（中/易）**：① 生命周期感知入口点建模（Android 生命周期回调（onCreate/onResume 等）作为污点分析入口——与 `taint-source` 结合——中）；② 完整污点路径报告（源→汇 的调用链路径 evidence——中）；③ 污点源/汇库扩充（设备标识/位置/剪贴板/账户等敏感源与更多汇——中/易补）。
-  - **中**：④ 调用图完整性（间接调用/接口分派——中）；⑤ 跨组件 Intent 数据流（组件间敏感数据传递——中/学术级）；⑥ 反射调用的静态解析（Soot 反射处理/常量传播——中/学术级）。
-  - **学术级/长期（不建议短期投入）**：⑦ 跨函数污点传播（IFDS 级——需完整 DEX 语义分析——大）；⑧ 常量传播/值分析（值域——学术级）；⑨ 可编程 IR（Jimple——库形态——边界/大）；⑩ 对象敏感/流敏感精确污点（同变量不同对象实例/语句顺序——学术级）；⑪ 静态字段/全局状态污点（学术级）；⑫ 集合/数组元素污点（容器内传播——学术级）；⑬ 库间污点分析（依赖库内传播——学术级）；⑭ Android 数据接收源建模（Intent/广播/ContentProvider 接收数据作源——中/学术级）；⑮ 污点清理函数（sanitizer）建模（加密/编码/校验后污点清除——可降误报——中/学术级）；⑯ SDK 版本化的源/汇/清理模型（按 Android SDK 版本的 API 模型——中/学术级）；⑰ 隐式流分析（控制流传递——学术级）；⑱ 动态回调注册建模（ClickListener/Handler——学术级）；⑲ 进程间（IPC）污点（Binder/跨进程——学术级）。
-  - 已停更——活跃维护已超越。
+- **下一竞争者（JAADAS——已停更 2017，Soot/FlowDroid 污点分析代表）**：~~差距（19 项）~~ **已全部实现并记录于 [1.0.1]——已追平/超越（四大功能面穷尽核对无遗漏 + 实效冒烟验证通过）**：生命周期入口/污点路径/源汇扩充、调用图完整性/跨组件/反射/跨函数/常量值/对象字段/库间/隐式流/可编程 IR 等 19 项——均落地；已停更——活跃维护已超越。
 
 ### 边界说明（能力方向）
 
