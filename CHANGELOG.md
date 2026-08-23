@@ -136,24 +136,6 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ## 开发路线（加固 / 混淆可扩展方向）
 
-### 功能完备性（现状）
-
-- **14 步流水线**：环境诊断 → 准备工作区 → 签名库 → 源码安全审计 → 构建 Release APK → APK 安全审计 → 本地安全防护 → Release 归一化 → Web JS 处理（可选）→ 资源名混淆（可选）→ ZIP 对齐 → APK 签名 → 最终验证 → 生成报告。
-- **静态审计 10+ 类**：权限模型、合规（targetSdk/ABI）、签名深度、深链与组件、meta-data 与资源密钥、DEX 字符串池、Native .so ELF、网络安全配置（NSC）、备份规则、供应链清单——附置信度分级与交叉证据。
-- **加固能力**：ARSC 资源混淆（名称/路径/颜色/维度）、Web JS 处理（Terser 白名单）、反调试 stub（检测信号 + 完整性/签名自检）、字符串加密桩（源码接入）、DEX 方法混淆受控子集（设计+工具）。
-- **发布工程化**：preflight 一键门禁、CI 集成、发布门禁（pass/review/block）、发布证据包、CycloneDX SBOM、修复包、加固成效量化——功能面完整。
-
-> 开发路线 ①-⑤ 方向与完善与优化各项已全部实现并记录于 [1.0.1]（2026-08-22）。
-
-### 下一阶段
-
-- **已完成（[1.0.1]）**：
-  - 短期：URL/域名/端点提取（`ENDPOINT_INVENTORY`）；弱加密算法检测（`SOURCE_WEAK_CRYPTO`）；证书有效期提示（`SIGNING_CERT_EXPIRED`/`EXPIRING`）；自定义规则文件加载（`customRulesFile`）。
-  - 中期：OWASP MASTG 映射；反编译核验建议；HTML 报告生成器；多扫描历史趋势。
-  - 长期（边界兼容）：动态分析外部衔接指南；平台支持矩阵；恶意指标轻量提示（`MALICIOUS_INDICATOR`）。
-  - 缺口补强：隐私数据收集清单（`PRIVACY_DATA_COLLECTION`/`PRIVACY_API_USAGE`）；证书固定缺失检测（`SOURCE_NO_CERT_PINNING`）；SQLite 明文存储审计（`SOURCE_UNENCRYPTED_STORAGE`）；反编译导出工具（`scripts/export-decompiled.ts`）。
-- **仍缺（边界项——明确不实现）**：内置动态分析（本地优先边界——见 `docs/dynamic-analysis-bridge.md`）；恶意软件沙箱/反病毒（偏离发布安全定位）。
-
 ### 边界说明（能力方向）
 
 - **审计质量与发布安全做到极致**：误报控制、置信度分级、交叉证据、失败关闭——把审计与发布安全做成核心竞争力。
@@ -173,18 +155,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **构建期/发布工程化（中期）**：发布前自动跑完整流水线与门禁；R8 规则模板库（Retrofit/Room/协程/序列化）；签名指纹管理脚本（多签名/轮换清单生成与校验）。
 - **供应链深化（长期）**：SBOM 已知漏洞比对（对接离线漏洞库快照，如 OSV）；Gradle 坐标的已知修复版本建议。
 
-### 计划与设计文档汇总（全部 plan / 路线内容）
+### 计划与设计文档汇总（未实现——供后续参考）
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| `docs/dex-method-obfuscation-plan.md` | DEX 方法/类级混淆受控子集接入设计（长期路线 ①——含真机验证矩阵与失败关闭边界） | ✅ 已实现（`apply-method-obfuscation.ts` + 生成器） |
-| `docs/assets-encryption-plan.md` | assets 资源轻量加密方案（开发路线 ②：资源/资产层） | ✅ 已实现（`encrypt-assets.ts` + `--gen-reader`） |
-| `docs/dex-write-engine.md` | 有损加固设计（DEX 写引擎 + ARSC 资源混淆） | 🔧 设计文档（DEX 方法重命名与 ARSC 混淆已落地——写引擎其余为参考） |
-| `docs/dynamic-analysis-bridge.md` | 动态分析外部衔接指南（长期①——边界兼容：Frida/drozer/模拟器配合静态审计） | ✅ 已实现（`adb-bridge.ts` 轻量动态验证 + POC 命令衔接） |
-| `docs/platform-matrix.md` | 平台支持矩阵（长期②——Android 矩阵与决策建议） | ✅ 已实现（Android 矩阵——iOS/Windows 应用审计已明确不实现） |
-| `docs/force-r8-variant-template.md` | 强制 R8 按变体细化模板（开发路线 ⑤：构建期与报告闭环） | ✅ 已实现（模板库） |
-| `docs/r8-rule-templates.md` | R8/ProGuard 规则模板库（中期：构建期/发布工程化——Retrofit/Room/协程/序列化 keep 模板与反模式） | ✅ 已实现 |
-| `docs/rule-examples.md` | 自定义规则示例集（规则生态——社区规则风格 7 条示例 + 格式/exact/元数据/suppression） | ✅ 已实现 |
-| `docs/server-report-protocol.md` | 服务端协作上报协议（`signalsToJson`——字段表/决策矩阵/抗滥用/接入示例） | ✅ 已实现 |
-| `docs/vulnerability-snapshot-maintenance.md` | 供应链快照维护记录（快照更新流程与一致性校验） | ✅ 已实现（`known-vuln-check.ts`） |
+| `docs/dex-write-engine.md` | 有损加固设计（DEX 写引擎 + ARSC 资源混淆——DEX 方法重命名与 ARSC 混淆已落地，写引擎其余为参考） | 🔧 设计文档 |
 | `docs/open-source-commercialization-roadmap.md` | 开源与商业化实施路线（B2B 企业服务路径等） | 🔧 规划文档（非功能路线） |

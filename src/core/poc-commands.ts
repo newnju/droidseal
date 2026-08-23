@@ -53,7 +53,7 @@ const COMMAND_TEMPLATES: readonly CommandTemplate[] = [
   {
     prefix: "EXPORTED_",
     build: (packageName) => `drozer console connect; run app.activity.info -a ${packageName}`,
-    explanation: "导出组件用 drozer 枚举并验证外部可达性(详见 dynamic-analysis-bridge)。",
+    explanation: "导出组件用 drozer 枚举并验证外部可达性（也可用本地 adb 真机/模拟器做轻量动态验证）。",
   },
 ]
 
