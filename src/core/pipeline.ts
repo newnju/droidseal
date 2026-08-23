@@ -474,7 +474,7 @@ export class Pipeline {
       code: `TOOL_${tool.name.toUpperCase().replaceAll(/\W+/g, "_")}_MISSING`,
       title: `缺少 ${tool.name}`,
       detail: `${tool.detail}不可用；对应步骤会解释错误并回退。`,
-      recommendation: "安装所需 JDK/Android SDK Build Tools，并重新运行环境诊断。",
+      recommendation: "可运行 `bun scripts/setup-tools.ts --install` 自动安装（用户级隔离、固定版本组合、许可预接受、失败关闭），或安装所需 JDK/Android SDK Build Tools 后重新运行环境诊断。",
     }))
     this.context.audit.findings.push(...findings)
 
@@ -484,6 +484,7 @@ export class Pipeline {
         message: `所选流程缺少 ${missing.map((tool) => tool.name).join("、")}`,
         explanation: "DroidSeal 已暂停流水线，未启动后续构建、签名或修改操作。",
         suggestions: [
+          "运行 `bun scripts/setup-tools.ts --install` 自动安装缺失工具（用户级隔离安装、固定版本组合、许可预接受、失败关闭）",
           "在界面中选择“下载并继续”，安装完成后会重新诊断并自动续跑",
           "也可以查看安装说明，手动安装后点击“已安装，重新检测”",
         ],
@@ -1761,6 +1762,11 @@ export class Pipeline {
       lastCommand = signature
       signatureVerified = signature.exitCode === 0
       this.context.signatureVerified = signatureVerified
+      detail.push(
+        signatureVerified
+          ? "✓ APK 签名验证通过"
+          : `○ 未签名验证：最终产物未签名（${this.config.signing.mode === "skip" ? "签名已跳过（未配置密钥）" : "签名验证未通过——见签名/验证错误"}）`,
+      )
       if (!signatureVerified && this.config.signing.mode !== "skip") {
         // If signing never produced an artifact, the raw apksigner output ("DOES NOT VERIFY")
         // is a symptom, not the cause. Point at the step that actually failed instead.
