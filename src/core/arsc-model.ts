@@ -462,3 +462,80 @@ export function markPoolDirty(pool: ArscStringPool): void {
 }
 
 export { align4 }
+
+// -- 资源条目对象模型(③——资源可编程 API:解析 body 的 type chunk → 类型/条目树) ----
+
+export interface ArscEntryModel {
+  entryId: number
+  key?: string
+  value?: string
+}
+
+export interface ArscTypeModel {
+  typeId: number
+  entryCount: number
+  entries: ArscEntryModel[]
+}
+
+export interface ArscResourceModel {
+  packageName: string
+  typeCount: number
+  types: ArscTypeModel[]
+}
+
+const RES_TABLE_TYPE_TYPE = 0x0201
+const NO_ENTRY = 0xffffffff
+
+// 解析资源表的类型/条目对象树(失败关闭——类型 chunk 解析异常跳过)。
+export function buildArscResourceModel(table: ArscTable): ArscResourceModel[] {
+  const out: ArscResourceModel[] = []
+  for (const pkg of table.packages) {
+    const view = new DataView(pkg.body.buffer, pkg.body.byteOffset, pkg.body.byteLength)
+    const types: ArscTypeModel[] = []
+    let offset = 0
+    while (offset + 8 <= pkg.body.length) {
+      const type = view.getUint16(offset, true)
+      const size = view.getUint32(offset + 4, true)
+      if (size < 8) break
+      if (type !== RES_TABLE_TYPE_TYPE) {
+        offset += size // 跳过非 type chunk(typeSpec 0x0202 等——继续扫描)
+        continue
+      }
+      if (size < 20) break
+      const typeId = pkg.body[offset + 8]!
+      const entryCount = view.getUint32(offset + 12, true)
+      const entriesStart = view.getUint32(offset + 16, true)
+      const entries: ArscEntryModel[] = []
+      for (let i = 0; i < entryCount && i < 200; i += 1) {
+        const entryOffset = view.getUint32(offset + 20 + i * 4, true)
+        if (entryOffset === NO_ENTRY) continue
+        const entryBase = offset + entriesStart + entryOffset
+        if (entryBase + 8 > pkg.body.length) continue
+        const keyIdx = view.getUint32(entryBase + 4, true)
+        const key = pkg.keyStrings.strings[keyIdx] ?? ""
+        // 值(字符串形态——globalStrings 引用)
+        let value: string | undefined
+        const valueOffset = entryBase + 8
+        if (valueOffset + 4 <= pkg.body.length) {
+          const valueSize = view.getUint16(valueOffset, true)
+          if (valueSize >= 8 && valueOffset + 8 <= pkg.body.length) {
+            const dataType = pkg.body[valueOffset + 1]!
+            const data = view.getUint32(valueOffset + 4, true)
+            if (dataType === 0x03 && data < table.globalStrings.strings.length) {
+              value = table.globalStrings.strings[data]
+            }
+          }
+        }
+        entries.push({ entryId: i, ...(key ? { key } : {}), ...(value ? { value } : {}) })
+      }
+      types.push({ typeId, entryCount: entries.length, entries })
+      offset += size
+    }
+    out.push({
+      packageName: pkg.keyStrings.strings[0] ?? `pkg_${pkg.id}`,
+      typeCount: types.length,
+      types,
+    })
+  }
+  return out
+}
