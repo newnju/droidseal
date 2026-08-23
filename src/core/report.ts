@@ -605,7 +605,7 @@ ${(() => {
 
 ## POC 验证命令建议
 
-以下高风险发现可执行 adb/drozer 命令验证（本地设备/模拟器——详见 docs/dynamic-analysis-bridge.md）：
+以下高风险发现可执行 adb/drozer 命令验证（本地设备/模拟器上人工执行）：
 
 ${(() => {
   const poc = buildPocCommands(sortedFindings, context.audit.apkMetadata?.packageName)
