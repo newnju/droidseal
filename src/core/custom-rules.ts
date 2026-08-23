@@ -13,6 +13,8 @@ export interface CustomRule {
   pattern: string
   scope: "source" | "dex" | "all"
   recommendation?: string
+  // 精确模式（Semgrep AST 级匹配的务实替代——词边界包裹——降误报）。
+  exact?: boolean
 }
 
 const SEVERITIES = ["critical", "high", "medium", "low", "info"]
@@ -40,6 +42,7 @@ export function parseCustomRules(text: string): CustomRule[] {
       pattern: rule.pattern,
       scope: rule.scope,
       ...(rule.recommendation ? { recommendation: rule.recommendation } : {}),
+      ...(rule.exact === true ? { exact: true } : {}),
     })
   }
   return rules
@@ -55,7 +58,8 @@ export function matchCustomRules(rules: readonly CustomRule[], strings: Iterable
   const seen = new Set<string>()
   for (const rule of rules) {
     if (rule.scope !== scope && rule.scope !== "all") continue
-    const regex = new RegExp(rule.pattern)
+    // 精确模式：词边界包裹（exact: true——精确代码匹配——降误报）
+    const regex = rule.exact ? new RegExp(`\\b(?:${rule.pattern})\\b`, "i") : new RegExp(rule.pattern)
     for (const s of strings) {
       if (regex.test(s)) {
         const key = `${rule.code}:${s.slice(0, 60)}`

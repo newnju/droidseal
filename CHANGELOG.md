@@ -132,6 +132,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - JAADAS 差距 19 项全量实现并实效验证：污点/数据流/语义/建模四大功能面穷尽核对无遗漏；新增检测器逐项冒烟验证（修复正则大小写/单字符变量/单行分支/off-by-one 等 7 处后全部命中合成样本——确认实际发挥作用）。
 - Androguard 深度可编程解析（⑤⑥⑦⑧⑨）：指令迭代器 API（`dex-instructions.ts`——逐指令 opcode/mnemonic/operands——关键指令助记符）；内置反汇编器（`dex-disassembler.ts`——smali-like 方法级输出——行为 finding 附反汇编片段——替代外部 jadx 的内置形态）；XREF 交叉引用（`xref.ts`——方法/字段被引用映射——`referencesOf`）；类级对象模型（`dex-class-model.ts`——类→方法→指令对象树——export-ir 的 `classes` 深化（schemaVersion 2））；交互式分析 REPL（`scripts/analyze-repl.ts`——load/classes/method/xref/exit）。
 - Androguard 剩余差距（②③）：任意 DEX 修改 API（`dex-patch.ts`——invoke 方法索引 / const-string 字符串索引的指令级补丁——真 DEX 字节修改验证）；资源条目对象模型（`buildArscResourceModel`——resources.arsc 的 type chunk 解析 → 类型/条目树——真 ARSC 解析出 146 类型）。
+- Semgrep 新差距 5 项：声明式污点规则（`taintRulesFile`——自定义 source/sink/sanitizer 合并到扫描）；autofix 自动修复（`autofix.ts` + `scripts/apply-autofix.ts`——安全替换 + 备份 .autofix.bak——失败关闭）；suppression 注释忽略（`droidseal-ignore` 行级忽略——集成核心扫描）；规则测试框架（`scripts/test-rules.ts`——正/负用例验证 + CI 退出码）；PR 注释生成（`scripts/generate-pr-comment.ts`——报告 → PR 评论 Markdown——CI 发布）。
 
 #### 文档
 
