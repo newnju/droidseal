@@ -19,19 +19,18 @@ export function scanReflectionTargets(source: string): ReflectionTarget[] {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!
     // 类目标:Class.forName("com.x.Y")
-    const classMatch = /class\.forname\(\s*["']([A-Za-z0-9_.$]+)["']/.exec(line)
+    const classMatch = /class\.forname\(\s*["']([A-Za-z0-9_.$]+)["']/i.exec(line)
     if (classMatch) {
       targets.push({ line: i + 1, kind: "class", target: classMatch[1]!, snippet: line.trim().slice(0, 100) })
-      continue
+      // 不 continue——同一行的 getMethod/getField 也要检查(单行形态)
     }
     // 方法目标:getMethod("m") / getDeclaredMethod("m")
-    const methodMatch = /get(?:declared)?method\(\s*["']([A-Za-z0-9_$]+)["']/.exec(line)
+    const methodMatch = /get(?:declared)?method\(\s*["']([A-Za-z0-9_$]+)["']/i.exec(line)
     if (methodMatch) {
       targets.push({ line: i + 1, kind: "method", target: methodMatch[1]!, snippet: line.trim().slice(0, 100) })
-      continue
     }
     // 字段目标:getField("f") / getDeclaredField("f")
-    const fieldMatch = /get(?:declared)?field\(\s*["']([A-Za-z0-9_$]+)["']/.exec(line)
+    const fieldMatch = /get(?:declared)?field\(\s*["']([A-Za-z0-9_$]+)["']/i.exec(line)
     if (fieldMatch) {
       targets.push({ line: i + 1, kind: "field", target: fieldMatch[1]!, snippet: line.trim().slice(0, 100) })
     }

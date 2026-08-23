@@ -26,7 +26,7 @@ function extractFunctions(source: string): FunctionInfo[] {
     const params = match[2]!
       .split(",")
       .map((p) => p.trim().split(/\s+/).pop() ?? "")
-      .filter((p) => /^[a-z_][A-Za-z0-9_]{1,}$/.test(p))
+      .filter((p) => /^[a-z_][A-Za-z0-9_]{0,}$/.test(p))
     if (name !== "if" && name !== "for" && name !== "while" && name !== "switch" && name !== "catch") {
       functions.push({ name, params, startLine: i + 1 })
     }
@@ -51,8 +51,8 @@ export function scanCrossFunctionTaint(source: string): Array<{ line: number; fu
       const lower = line.toLowerCase()
       const hasSourceArg = CROSS_FUNCTION_SOURCES.some((s) => lower.includes(s))
       if (!hasSourceArg) continue
-      // 被调函数体内参数 → 汇
-      for (let j = func.startLine; j < lines.length && j < func.startLine + 40; j += 1) {
+      // 被调函数体内参数 → 汇(startLine 是 1 基——数组索引减 1)
+      for (let j = func.startLine - 1; j < lines.length && j < func.startLine + 40; j += 1) {
         const bodyLine = lines[j]!
         const bodyLower = bodyLine.toLowerCase()
         if (!func.params.some((p) => bodyLine.includes(p))) continue

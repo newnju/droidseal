@@ -128,6 +128,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - POC 验证命令建议（`poc-commands.ts` + 报告 `pocCommands`/「POC 验证命令建议」节）：对高风险发现（EXPORTED 组件/备份/可调试/深链）生成可执行 adb/drozer 验证命令，带可验证性标记与教育性说明（失败关闭，衔接 `docs/dynamic-analysis-bridge.md`）。
 - 污点分析深化（JAADAS 差距）：污点源/汇库扩充（设备标识/位置/剪贴板/账户源、文件写入汇——源 6→14、汇 13→15）；生命周期回调入口点（`SOURCE_LIFECYCLE_ENTRY`）；sanitizer 清理建模（加密/编码后污点清除——降误报）；调用图接口分派近似（`expandInterfaceDispatch`）；污点路径报告（报告 `taintPaths`/「污点数据流路径」节）。
 - 污点分析完整版（JAADAS 差距）：接收侧源（Intent/广播/ContentProvider 的 `getIntent`/`getData`/`query` 等）；动态回调注册入口（`SOURCE_CALLBACK_ENTRY`——ClickListener/Handler/AsyncTask 等 9 类）；SDK 版本化 API 模型（`SDK_LEVEL_API_MISMATCH`——API 引入版本 vs minSdk）；静态字段污点（`SOURCE_STATIC_TAINT`——项目级跨文件追踪）；集合元素污点（`SOURCE_COLLECTION_TAINT`——put/add → get → 汇）。
+- 污点分析进阶（JAADAS 差距 9 项）：跨组件/跨进程 Intent 数据流（`SOURCE_CROSS_COMPONENT_TAINT`——putExtra 源 → 组件/服务/广播/绑定）；反射调用静态解析（`SOURCE_REFLECTION_TARGET`——Class.forName/getMethod 目标提取）；跨函数污点传播（`SOURCE_CROSS_FUNCTION_TAINT`——参数边界）；常量值分析 + 对象字段污点（`SOURCE_CONSTANT_VALUE`/`SOURCE_OBJECT_FIELD_TAINT`——敏感字面量间接持有 + 实例字段）；库间污点 + 隐式流（`SOURCE_LIBRARY_TAINT`/`SOURCE_IMPLICIT_FLOW`——库方法返回值 + 控制流污点）；可编程 IR（`scripts/export-ir.ts`——JSON IR 导出供第三方分析）。
 
 #### 文档
 
