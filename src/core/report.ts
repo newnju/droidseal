@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises"
 import { EDITION } from "../brand.ts"
 import { writeRemediationBundle } from "./remediation.ts"
 import { mappedMastgFindings, decompileSuggestions } from "./mastg-map.ts"
+import { buildMastgChecklist, mastgComplianceSummary } from "./mastg-checklist.ts"
 import { buildPocCommands } from "./poc-commands.ts"
 import { writeReleaseEvidence, type ReleaseEvidenceResult } from "./release-evidence.ts"
 import {
@@ -515,6 +516,11 @@ export async function writeReports(
       suggestionCount: remediation.artifacts.length,
     } : null,
     mastg: mappedMastgFindings(sortedFindings),
+    // MASTG 逐项检查清单 + MASVS 合规级别（APKHunt 差距①②）
+    mastgChecklist: (() => {
+      const checklist = buildMastgChecklist(sortedFindings)
+      return { items: checklist, compliance: mastgComplianceSummary(checklist) }
+    })(),
     decompileSuggestions: decompileSuggestions(sortedFindings),
     behaviorAnalysis: sortedFindings
       .filter((f) => f.code === "MALICIOUS_BEHAVIOR" || f.code === "MALICIOUS_SCORE")
