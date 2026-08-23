@@ -269,6 +269,13 @@ export function App() {
   const [needsFailureAdvance, setNeedsFailureAdvance] = createSignal(false)
   const [pipelineDone, setPipelineDone] = createSignal(false)
   const [spinnerIndex, setSpinnerIndex] = createSignal(0)
+  // 占用显示（③）：RSS/堆内存——每 2 秒采样一次实时显示
+  const [memory, setMemory] = createSignal<{ rss: number; heap: number }>({ rss: 0, heap: 0 })
+  const memoryTimer = setInterval(() => {
+    const usage = process.memoryUsage()
+    setMemory({ rss: usage.rss / 1024 / 1024, heap: usage.heapUsed / 1024 / 1024 })
+  }, 2000)
+  void memoryTimer
   const [toolRecovery, setToolRecovery] = createSignal<ToolRecoveryState>()
   const [interactionZoom, setInteractionZoom] = createSignal<InteractionZoom>(100)
 
@@ -1517,6 +1524,9 @@ export function App() {
           >
             <text fg={theme.textMuted}>
               {t("sidebarSuccess")} {successCount()} · {t("sidebarSkipped")} {skippedCount()} · {t("sidebarFailed")} {failedCount()}
+            </text>
+            <text fg={theme.textMuted}>
+              内存 RSS {memory().rss.toFixed(1)} MB / 堆 {memory().heap.toFixed(1)} MB
             </text>
             <box height={1} />
             <scrollbox ref={(el: ScrollBoxRenderable) => { progressScrollBox = el }} flexGrow={1} minHeight={0}>

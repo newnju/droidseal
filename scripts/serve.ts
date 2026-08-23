@@ -187,7 +187,13 @@ async function main(): Promise<void> {
         return Response.json({ ok: true, runId: id, status: "cancelled" })
       }
       if (request.method === "GET" && url.pathname === "/health") {
-        return Response.json({ ok: true, service: "DroidSeal Web", outputDirectory: outputDir })
+        const usage = process.memoryUsage()
+        return Response.json({
+          ok: true,
+          service: "DroidSeal Web",
+          outputDirectory: outputDir,
+          memoryUsageMb: { rss: +(usage.rss / 1024 / 1024).toFixed(1), heap: +(usage.heapUsed / 1024 / 1024).toFixed(1) },
+        })
       }
       if (request.method === "GET" && url.pathname === "/runs") {
         const runs = await listRuns(outputDir)

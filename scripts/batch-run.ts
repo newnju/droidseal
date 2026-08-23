@@ -86,6 +86,14 @@ async function main(): Promise<void> {
 
   const results: Array<{ name: string; ok: boolean; seconds?: number; stepsOk?: number; stepsSkipped?: number; gate?: string; error?: string }> = []
   const startedAt = Date.now()
+  // 占用采样（①）：峰值 RSS/堆内存——每条目后采样，汇总输出峰值
+  let peakRss = 0
+  let peakHeap = 0
+  const sampleMemory = (): void => {
+    const usage = process.memoryUsage()
+    if (usage.rss > peakRss) peakRss = usage.rss
+    if (usage.heapUsed > peakHeap) peakHeap = usage.heapUsed
+  }
 
   const runOne = async (index: number): Promise<void> => {
     const item = items[index]!
@@ -109,6 +117,7 @@ async function main(): Promise<void> {
       const seconds = (Date.now() - itemStarted) / 1000
       const stepsOk = data.steps?.filter((s) => s.status === "success").length ?? 0
       const stepsSkipped = data.steps?.filter((s) => s.status === "skipped").length ?? 0
+      sampleMemory()
       process.stdout.write(`\r`)
       console.log(`[${index + 1}/${items.length}] ${item.name} 完成（${seconds.toFixed(1)}s，成功 ${stepsOk} 步${stepsSkipped > 0 ? `，跳过 ${stepsSkipped} 步` : ""}${data.gate ? `，门禁 ${data.gate}` : ""}${attempts > 1 ? `，重试 ${attempts - 1} 次后成功` : ""}）`)
       results[index] = { name: item.name, ok: true, seconds, stepsOk, stepsSkipped, ...(data.gate ? { gate: data.gate } : {}) }
@@ -131,7 +140,7 @@ async function main(): Promise<void> {
 
   const ok = results.filter((r) => r.ok).length
   console.log(`\n===== 批量汇总 =====`)
-  console.log(`成功 ${ok}/${results.length}；总耗时 ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
+  console.log(`成功 ${ok}/${results.length}；总耗时 ${((Date.now() - startedAt) / 1000).toFixed(1)}s；峰值内存 ${(peakRss / 1024 / 1024).toFixed(1)} MB（RSS）/ ${(peakHeap / 1024 / 1024).toFixed(1)} MB（堆）`)
   for (const r of results) {
     console.log(`- ${r.ok ? "✓" : "✗"} ${r.name}${r.ok ? `（${r.seconds?.toFixed(1)}s${r.stepsOk !== undefined ? `，成功 ${r.stepsOk} 步` : ""}）` : `：${r.error ?? ""}`}`)
   }
