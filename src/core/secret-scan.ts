@@ -1,5 +1,6 @@
 // Shared secret scanner. Shape-specific tokens are high-confidence; generic
 // assignments must also pass value-only entropy and placeholder filters.
+import { readFile } from "node:fs/promises"
 import type { FindingConfidence } from "./types.ts"
 
 export interface SecretHit {
@@ -10,7 +11,7 @@ export interface SecretHit {
   preview: string
 }
 
-interface SecretPattern {
+export interface SecretPattern {
   code: string
   label: string
   regex: RegExp
@@ -18,6 +19,8 @@ interface SecretPattern {
   // When set, entropy is calculated from this capture group, not the key name.
   valueGroup?: number
   minEntropy?: number
+  // 厂商/平台元数据（apkleaks 差距④——报告分类与针对性提示）。
+  vendor?: string
 }
 
 // Well-known credential shapes. Ordered most-specific first so labelling is stable.
@@ -30,6 +33,26 @@ export const SECRET_PATTERNS: readonly SecretPattern[] = [
   { code: "STRIPE_KEY", label: "Stripe 密钥", regex: /\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}\b/, confidence: "high" },
   { code: "JWT", label: "JWT", regex: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/, confidence: "high" },
   { code: "BEARER_TOKEN", label: "Bearer Token", regex: /\bBearer\s+[0-9A-Za-z._-]{20,}\b/, confidence: "high" },
+  // 多平台密钥格式扩充（apkleaks 差距①——几十种常见厂商密钥）
+  { code: "TWILIO_API_KEY", label: "Twilio API Key", regex: /\bSK[0-9a-fA-F]{32}\b/, confidence: "high", vendor: "Twilio" },
+  { code: "SENDGRID_API_KEY", label: "SendGrid API Key", regex: /\bSG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}\b/, confidence: "high", vendor: "SendGrid" },
+  { code: "DISCORD_TOKEN", label: "Discord Bot Token", regex: /\bM[A-Za-z0-9_-]{23}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}\b/, confidence: "high", vendor: "Discord" },
+  { code: "FACEBOOK_TOKEN", label: "Facebook Token", regex: /\bEAACEdE0[0-9A-Za-z]{60,}\b/, confidence: "high", vendor: "Facebook" },
+  { code: "HEROKU_API_KEY", label: "Heroku API Key", regex: /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/, confidence: "medium", vendor: "Heroku" },
+  { code: "SHOPIFY_TOKEN", label: "Shopify Access Token", regex: /\bshp(?:at|ss|pa|ka|ps)_[0-9a-fA-F]{32}\b/, confidence: "high", vendor: "Shopify" },
+  { code: "SQUARE_TOKEN", label: "Square Token", regex: /\bsq0atp-[0-9A-Za-z_-]{22}\b/, confidence: "high", vendor: "Square" },
+  { code: "ZENDESK_TOKEN", label: "Zendesk Token", regex: /\bx[0-9A-Za-z_-]{32}\b/, confidence: "medium", vendor: "Zendesk" },
+  { code: "POSTMAN_TOKEN", label: "Postman Token", regex: /\bPMAK-[0-9a-fA-F]{24}-[0-9a-fA-F]{34}\b/, confidence: "high", vendor: "Postman" },
+  { code: "NPM_TOKEN", label: "npm Token", regex: /\bnpm_[0-9A-Za-z]{36}\b/, confidence: "high", vendor: "npm" },
+  { code: "SENTRY_TOKEN", label: "Sentry Token", regex: /\b(?:[0-9a-fA-F]{64})\b/, confidence: "medium", vendor: "Sentry" },
+  { code: "TELEGRAM_TOKEN", label: "Telegram Bot Token", regex: /\b[0-9]{8,10}:[A-Za-z0-9_-]{35}\b/, confidence: "high", vendor: "Telegram" },
+  { code: "AZURE_SAS", label: "Azure SAS Token", regex: /\bsig=[0-9A-Za-z%]{30,}\b/, confidence: "medium", vendor: "Azure" },
+  { code: "OPENAI_API_KEY", label: "OpenAI API Key", regex: /\bsk-[0-9A-Za-z]{20,}\b/, confidence: "high", vendor: "OpenAI" },
+  { code: "GEMINI_API_KEY", label: "Gemini API Key", regex: /\bAIza[0-9A-Za-z_-]{35}\b/, confidence: "high", vendor: "Google" },
+  { code: "ANTHROPIC_API_KEY", label: "Anthropic API Key", regex: /\bsk-ant-[0-9A-Za-z_-]{20,}\b/, confidence: "high", vendor: "Anthropic" },
+  { code: "HUGGINGFACE_TOKEN", label: "Hugging Face Token", regex: /\bhf_[0-9A-Za-z]{34}\b/, confidence: "high", vendor: "Hugging Face" },
+  { code: "GITLAB_TOKEN", label: "GitLab Token", regex: /\bglpat-[0-9A-Za-z_-]{20,}\b/, confidence: "high", vendor: "GitLab" },
+  { code: "BITBUCKET_TOKEN", label: "Bitbucket Token", regex: /\bATBB[0-9A-Za-z]{20,}\b/, confidence: "high", vendor: "Bitbucket" },
   {
     code: "GENERIC_CREDENTIAL",
     label: "疑似硬编码凭据赋值",
@@ -53,6 +76,45 @@ export function shannonEntropy(value: string): number {
   return entropy
 }
 
+// apkleaks 式密钥规则集导入（差距③——keyFormatsFile：厂商/正则映射文件合并）。
+export interface KeyFormatRule {
+  code: string
+  label: string
+  pattern: string
+  confidence?: "confirmed" | "high" | "medium" | "low"
+  vendor?: string
+}
+
+export async function loadKeyFormats(file: string): Promise<SecretPattern[]> {
+  const raw = await readFile(file, "utf8")
+  const rules = JSON.parse(raw) as KeyFormatRule[]
+  if (!Array.isArray(rules)) throw new Error("密钥规则文件应为 JSON 数组")
+  const patterns: SecretPattern[] = []
+  for (const rule of rules) {
+    if (!rule.code || !rule.label || !rule.pattern) {
+      throw new Error(`密钥规则缺少 code/label/pattern：${JSON.stringify(rule).slice(0, 80)}`)
+    }
+    try {
+      patterns.push({
+        code: rule.code,
+        label: rule.label,
+        regex: new RegExp(rule.pattern),
+        confidence: rule.confidence ?? "high",
+        ...(rule.vendor ? { vendor: rule.vendor } : {}),
+      })
+    } catch {
+      throw new Error(`密钥规则正则非法：${rule.code}`)
+    }
+  }
+  return patterns
+}
+
+// 合并自定义密钥规则与内置（自定义追加——供扫描使用）。
+export async function mergeKeyFormats(file: string | undefined): Promise<readonly SecretPattern[]> {
+  if (!file) return SECRET_PATTERNS
+  return [...SECRET_PATTERNS, ...(await loadKeyFormats(file))]
+}
+
 function redact(match: string): string {
   const trimmed = match.length > 48 ? `${match.slice(0, 24)}…${match.slice(-8)}` : match
   if (trimmed.length <= 8) return `${trimmed.slice(0, 2)}****`
@@ -69,12 +131,15 @@ function looksLikePlaceholder(value: string): boolean {
 
 // De-duplicates by (code, preview). Generic assignments are intentionally held
 // to a stronger threshold than provider-specific token formats.
-export function scanStringsForSecrets(strings: Iterable<string>): SecretHit[] {
+export function scanStringsForSecrets(
+  strings: Iterable<string>,
+  patterns: readonly SecretPattern[] = SECRET_PATTERNS,
+): SecretHit[] {
   const seen = new Set<string>()
   const hits: SecretHit[] = []
   for (const value of strings) {
     if (typeof value !== "string" || value.length < 8) continue
-    for (const pattern of SECRET_PATTERNS) {
+    for (const pattern of patterns) {
       const match = pattern.regex.exec(value)
       if (!match) continue
       const candidate = pattern.valueGroup === undefined ? match[0] : (match[pattern.valueGroup] ?? "")

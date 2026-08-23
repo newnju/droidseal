@@ -23,6 +23,7 @@ import { loadCustomRules, applyCustomRulesToProject } from "./custom-rules.ts"
 import { scanProjectPrivacyApis } from "./privacy-collection.ts"
 import { scanProjectStorageSecurity } from "./storage-security.ts"
 import { scanProjectSslBypass } from "./ssl-bypass.ts"
+import { mergeKeyFormats } from "./secret-scan.ts"
 import { scanProjectJsAudit } from "./js-audit.ts"
 import { scanProjectWebAudit } from "./web-audit.ts"
 import { scanProjectSdkMismatch } from "./sdk-model.ts"
@@ -964,7 +965,7 @@ export class Pipeline {
     const packerFingerprints = this.config.packerFingerprintsFile
       ? mergePackerFingerprints(await loadPackerFingerprints(this.config.packerFingerprintsFile))
       : KNOWN_PACKERS
-    const audit = await auditApk(artifact, toolchain, (message) => this.progress("apk-audit", message), mergeBehaviorRules(customBehaviorRules), scoreThresholds, packerFingerprints)
+    const audit = await auditApk(artifact, toolchain, (message) => this.progress("apk-audit", message), mergeBehaviorRules(customBehaviorRules), scoreThresholds, packerFingerprints, await mergeKeyFormats(this.config.keyFormatsFile))
     this.context.audit.findings.push(...audit.findings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [

@@ -7,6 +7,9 @@ export interface ExtractedEndpoint {
   url?: string
   host: string
   path?: string
+  // 端点深度（apkleaks 差距②）：路径段数 + 子域名级数
+  pathDepth?: number
+  subdomainLevel?: number
 }
 
 const URL_RE = /https?:\/\/[a-zA-Z0-9._~:/?#[\]@!$&'()*+,;=%-]+/g
@@ -41,7 +44,14 @@ export function extractEndpoints(strings: Iterable<string>): ExtractedEndpoint[]
       const parsed = new URL(url)
       if (BLOCKED_HOSTS.has(parsed.hostname)) continue
       const path = parsed.pathname !== "/" ? parsed.pathname : undefined
-      out.push({ url, host: parsed.hostname, ...(path ? { path } : {}) })
+      const hostLabels = parsed.hostname.split(".")
+      out.push({
+        url,
+        host: parsed.hostname,
+        ...(path ? { path } : {}),
+        ...(path ? { pathDepth: path.split("/").filter(Boolean).length } : {}),
+        ...(hostLabels.length >= 3 ? { subdomainLevel: hostLabels.length - 2 } : {}),
+      })
       if (out.length >= MAX) return out
     }
     for (const match of s.matchAll(DOMAIN_RE)) {
@@ -65,12 +75,19 @@ export function buildEndpointFindings(strings: Iterable<string>): Finding[] {
   const endpoints = extractEndpoints(strings)
   if (endpoints.length === 0) return []
   const samples = endpoints.slice(0, 10).map((e) => (e.url ?? e.host) + (e.path ?? "")).join("、")
+  // 端点深度统计（apkleaks 差距②）：子域名端点 + 深路径端点
+  const subdomains = endpoints.filter((e) => (e.subdomainLevel ?? 0) > 0).length
+  const deepPaths = endpoints.filter((e) => (e.pathDepth ?? 0) >= 3).length
+  const depthNote =
+    subdomains + deepPaths > 0
+      ? ` 深度：含 ${subdomains} 个子域名端点、${deepPaths} 个深路径（≥3 段）端点。`
+      : ""
   return [
     {
       severity: "info",
       code: "ENDPOINT_INVENTORY",
       title: `从 DEX 字符串池提取到 ${endpoints.length} 个端点（URL/域名/路径）`,
-      detail: `清单级提取（去重排序，不联网）：${samples}${endpoints.length > 10 ? "…" : ""}。供端点管理与攻击面人工核验。`,
+      detail: `清单级提取（去重排序，不联网）：${samples}${endpoints.length > 10 ? "…" : ""}。${depthNote}供端点管理与攻击面人工核验。`,
       recommendation: "核对端点清单；内部/测试端点不应出现在发布包，敏感端点建议服务端化或加密。",
       evidence: endpoints.slice(0, 5).map((e) => e.url ?? e.host).join(", "),
     },
