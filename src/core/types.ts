@@ -97,6 +97,8 @@ export interface PipelineConfig {
   packerFingerprintsFile?: string
   // 声明式污点规则文件(JSON:{ sources, sinks, sanitizers——字符串数组 })——与内置源/汇/清理合并。
   taintRulesFile?: string
+  // apkleaks 式密钥规则文件(JSON 数组:{ code, label, pattern, vendor?, confidence? })——与内置密钥格式库合并。
+  keyFormatsFile?: string
   // 恶意行为评分分级阈值(默认 high 60 / medium 30——score >= high 为 medium 严重度, >= medium 为 low)。
   maliciousScoreThresholds?: { high?: number; medium?: number }
   signing: SigningConfig

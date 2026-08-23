@@ -14,7 +14,7 @@ import { resolveArscFilePath } from "./arsc-model.ts"
 import { runProcess } from "./process.ts"
 import { buildPermissionFindings, type CustomPermission } from "./permissions-catalog.ts"
 import { buildPrivacyFindings } from "./privacy-collection.ts"
-import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
+import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey, type SecretPattern } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
 import { extractCalledMethods, extractCallGraph, callersOf } from "./dex-callgraph.ts"
 import { disassembleNamed } from "./dex-disassembler.ts"
@@ -411,7 +411,7 @@ export interface AxmlManifestAudit {
 // Parse AndroidManifest.xml directly from compiled AXML. The normalized dump
 // matches the subset consumed by the existing manifest auditors, so aapt and
 // direct-AXML modes share component, permission, and meta-data rules.
-export function auditManifestAxml(bytes: Uint8Array): AxmlManifestAudit {
+export function auditManifestAxml(bytes: Uint8Array, keyFormats?: readonly SecretPattern[]): AxmlManifestAudit {
   const tree = parseAxmlElements(bytes)
   const manifest = findAxmlElement(tree, "manifest")
   if (!manifest) throw new Error("AXML manifest root not found")
@@ -438,7 +438,7 @@ export function auditManifestAxml(bytes: Uint8Array): AxmlManifestAudit {
   ))
   findings.push(...detectMaliciousIndicators(parseUsesPermissions(xmlTree)))
   findings.push(...buildPrivacyFindings(parseUsesPermissions(xmlTree)))
-  findings.push(...metaDataSecretFindings(parseMetaDataValues(xmlTree), "MANIFEST"))
+  findings.push(...metaDataSecretFindings(parseMetaDataValues(xmlTree), "MANIFEST", keyFormats))
   return { findings, metadata, tree, xmlTree }
 }
 
@@ -555,8 +555,12 @@ export function parseMetaDataValues(xmlTree: string): Array<{ name: string; valu
 export function metaDataSecretFindings(
   entries: Array<{ name: string; value: string }>,
   codePrefix: "MANIFEST" | "SOURCE",
+  keyFormats?: readonly SecretPattern[],
 ): Finding[] {
-  const hits = scanStringsForSecrets(entries.map((entry) => `${entry.name}=${entry.value}`))
+  const hits = scanStringsForSecrets(
+    entries.map((entry) => `${entry.name}=${entry.value}`),
+    keyFormats,
+  )
   if (hits.length === 0) return []
   return [{
     severity: hits.some((hit) => hit.confidence === "confirmed" || hit.confidence === "high") ? "high" : "medium",
@@ -1398,6 +1402,7 @@ export async function auditApk(
   rules: readonly BehaviorRule[] = BUILTIN_BEHAVIOR_RULES,
   thresholds: MaliciousScoreThresholds = DEFAULT_SCORE_THRESHOLDS,
   fingerprints: readonly PackerFingerprint[] = KNOWN_PACKERS,
+  keyFormats?: readonly SecretPattern[],
 ): Promise<SecurityAudit> {
   onProgress?.("读取 APK ZIP 中央目录")
   const entries = await parseZipEntries(apkPath)
@@ -1411,7 +1416,7 @@ export async function auditApk(
   if (manifestBytes) {
     try {
       onProgress?.("直接解析 APK 二进制 Manifest (AXML)")
-      directManifest = auditManifestAxml(manifestBytes)
+      directManifest = auditManifestAxml(manifestBytes, keyFormats)
       Object.assign(metadata, directManifest.metadata)
       findings.push(...directManifest.findings)
       findings.push(...(await auditApkConfiguredXmlResources(
