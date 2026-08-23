@@ -23,6 +23,7 @@ import { loadCustomRules, applyCustomRulesToProject } from "./custom-rules.ts"
 import { scanProjectPrivacyApis } from "./privacy-collection.ts"
 import { scanProjectStorageSecurity } from "./storage-security.ts"
 import { scanProjectSslBypass } from "./ssl-bypass.ts"
+import { runDynamicVerification } from "./adb-bridge.ts"
 import { mergeKeyFormats } from "./secret-scan.ts"
 import { scanProjectJsAudit } from "./js-audit.ts"
 import { scanProjectWebAudit } from "./web-audit.ts"
@@ -1719,6 +1720,16 @@ export class Pipeline {
     this.context.toolchain = toolchain
     const detail: string[] = []
     let lastCommand: CommandResult | undefined
+
+    // adb 真机/模拟器动态验证（动态分析轻量形态——无设备跳过——失败关闭）
+    this.progress("verify", "adb 动态验证（真机/模拟器——可选）")
+    const dynamic = runDynamicVerification(artifact, this.context.audit.apkMetadata?.packageName, this.context.audit.findings)
+    if (dynamic.skipped) {
+      detail.push(`动态验证跳过：${dynamic.reason ?? "无 adb 设备"}（可选步骤——不影响静态审计）`)
+    } else {
+      this.context.audit.findings.push(...dynamic.findings)
+      detail.push(`动态验证：设备 ${dynamic.device}——新增 ${dynamic.findings.length} 条动态证据（静态+动态交叉）`)
+    }
 
     if (toolchain.zipalign.path) {
       this.progress("verify", "验证 ZIP 对齐")
