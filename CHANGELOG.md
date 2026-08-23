@@ -139,6 +139,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - APKHunt 差距 3 项：MASTG 逐项检查清单 + MASVS L1/L2 合规级别（`mastg-checklist.ts`——16 项 MASTG-* 检查项（存储/网络/加密/代码质量/平台交互）——finding 驱动的状态推导（需核验/未检查）+ 合规摘要——报告 `mastgChecklist` 字段）；PDF 报告导出（`scripts/generate-pdf-report.ts`——极简 PDF 1.4（门禁/发现统计/发现列表/MASTG 清单——纯 TS 零依赖））。
 - mobsfscan 差距 3 项：Semgrep YAML/JSON 式规则导入（`loadSemgrepRules`——`rules: - id` / `patterns: - pattern-regex` 提取 + cwe/owasp 列表解析——复用 Semgrep 生态规则）；CWE/OWASP 元数据字段（`CustomRule.cwe`/`owasp`——报告标准对齐——与 MASTG 互补）；MobSF 生态衔接（`scripts/export-mobsf-json.ts`——报告 → MobSF 兼容 JSON（应用信息/严重度统计/发现列表——供 MobSF 平台联动））。
 - DroidStatx 差距 2 项：权限风险评分 + 权限-数据流关联（`permission-risk.ts`——12 个敏感权限风险分 + 权限-源/汇映射——`PERMISSION_RISK_HIGH`（风险评分汇总）+ `PERMISSION_DATAFLOW_LINK`（交叉证据升级：声明敏感权限 + 数据流中使用——manifest 审计集成））；调用图可视化（`scripts/visualize-callgraph.ts`——调用图（含接口分派）→ Mermaid flowchart（.mmd——节点转义 + 有界 500 边——供渲染与人工核验））。
+- adb 真机/模拟器桥接（动态分析轻量验证）：`adb-bridge.ts`——设备检测（真机/模拟器统一——`adb devices` + emulator-* 识别）/ 安装 + 启动 / logcat 敏感明文日志捕获（`DYNAMIC_LOG_LEAK`）/ dumpsys 运行时状态（`DYNAMIC_DEBUGGABLE`）/ 静态+动态交叉证据升级——失败关闭（无设备跳过——不影响静态审计）——pipeline verify 步骤集成。
 
 #### 文档
 
