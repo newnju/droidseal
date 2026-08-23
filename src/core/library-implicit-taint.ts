@@ -61,10 +61,10 @@ export function scanImplicitFlow(source: string): Array<{ line: number; conditio
     if (!/^\s*(if|while|for|switch)\s*\(/.test(lower)) continue
     const sourcePattern = IMPLICIT_FLOW_SOURCES.find((s) => lower.includes(s))
     if (!sourcePattern) continue
-    // 分支内（后续行）的汇调用
-    for (let j = i + 1; j < lines.length && j < i + 15; j += 1) {
+    // 分支内（当前行或后续行）的汇调用——含单行 if 形态
+    for (let j = i; j < lines.length && j < i + 15; j += 1) {
       const branchLine = lines[j]!
-      if (/^\s*}/.test(branchLine)) break
+      if (j > i && /^\s*}/.test(branchLine)) break
       const sink = LIBRARY_SINKS.find((s) => branchLine.toLowerCase().includes(s))
       if (sink) {
         matches.push({ line: j + 1, condition: sourcePattern, sink, snippet: branchLine.trim().slice(0, 120) })

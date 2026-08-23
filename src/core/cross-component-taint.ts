@@ -16,11 +16,11 @@ export function scanCrossComponentTaint(source: string): Array<{ line: number; i
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!
     const lower = line.toLowerCase()
-    // Intent 携带源:intent.putExtra(key, 源) / Intent().putExtra(...)
-    const putMatch = /([A-Za-z_][A-Za-z0-9_]{0,3}intent[A-Za-z0-9_]*)\s*\.\s*putextra\([^)]*/.exec(line)
+    // Intent 携带源:intent.putExtra(key, 源) / Intent().putExtra(...)——任意变量(含单字符 i/intent 命名,忽略大小写)
+    const putMatch = /([A-Za-z_][A-Za-z0-9_]{0,})\s*\.\s*putextra\([^)]*/i.exec(line)
     if (putMatch && INTENT_SOURCES.some((s) => lower.includes(s))) {
       taintedIntents.add(putMatch[1]!)
-      continue
+      // 不 continue——同一行的 startActivity 等也要检查(单行形态)
     }
     // 跨组件汇:startActivity/Service/Broadcast/Bind(intent)
     for (const intent of taintedIntents) {
