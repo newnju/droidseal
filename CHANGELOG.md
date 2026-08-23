@@ -10,136 +10,67 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ### Added
 
-#### 审计与加固（静态审计扩展 / 加固能力）
+#### 静态审计扩展
 
-- Native 加固检查深化：`.so` 未剥离符号表（`SO_UNSTRIPPED_SYMBOLS`）、含调试信息（`SO_DEBUG_INFO_PRESENT`）、疑似包含凭据格式字符串（`SO_CREDENTIAL_FORMAT`）；已剥离时给 `SO_STRIPPED_OK` 确认信号。
-- 资源名混淆：Mode C 值级保守混淆（颜色 `#RRGGBB`→`#AARRGGBB`、维度 `Ndp`→`Ndip`，视觉不变）+ Mode D 目录保留式路径混淆（`res/drawable-hdpi/ic.png`→`res/a/a.png`，`pathMode: "flatten" | "scramble"` 选项）。
-- ARSC 值级审计新增 `ARSC_VALUE_TECHNICAL` finding（key_/id_/token_ 等技术形态字符串值识别，仅审计不改写）。
-- 新增打包器/保护器指纹识别（`PACKER_DETECTED`）：纯 TypeScript 指纹表（腾讯乐固/梆梆/爱加密/360 加固/DexProtector/DexGuard/阿里聚安全/娜迦/顶象/APKProtect/通付盾），提示静态审计可见性降级与商业加固核验，失败关闭。
-- DEX 字符串安全子集接入主线：`DEX_STRING_SECURITY` finding（字符串池级可加密敏感串估计）衔接 `--from-audit` 加密桩生成。
-- DEX 头结构只读校验（`DEX_HEADER_MALFORMED`，失败关闭）。
-- 源码凭据格式启发式：AWS/Google/GitHub 令牌与 PEM 私钥块检测（`SOURCE_CREDENTIAL_FORMAT_*` / `SOURCE_PRIVATE_KEY_BLOCK`）。
-- Web JS 处理支持 webpack 动态 import chunk 发现（白名单内懒加载产物纳入处理，有界单遍、容错解码）。
-- DEX 方法/类级混淆受控子集：设计文档（`docs/dex-method-obfuscation-plan.md`，含真机验证矩阵与失败关闭边界）+ 白名单映射生成器（`scripts/generate-method-obfuscation-plan.ts`）。
-- 源码侧字符串加密桩生成器（`scripts/generate-string-crypto-stub.ts`）：编译期加密、运行期解密，DEX 池不含明文敏感串；支持 `--from-audit` 自动提取审计发现的敏感串。
-- 报告修复包建议动态化：`proguard-rules.suggestion.md` 与 `manifest-permissions.suggestion.md` 现带本次审计发现的具体项，前置于通用指引。
+- Native(.so) 审计：未剥离符号（`SO_UNSTRIPPED_SYMBOLS`）/ 调试信息（`SO_DEBUG_INFO_PRESENT`）/ 凭据格式（`SO_CREDENTIAL_FORMAT`）/ 已剥离确认（`SO_STRIPPED_OK`）/ SO 加壳（`SO_PACKED`——UPX/jiagu 字节级扫描）。
+- DEX 审计：字符串安全子集（`DEX_STRING_SECURITY`——衔接 `--from-audit` 加密桩）/ 头结构校验（`DEX_HEADER_MALFORMED`——失败关闭）。
+- 源码审计：弱加密（`SOURCE_WEAK_CRYPTO`——AES 默认 ECB/DES/3DES/硬编码 IV）/ SSL 证书校验绕过（`SOURCE_SSL_BYPASS`——自定义 TrustManager/空 checkServerTrusted/ALLOW_ALL）/ 语义漏洞（`SOURCE_SEMANTIC_VULN`——SQL 注入/命令执行汇）/ 凭据格式启发式（AWS/Google/GitHub 令牌/PEM 私钥）/ URL/域名/端点提取（`ENDPOINT_INVENTORY`——DEX 字符串池 URL/域名/路径——含路径深度与子域名级数）。
+- JS/Web 审计：JS 硬编码密钥/危险 API（innerHTML/eval/动态脚本）/弱加密（MD5/SHA1）——`SOURCE_JS_*`；Web 明文表单/内联 XSS 事件处理器/Web 存储敏感数据——`SOURCE_WEB_*`；自动反混淆（eval/atob 编码层自动解码——JS 审计前预处理）。
+- 恶意指标：`MALICIOUS_INDICATOR`（危险权限组合——短信劫持/屏幕覆盖+无障碍/设备管理+短信——info 级清单提示只报告）。
 
-#### 发布工程化（门禁 / 证据 / SBOM / CI / 双模式）
+#### 污点分析（19 项全量）
 
-- 新增发布预检脚本（`scripts/preflight.ts`）：一键运行 type-check / test / release-check 并逐项汇总。
-- 发布流水线 CI 集成：CI verify 任务改用预检脚本，门禁与本地完全一致。
-- 发布门禁新增加固覆盖度提示（`HARDENING_COVERAGE_LOW`）：核心审计/防护/验证步骤未真实执行时给 review 提示（不阻断）。
-- 新增修复包复测闭环（`scripts/re-test.ts`）：`--before`/`--auto` 对比消除/新增/剩余 findings，并输出门禁建议。
-- 新增经典 / 测试与学习双模式：经典模式清理中间 APK 只留最终 release 与报告；测试与学习模式（TUI 顶部切换按钮或 `--test-learning`）保留全部中间产物。
-- 报告新增「加固成效」节：产物前后大小对比、DEX/SO 敏感项计数与加固覆盖度评分。
-- AAB 输入显式检测：`AAB_INPUT_NOT_SUPPORTED`（含 bundletool/Gradle 转换指引）。
-- 新增非交互流水线测试 runner（`scripts/test-runner.ts`）：apk/project × skip/existing + `--web`/`--arsc`/`--test-learning`，CI 可用。
+- 源/汇库：源 6→14（设备标识/位置/剪贴板/账户/接收侧（getIntent/getData/query））、汇 13→15（文件写入）。
+- 入口点：生命周期回调（`SOURCE_LIFECYCLE_ENTRY`）/ 动态回调注册（`SOURCE_CALLBACK_ENTRY`——ClickListener/Handler/AsyncTask 等 9 类）。
+- 传播：跨函数（`SOURCE_CROSS_FUNCTION_TAINT`）/ 跨组件·IPC（`SOURCE_CROSS_COMPONENT_TAINT`）/ 库间（`SOURCE_LIBRARY_TAINT`）/ 隐式流（`SOURCE_IMPLICIT_FLOW`）/ 静态字段（`SOURCE_STATIC_TAINT`）/ 集合元素（`SOURCE_COLLECTION_TAINT`）/ 对象字段（`SOURCE_OBJECT_FIELD_TAINT`）/ 常量值（`SOURCE_CONSTANT_VALUE`）。
+- 语义：sanitizer 清理建模（加密/编码后污点清除——降误报）/ 反射调用静态解析（`SOURCE_REFLECTION_TARGET`）/ SDK 版本化模型（`SDK_LEVEL_API_MISMATCH`）/ 调用图接口分派近似（`expandInterfaceDispatch`）/ 污点路径报告（`taintPaths`）。
+- 规则化：声明式污点规则（`taintRulesFile`——自定义 source/sink/sanitizer 合并到扫描）。
 
-#### 运行时防护（反调试 stub）
+#### 行为分析与调用图
 
-- 检测标记扩展（magisk/zygisk/lspd/riru/Sui），并新增五类只报告信号：`checkApkIntegrity`（完整性哈希自检）、`checkApkSignature`（签名指纹自检，多指纹轮换）、`checkEmulator`（模拟器特征）、`checkVpnProxy`（VPN/代理）、`checkClockAnomaly`（时钟异常，30s 阈值）。
-- 新增 `signalsToJson`：把全部检测信号汇总为 JSON，供服务端协作上报（只报告不阻断）。
-- 接入指南补充「完整性自检定期复查」「服务端协作上报」与 `signalsToJson` 上报示例。
+- 行为规则引擎（内置 10 条恶意行为规则）+ 加权恶意评分（`MALICIOUS_SCORE` 0-100 归一化）+ 行为规则文件加载（`behaviorRulesFile`）+ 评分阈值可配置（`maliciousScoreThresholds`）。
+- DEX 调用图提取（invoke-kind 指令解析）/ 调用链关联（行为证据带调用方）/ 调用图导出；反混淆辅助（hex/base64/URL 三编码解码匹配）。
+
+#### 加固与防护
+
+- 打包器/混淆器指纹（`packers.ts` 12→27→33 条——商业加固壳/混淆器——regex 型 + version/author 元数据 + 指纹规则文件加载（`packerFingerprintsFile`））。
+- 资源名混淆：Mode C 值级保守混淆（颜色 #RRGGBB→#AARRGGBB、维度 Ndp→Ndip，视觉不变）+ Mode D 目录保留式路径混淆（`pathMode`）。
+- ARSC 值级审计（`ARSC_VALUE_TECHNICAL`）+ 资源条目对象模型（resources.arsc 的 type chunk 解析 → 类型/条目树——146 类型）。
+- DEX 方法重命名工具（新建短名串 + 改该 method_id 的 name_idx（调用点自动跟随）——重算 adler32/SHA-1——引用完整性验证——失败关闭）+ 白名单映射生成器（`--from-audit` 自动提取疑似反射/注解类）。
+- 字符串加密桩（编译期加密/运行期解密——DEX 池不含明文敏感串——`--from-audit`/`--verify`/`--rotate` 密钥轮换）+ assets 资源轻量加密（`--gen-reader` 解密器/`--verify` 回程验证）。
+- 反调试 stub：magisk/zygisk/lspd/riru/Sui 检测 + 五类只报告信号（完整性自检/签名指纹自检/模拟器特征/VPN·代理/时钟异常）+ `signalsToJson` 服务端协作上报 + `checkFridaInjection`（/proc/self/maps 分层检测）。
+
+#### 发布工程化
+
+- 发布预检（`preflight.ts`——type-check/test/release-check 4 门禁 + `--json` 机器可读 + `--skip-test`）/ 修复包复测闭环（`re-test.ts`——`--before`/`--auto`/`--json`/`--fail-on-remaining`/`gateStatus` 门禁非零退出）。
+- 经典 / 测试与学习双模式（经典模式清理中间 APK 只留最终 release；`--test-learning` 保留全部中间产物）。
+- 加固成效量化（产物前后大小对比/DEX·SO 敏感项计数/覆盖度评分——7 维含 nativeAudit）+ 报告历史对比（`previousRun`/`previousGate`——schemaVersion 8）+ 门禁置信度感知（pass/review/block）+ 加固覆盖度阈值（`minimumHardeningCoverage`）。
 
 #### 供应链
 
-- 离线已知漏洞比对（`SUPPLYCHAIN_KNOWN_VULNERABILITY`）：检测到的 SDK 与内置精简快照比对，不联网、清单级提示。
-- 快照补 `fixedIn`/`affected` 版本区间提示，建议自动带上修复版本。
-- 供应链快照扩充至 8 条（gson/commons-compress/okio 等）；打包器指纹扩充至 12 个。
-- 新增快照/指纹一致性校验（`scripts/known-vuln-check.ts`）与数据表一致性测试（CVE/包名/marker 唯一性、字段完整性）。
+- 离线已知漏洞比对（`SUPPLYCHAIN_KNOWN_VULNERABILITY`——内置快照 8 条——`fixedIn`/`affected` 版本区间——不联网清单级提示）+ 数据表一致性校验（`known-vuln-check`——CVE/包名/marker 唯一性 + `--suggest`）。
 
-#### 报告与门禁
+#### 报告与标准对齐
 
-- 报告「执行步骤」段新增真实处理/跳过计数说明（“已处理”含跳过与失败回退，真实处理成功单独列出）。
-- 发布门禁置信度感知（pass/review/block）与修复包 4 模板（network_security_config / backup_rules / manifest 片段 / dex-string-security 计划）。
+- HTML 自包含报告（TUI 视觉）/ SARIF 2.1.0 导出（GitHub Code Scanning 可导入）/ 极简 PDF 报告（纯 TS 零依赖）/ MASTG 逐项检查清单 + MASVS L1/L2 合规级别（16 项 + finding 驱动的状态推导 + 合规摘要）/ MASTG 规则映射 / CWE·OWASP 元数据 / POC 验证命令建议（EXPORTED 组件/深链/备份的 adb/drozer 验证命令）/ 反编译核验建议 / 历史趋势 / PR 评论生成 / MobSF 兼容 JSON 导出。
 
-#### 工具与脚本
+#### 可编程性与工具链
 
-- 本地 REST API 服务（`scripts/serve.ts`）：127.0.0.1 + 可选 Bearer token——`POST /run` / `GET /runs` / `GET /runs/:id` / `GET /runs/:id/findings`（severity 筛选）/ `GET /reports/<path>` / `GET /health`，本地优先；Web UI 已移除，批量/CI 集成使用 REST。
-- assets 资源轻量加密工具（`scripts/encrypt-assets.ts`）：构建期加密 + `manifest.json` 生成（与字符串加密桩同模式）。
-- DEX 方法混淆设备验证清单生成器（`scripts/generate-device-checklist.ts`）：7 项真机矩阵清单。
-- 签名指纹管理脚本（`scripts/signing-fingerprints.ts`）：keytool 指纹清单 + `--expect` 多指纹校验，密码仅从环境变量读取。
-- `encrypt-assets.ts` 新增 `--gen-reader`：生成 `AssetsReader.kt` 解密器（嵌入密钥与清单，运行时按清单解密 `.enc`，源码接入完整化）。
-- `preflight.ts` 新增 `--json`（门禁结果机器可读输出）并集成 `known-vuln-check`（数据表一致性门禁，共 4 项）。
-- `generate-string-crypto-stub.ts` 新增 `--verify`：密文回程验证（每个密文解密回原文，失败关闭）。
-- `re-test.ts` 新增 `--json`：复测结果机器可读（消除/新增/剩余 + `gateSuggestion` 门禁建议）。
-- `encrypt-assets.ts` 新增 `--verify`：密文回程验证（每个文件解密回原文，失败关闭）。
-- `generate-method-obfuscation-plan.ts` 新增 `--from-audit`：从报告自动提取疑似反射/注解类 → 白名单 `#*` 整类保留建议。
-- 发布门禁新增可配置加固覆盖度阈值（`minimumHardeningCoverage`）。
-- 报告新增 `previousRun` 历史对比字段（与上一次运行的发现对比：消除/新增/剩余）。
-- TUI 运行完成新增门禁横幅（发现数 + 发布门禁状态 + 原因 code 数）。
-- `known-vuln-check.ts` 新增 `--suggest`：新条目格式模板提示。
-- 报告 Markdown 新增「与上次运行对比」节（消除/新增/剩余 + 上次门禁状态）。
-- TUI 运行完成门禁横幅新增严重度统计（critical/high 计数）；侧栏可选步骤（Web JS/资源名混淆）未开启时行内标注「可选未开启」。
-- `re-test.ts` 新增 `--fail-on-remaining`：剩余 finding 未消除时非零退出（CI 门禁）。
-- `known-vuln-check.ts` 新增 affected 字段格式校验（非空字符串或省略）。
-- i18n 补键：阶段分组头（准备/审计/加固/发布）与可选步骤提示的中英文键（TUI 语言切换即时生效）。
-- `preflight.ts` 新增 `--skip-test`：CI 快速门禁（跳过慢测试门禁）。
-- 报告门禁原因的 Markdown 新增严重度标注（`[严重度 X]`）。
-- `known-vuln-check.ts` 新增 fixedIn 字段格式校验。
-- CI 工作流 verify 门禁改用 `preflight.ts --json`（机器可读输出入 CI 日志）。
-- `re-test.ts` 新增门禁状态输出（`gateStatus`：剩余 finding 为 block，否则 pass）。
-- TUI 门禁横幅消息 i18n 化（`t()` 支持参数化，`gateBannerFindings` 中英文键，语言切换即时生效）。
-- `re-test.ts` 门禁状态 `block` 时非零退出（gateStatus 门禁，CI 统一）。
-- `generate-string-crypto-stub.ts` 新增 `--rotate`：密钥轮换（强制新密钥，旧密文失效需全量重新生成）。
-- 报告 schemaVersion 升版至 8（`previousRun`/`previousGate` 字段的结构版本化）。
-- `known-vuln-check.ts` 输出严重度分布统计。
-- 报告加固成效新增 `nativeAudit` 覆盖维度（6 → 7 维）。
-- TUI 完成消息 i18n 补全：已处理/跳过原因消息中英文键（`gateBannerSummary`/`gateBannerSkipped`）。
-- `preflight.ts --json` 输出失败门禁的错误尾部（`tail` 字段，CI 消费）。
-- `generate-method-obfuscation-plan.ts` 新增 `--verify`：映射文件格式校验（失败关闭）。
-- 报告 remediation 新增 `suggestionCount`（修复包建议数统计）。
-- 新增服务端协作上报协议规范（`docs/server-report-protocol.md`：字段表/决策矩阵/抗滥用/接入示例）。
-- TUI 底部新增快捷键提示（Enter 重试失败步骤 · Ctrl+C 复制不退出）。
+- 深度可编程解析：指令迭代器 API（逐指令 opcode/mnemonic/operands）/ 内置反汇编器（smali-like 方法级——行为 finding 附反汇编片段）/ XREF 交叉引用（方法/字段被引用映射）/ 类级对象模型（类→方法→指令对象树——export-ir `classes` 深化）/ 任意 DEX 修改 API（invoke 方法索引/const-string 字符串索引补丁）/ 交互式分析 REPL / 可编程 IR 导出（JSON IR 供第三方分析）。
+- 规则体系：JSON 正则自定义规则（`customRulesFile`）/ Semgrep YAML·JSON 规则导入（`loadSemgrepRules`——pattern-regex 提取 + cwe/owasp 列表解析）/ 精确模式（`exact`——词边界整词匹配降误报）/ 规则测试框架（正/负用例 + CI 退出码）/ autofix 自动修复（安全替换 + 备份 .autofix.bak——失败关闭）/ suppression 注释忽略（`droidseal-ignore` 行级忽略——集成核心扫描）。
+- 密钥格式库：31 种多平台密钥格式（Twilio/SendGrid/Discord/OpenAI/Gemini/Anthropic/GitLab 等）+ 厂商元数据（`vendor`）+ apkleaks 式密钥规则导入（`keyFormatsFile`）。
+- 权限：权限风险评分（`PERMISSION_RISK_HIGH`——12 个敏感权限风险分）+ 权限-数据流关联（`PERMISSION_DATAFLOW_LINK`——声明敏感权限 + 数据流中使用——交叉证据升级）+ 调用图可视化（Mermaid flowchart）。
 
-- 开发路线精简：删除已实现且已记录的条目，保留未实现 3 项（① DEX 方法混淆改写 / ② 字符串值·布局名保守混淆 / ④ Frida·maps 分层检测），并标注「已实现并记录于 [1.0.1]」。
-- ARSC 字符串值保守混淆：技术标识符形态字符串值（key_/id_/token_/api_/secret_ 前缀）改写为短标识符（失败关闭，运行时按值消费会失效——仅内部技术标记）。
-- 反调试 stub 新增 `checkFridaInjection`：`/proc/self/maps` 的 Frida 特征分层检测（只报告不阻断，失败关闭），`signalsToJson` 新增 `fridaInjection` 字段。
-- 新增 DEX 方法重命名工具（`scripts/apply-method-obfuscation.ts`）：按白名单映射（`method-obfuscation.map`）重写 DEX 方法名——新建短名串 + 改该 `method_id` 的 `name_idx`（调用点自动跟随）——重算 adler32 校验和与 SHA-1 签名——引用完整性验证（失败关闭）；构建期工具（源码接入模式，不事后改写未知 APK）。
-- 新增 URL/域名/端点提取（`ENDPOINT_INVENTORY`）：从 DEX 字符串池提取 URL/域名/路径端点（apkleaks 式，去重排序有界，失败关闭）。
-- 新增弱加密算法检测（`SOURCE_WEAK_CRYPTO`）：AES 默认 ECB / AES-ECB / DES / 3DES / 硬编码 IV 的源码模式匹配（失败关闭）。
-- 签名审计新增证书有效期提示（`SIGNING_CERT_EXPIRED`/`SIGNING_CERT_EXPIRING`）：证书过期（medium）与临近 30 天（low）提示。
-- 新增自定义规则文件加载（`customRulesFile` 配置）：JSON 正则规则（source/dex/all scope），审计时应用（失败关闭）。
-- OWASP MASTG 规则映射（中期）：常见发现映射到 MASTG 类别参考，报告新增 JSON `mastg` 字段与 Markdown「OWASP MASTG 参考」节。
-- 反编译核验建议（中期）：复杂发现（SOURCE_/DEX_/PACKER_ 等）提示 JADX/apktool 反编译人工核验，报告新增 JSON 字段与 Markdown 节。
-- HTML 报告生成器（中期）：`scripts/generate-html-report.ts` 从报告 JSON 生成自包含 HTML（门禁横幅/发现表格/步骤/加固成效/MASTG/反编译建议/上次对比——TUI 视觉）。
-- 多扫描历史趋势（中期）：最近 10 次运行的门禁/发现数序列，报告新增 JSON `historyTrend` 与 Markdown「历史趋势」表。
-- 动态分析外部衔接指南（长期）：`docs/dynamic-analysis-bridge.md`——Frida/drozer/模拟器配合静态审计的按发现类型验证建议（保持本地优先，不内置动态）。
-- 平台支持矩阵（长期）：`docs/platform-matrix.md`——当前 Android 矩阵与决策建议。
-- 恶意指标轻量提示（长期）：`MALICIOUS_INDICATOR`——危险权限组合（短信劫持/屏幕覆盖+无障碍/设备管理+短信）清单级提示（info，失败关闭，不判定恶意）。
-- DEX 调用图提取（`dex-callgraph.ts`）：解析 invoke-kind 指令 → 被调 类.方法（有界、失败关闭）。
-- 行为规则引擎（`behavior-rules.ts`）：调用图匹配内置 10 条恶意行为规则（短信劫持/键盘记录/设备管理滥用/截屏/录音等）→ `MALICIOUS_BEHAVIOR` finding + 加权恶意评分 `MALICIOUS_SCORE`（0-100，归一化）。
-- 反混淆辅助：hex/base64 编码串解码后与行为规则匹配（补充命中，失败关闭）。
-- 报告新增「行为分析（恶意行为特征）」节（JSON `behaviorAnalysis` + Markdown）。
-- 行为规则文件加载（`behaviorRulesFile` 配置）：外部 JSON 行为规则与内置库合并（自定义优先，失败关闭）。
-- 恶意行为评分分级阈值可配置（`maliciousScoreThresholds`：high/medium，默认 60/30）。
-- DEX 调用链关联：`extractCallGraph`（解析 class_data 的 code_off → 调用方→被调 映射），行为 finding 证据带调用方（失败关闭）。
-- 调用图导出工具（`scripts/export-callgraph.ts`）：直接 DEX 或 `--apk` 模式导出调用图 JSON。
-- 反混淆辅助深化：URL 编码（%XX）解码匹配（与 hex/base64 并列为三编码）。
-- SSL 证书校验绕过语义检测（`SOURCE_SSL_BYPASS`）：自定义 TrustManager / 空 `checkServerTrusted` / ALLOW_ALL 主机名校验器（失败关闭）。
-- 语义漏洞模式库（`SOURCE_SEMANTIC_VULN`）：敏感数据流入 SQL 注入（execSQL/rawQuery/compileStatement）/ 命令执行（Runtime.exec/ProcessBuilder）汇的检测（medium，区别于 `SOURCE_DATAFLOW`）。
-- 目录/库级批量（`batch-run --dir`）：扫描目录下 `*.apk` 自动建清单批量运行。
-- 加固壳/混淆器指纹库扩充（`packers.ts` 12 → 27 条）：新增网易易盾/百度加固/腾讯御安全/360 运行时/梆梆变体/通用壳/StringFog 字符串加密/ProGuard 混淆特征/ApkTool 重打包等。
-- 指纹规则文件加载（`packerFingerprintsFile` 配置）：外部 JSON 指纹与内置库合并（marker 去重，自定义优先，失败关闭）。
-- SO 级加壳特征检测（`SO_PACKED`）：UPX / jiagu 等加壳标记的字节级扫描（elf-scan，失败关闭）。
-- regex 型指纹支持：指纹可含 `regex`（marker 或 regex 至少一——精确匹配），外部规则文件校验 regex 合法性（失败关闭）。
-- 指纹元数据：`version`/`author`/`source` 可选字段（外部规则文件可带，finding 按需展示版本与规则作者）。
-- 混淆器覆盖扩充（`packers.ts` 27 → 33 条）：新增 AndResGuard / BlackObfuscator / Obfuscapk / Allatori / Zelix KlassMaster / DashO 等混淆器指纹。
-- POC 验证命令建议（`poc-commands.ts` + 报告 `pocCommands`/「POC 验证命令建议」节）：对高风险发现（EXPORTED 组件/备份/可调试/深链）生成可执行 adb/drozer 验证命令，带可验证性标记与教育性说明（失败关闭，衔接 `docs/dynamic-analysis-bridge.md`）。
-- 污点分析深化（JAADAS 差距）：污点源/汇库扩充（设备标识/位置/剪贴板/账户源、文件写入汇——源 6→14、汇 13→15）；生命周期回调入口点（`SOURCE_LIFECYCLE_ENTRY`）；sanitizer 清理建模（加密/编码后污点清除——降误报）；调用图接口分派近似（`expandInterfaceDispatch`）；污点路径报告（报告 `taintPaths`/「污点数据流路径」节）。
-- 污点分析完整版（JAADAS 差距）：接收侧源（Intent/广播/ContentProvider 的 `getIntent`/`getData`/`query` 等）；动态回调注册入口（`SOURCE_CALLBACK_ENTRY`——ClickListener/Handler/AsyncTask 等 9 类）；SDK 版本化 API 模型（`SDK_LEVEL_API_MISMATCH`——API 引入版本 vs minSdk）；静态字段污点（`SOURCE_STATIC_TAINT`——项目级跨文件追踪）；集合元素污点（`SOURCE_COLLECTION_TAINT`——put/add → get → 汇）。
-- 污点分析进阶（JAADAS 差距 9 项）：跨组件/跨进程 Intent 数据流（`SOURCE_CROSS_COMPONENT_TAINT`——putExtra 源 → 组件/服务/广播/绑定）；反射调用静态解析（`SOURCE_REFLECTION_TARGET`——Class.forName/getMethod 目标提取）；跨函数污点传播（`SOURCE_CROSS_FUNCTION_TAINT`——参数边界）；常量值分析 + 对象字段污点（`SOURCE_CONSTANT_VALUE`/`SOURCE_OBJECT_FIELD_TAINT`——敏感字面量间接持有 + 实例字段）；库间污点 + 隐式流（`SOURCE_LIBRARY_TAINT`/`SOURCE_IMPLICIT_FLOW`——库方法返回值 + 控制流污点）；可编程 IR（`scripts/export-ir.ts`——JSON IR 导出供第三方分析）。
-- JAADAS 差距 19 项全量实现并实效验证：污点/数据流/语义/建模四大功能面穷尽核对无遗漏；新增检测器逐项冒烟验证（修复正则大小写/单字符变量/单行分支/off-by-one 等 7 处后全部命中合成样本——确认实际发挥作用）。
-- Androguard 深度可编程解析（⑤⑥⑦⑧⑨）：指令迭代器 API（`dex-instructions.ts`——逐指令 opcode/mnemonic/operands——关键指令助记符）；内置反汇编器（`dex-disassembler.ts`——smali-like 方法级输出——行为 finding 附反汇编片段——替代外部 jadx 的内置形态）；XREF 交叉引用（`xref.ts`——方法/字段被引用映射——`referencesOf`）；类级对象模型（`dex-class-model.ts`——类→方法→指令对象树——export-ir 的 `classes` 深化（schemaVersion 2））；交互式分析 REPL（`scripts/analyze-repl.ts`——load/classes/method/xref/exit）。
-- Androguard 剩余差距（②③）：任意 DEX 修改 API（`dex-patch.ts`——invoke 方法索引 / const-string 字符串索引的指令级补丁——真 DEX 字节修改验证）；资源条目对象模型（`buildArscResourceModel`——resources.arsc 的 type chunk 解析 → 类型/条目树——真 ARSC 解析出 146 类型）。
-- Semgrep 新差距 5 项：声明式污点规则（`taintRulesFile`——自定义 source/sink/sanitizer 合并到扫描）；autofix 自动修复（`autofix.ts` + `scripts/apply-autofix.ts`——安全替换 + 备份 .autofix.bak——失败关闭）；suppression 注释忽略（`droidseal-ignore` 行级忽略——集成核心扫描）；规则测试框架（`scripts/test-rules.ts`——正/负用例验证 + CI 退出码）；PR 注释生成（`scripts/generate-pr-comment.ts`——报告 → PR 评论 Markdown——CI 发布）。
-- Semgrep 剩余差距 4 项：SARIF 2.1.0 报告导出（`scripts/generate-sarif.ts`——CI 生态标准——GitHub Code Scanning 可导入）；自定义规则精确模式（`exact: true`——词边界整词匹配——降误报）；JS 资源审计（`js-audit.ts`——混合应用 JS 的硬编码密钥/危险 API（innerHTML/eval/动态脚本）/弱加密（MD5/SHA1）——`SOURCE_JS_*`）；规则生态示例集（`docs/rule-examples.md`——社区规则风格 7 条示例）。
-- SUPER 差距 3 项：并行扫描（服务端允许并发运行（每个 run 独立目录）+ `batch-run --parallel N` 并发池）；Web/混合应用审计（`web-audit.ts`——HTML 明文表单/内联 XSS 事件处理器/Web 存储敏感数据——`SOURCE_WEB_*`）；自动反混淆（`obfuscation-decode.ts`——eval/atob 编码层自动解码——JS 审计前预处理）。
-- apkleaks 差距 4 项：密钥格式库扩充（`secret-scan.ts`——8 → 31 种多平台密钥格式（Twilio/SendGrid/Discord/OpenAI/Gemini/Anthropic/GitLab 等）+ 厂商元数据（`vendor`——报告分类与针对性提示））；端点深度提取（`endpoint-extract.ts`——`pathDepth`/`subdomainLevel` + 子域名/深路径端点统计）；apkleaks 式密钥规则集导入（`keyFormatsFile`——自定义厂商/正则文件合并到密钥格式库——校验失败关闭）。
-- APKHunt 差距 3 项：MASTG 逐项检查清单 + MASVS L1/L2 合规级别（`mastg-checklist.ts`——16 项 MASTG-* 检查项（存储/网络/加密/代码质量/平台交互）——finding 驱动的状态推导（需核验/未检查）+ 合规摘要——报告 `mastgChecklist` 字段）；PDF 报告导出（`scripts/generate-pdf-report.ts`——极简 PDF 1.4（门禁/发现统计/发现列表/MASTG 清单——纯 TS 零依赖））。
-- mobsfscan 差距 3 项：Semgrep YAML/JSON 式规则导入（`loadSemgrepRules`——`rules: - id` / `patterns: - pattern-regex` 提取 + cwe/owasp 列表解析——复用 Semgrep 生态规则）；CWE/OWASP 元数据字段（`CustomRule.cwe`/`owasp`——报告标准对齐——与 MASTG 互补）；MobSF 生态衔接（`scripts/export-mobsf-json.ts`——报告 → MobSF 兼容 JSON（应用信息/严重度统计/发现列表——供 MobSF 平台联动））。
-- DroidStatx 差距 2 项：权限风险评分 + 权限-数据流关联（`permission-risk.ts`——12 个敏感权限风险分 + 权限-源/汇映射——`PERMISSION_RISK_HIGH`（风险评分汇总）+ `PERMISSION_DATAFLOW_LINK`（交叉证据升级：声明敏感权限 + 数据流中使用——manifest 审计集成））；调用图可视化（`scripts/visualize-callgraph.ts`——调用图（含接口分派）→ Mermaid flowchart（.mmd——节点转义 + 有界 500 边——供渲染与人工核验））。
-- adb 真机/模拟器桥接（动态分析轻量验证）：`adb-bridge.ts`——设备检测（真机/模拟器统一——`adb devices` + emulator-* 识别）/ 安装 + 启动 / logcat 敏感明文日志捕获（`DYNAMIC_LOG_LEAK`）/ dumpsys 运行时状态（`DYNAMIC_DEBUGGABLE`）/ 静态+动态交叉证据升级——失败关闭（无设备跳过——不影响静态审计）——pipeline verify 步骤集成。
+#### 运行时服务与批量
+
+- REST API 服务（`serve.ts`——并发运行 + 可选 Bearer token——POST /run / GET /runs / GET /reports / GET /health——本地优先）。
+- 批量运行（`batch-run`——manifest.json + `--dir` 目录模式 + `--parallel N` 并发池）。
+- adb 真机/模拟器动态验证（设备检测统一/安装启动/logcat 敏感明文日志（`DYNAMIC_LOG_LEAK`）/dumpsys 运行时状态（`DYNAMIC_DEBUGGABLE`）——静态+动态交叉证据升级——无设备跳过失败关闭）。
+- 工具安装引导（`setup-tools`——用户级隔离安装 + 固定版本组合 + sdkmanager 许可预接受 + 失败关闭）+ 非交互流水线测试 runner。
+
+#### TUI 与 i18n
+
+- 入口按钮（一键/分步/诊断——一键置首）/ 门禁横幅（发现数 + 严重度统计 + 原因 code）/ 阶段分组侧栏（可选步骤「可选未开启」标注）/ 快捷键提示 / i18n 完整中英文键（`t()` 参数化——语言切换即时生效）。
 
 #### 文档
 
@@ -149,8 +80,6 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 ### Fixed
 
 - 修复传递依赖已知漏洞：`brace-expansion` 升级至 `^2.1.4`（GHSA-rgw5-rvv9-x895，无界中间数组 DoS）、`@babel/core` 升级至 `^7.29.1`（GHSA-4x5r-pxfx-6jf8，sourceMappingURL 注释任意文件读）；`bun audit` 现报告无已知漏洞，release-check 的依赖覆盖断言同步更新。
-- 报告「执行步骤」段新增真实处理/跳过计数说明：明确"已处理"为流程到达（含跳过与失败回退），真实处理成功步数单独列出，跳过不再被误认为真实执行。
-- 注：签名/发布路径的安全缺陷（签名保留、产物命名、错误根因掩盖）已在 v1.0.0 的 Fixed 节修复并记录。
 
 ## [1.0.0] - 2026-08-20
 
@@ -159,7 +88,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 新增 R8/ProGuard 规则质量精审：只检查 app release 的有效规则范围，精确报告关闭优化/裁剪/混淆、全局/整包宽 keep、缺失规则引用，并通过注释、注解/继承约束和 allow 语义降低误报。
 - 新增发布证据包：从本次实际 Gradle APK 精确反推变体，归档同变体 R8 mapping/configuration/seeds/usage、可选 missing_rules 与 DroidSeal R8 覆盖脚本，逐文件记录 SHA-256/大小/相对来源；APK 输入和无法解析的布局不会模糊匹配旧产物。
 - 新增 CycloneDX 1.5 SBOM 与许可证待核验清单：精确 Gradle 字面量坐标生成 Maven purl；动态/version-ref、DEX SDK 家族和 Native 库保持 unresolved/observed；Native 跨 ABI 去重并保留路径证据；未知许可证统一为 `NOASSERTION`，不联网猜测。
-- 新增置信度感知发布门禁与纵深防御覆盖矩阵：报告稳定输出 `pass/review/block`、原因 code 和规则版本；只让失败步骤、明确无效/缺失签名及 confirmed/high critical 自动阻断，低置信度“未观察到”不阻断；业务侧/服务端控制保持 `external-required` 或最多 `observed`。
+- 新增置信度感知发布门禁与纵深防御覆盖矩阵：报告稳定输出 `pass/review/block`、原因 code 和规则版本；只让失败步骤、明确无效/缺失签名及 confirmed/high critical 自动阻断，低置信度"未观察到"不阻断；业务侧/服务端控制保持 `external-required` 或最多 `observed`。
 - 新增签名材料与 Git 暴露精审：检查签名属性、项目内 JKS/keystore/P12/PFX 和文档密码，区分 tracked/历史/未跟踪/未知状态；finding 只保留路径、行号和字段名，不回显密码，并生成不覆盖源码的轮换与 `.gitignore` 清单。
 - npm 发布改为 Windows x64 二进制：Bun bundle 经 Terser 5.49.0 保守压缩和顶层标识符 mangle 后由 `bun --compile` 生成 `dist/droidseal.exe`；中间 JS 构建后删除，npm 白名单排除源码、脚本、测试、内部文档、锁文件和 source map。启动器先校验 exe 的 SHA-256，再设置资源目录并透传参数；OpenTUI DLL 嵌入 exe，worker/WASM/查询资源逐文件校验。
 - 完成二进制第三方许可证据链：按 Bun metafile 精确生成实际 bundle 与显式原生运行时包清单、CycloneDX SBOM、逐包许可证副本和可读通知；固定 Bun 1.3.14 及其 WebKit、TinyCC 提交，附 LGPL-2.0-only/LGPL-2.1 正文、对应源码与重新链接说明。构建和发布门禁会在版本漂移、未知许可证、缺少许可证正文/源码地址或制品哈希不一致时失败。
@@ -179,7 +108,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
   - 供应链清单：DEX 描述符识别第三方 SDK 与 Gradle 依赖坐标清单，仅清单不做 CVE 比对（`SUPPLYCHAIN_SDK_INVENTORY`）。
 - 报告输出（JSON 与 Markdown）按严重度（critical→info）排序，同级保持稳定顺序。
 - 新增自研、opt-in 的构建期反调试 stub（`src/assets/antidebug-stub`，通过 `bun scripts/install-antidebug-stub.ts` 安装）：JNI + Kotlin，在编译期经 NDK/CMake 链接，检测 TracerPid 与注入框架特征，仅检测不改写 APK。
-- 为每个跳过步骤提供“不适用、用户选择、按配置、安全保护、缺少前置 APK”分类和解释。
+- 为每个跳过步骤提供"不适用、用户选择、按配置、安全保护、缺少前置 APK"分类和解释。
 - 在 TUI、JSON 和 Markdown 报告中解释跳过原因。
 - 添加商标政策、治理机制、DCO 检查、CODEOWNERS 和完整开源社区文件。
 - 添加 npm 包元数据、项目仓库链接、支持范围和安全报告说明。
@@ -201,9 +130,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ### Fixed
 
-- 选择“暂不签名”处理已签名 APK 时，Release 归一化会为剔除残留条目（如 `DebugProbesKt.bin`）重建 ZIP，使原有签名失效，产出无法安装的 APK。现在检测到需保护的现有签名时跳过剔除（`HARDEN_SKIPPED_TO_PRESERVE_SIGNATURE`）；仅当必须修复 `debuggable=true` 时才改写，并以 `HARDEN_SIGNATURE_INVALIDATED` 明确告知签名已失效。
+- 选择"暂不签名"处理已签名 APK 时，Release 归一化会为剔除残留条目（如 `DebugProbesKt.bin`）重建 ZIP，使原有签名失效，产出无法安装的 APK。现在检测到需保护的现有签名时跳过剔除（`HARDEN_SKIPPED_TO_PRESERVE_SIGNATURE`）；仅当必须修复 `debuggable=true` 时才改写，并以 `HARDEN_SIGNATURE_INVALIDATED` 明确告知签名已失效。
 - 签名失败时最终产物仍被命名为 `guarded-signed`，使未签名、无法安装的 APK 看起来已签名。产物后缀改为依据最终验证的实际结果，而非配置意图。
-- 签名库校验失败后，签名步骤仍会重试 apksigner 并报出更含糊的 `KEYSTORE_PASSWORD_INVALID`，掩盖“别名不存在”“文件不存在”等真实根因。现在直接跳过签名并保留原始错误；最终验证改报 `SIGNATURE_MISSING_AFTER_FAILED_SIGNING`，指向真正失败的步骤。
+- 签名库校验失败后，签名步骤仍会重试 apksigner 并报出更含糊的 `KEYSTORE_PASSWORD_INVALID`，掩盖"别名不存在""文件不存在"等真实根因。现在直接跳过签名并保留原始错误；最终验证改报 `SIGNATURE_MISSING_AFTER_FAILED_SIGNING`，指向真正失败的步骤。
 
 ## 开发路线（加固 / 混淆可扩展方向）
 
@@ -216,7 +145,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 > 开发路线 ①-⑤ 方向与完善与优化各项已全部实现并记录于 [1.0.1]（2026-08-22）。
 
-### 下一阶段（MobSF 缺口导向）
+### 下一阶段
 
 - **已完成（[1.0.1]）**：
   - 短期：URL/域名/端点提取（`ENDPOINT_INVENTORY`）；弱加密算法检测（`SOURCE_WEAK_CRYPTO`）；证书有效期提示（`SIGNING_CERT_EXPIRED`/`EXPIRING`）；自定义规则文件加载（`customRulesFile`）。
@@ -224,60 +153,16 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
   - 长期（边界兼容）：动态分析外部衔接指南；平台支持矩阵；恶意指标轻量提示（`MALICIOUS_INDICATOR`）。
   - 缺口补强：隐私数据收集清单（`PRIVACY_DATA_COLLECTION`/`PRIVACY_API_USAGE`）；证书固定缺失检测（`SOURCE_NO_CERT_PINNING`）；SQLite 明文存储审计（`SOURCE_UNENCRYPTED_STORAGE`）；反编译导出工具（`scripts/export-decompiled.ts`）。
 - **仍缺（边界项——明确不实现）**：内置动态分析（本地优先边界——见 `docs/dynamic-analysis-bridge.md`）；恶意软件沙箱/反病毒（偏离发布安全定位）。
-- **下一竞争者（Quark-Engine——活跃，恶意行为加权评分）**：~~差距与设计~~ **已全部实现并记录于 [1.0.1]——已追平/超越（11/11 项核对无遗漏）**：DEX 调用图（含调用链）、行为规则引擎、加权评分、内置规则库（10 条）、行为报告节、反混淆辅助（hex/base64/URL）、行为规则文件加载、评分阈值配置、调用图导出——均落地；CLI/API 维度以 REST 语言无关接口超越。
-- **下一竞争者（AndroBugs——已归档，字节码语义分析代表）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：SSL 证书校验绕过语义检测（`SOURCE_SSL_BYPASS`）、语义漏洞模式库（`SOURCE_SEMANTIC_VULN`）、目录/库级批量（`batch-run --dir`）、WebView SSL 错误忽略（`WEBVIEW_SSL_ERROR_IGNORED`）——均落地；效率（3-40s/APK）与活跃维护维度已超越。
-- **下一竞争者（APKiD——活跃，打包器/保护器指纹识别）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：指纹库扩充（`packers.ts` 33 条——商业加固壳/混淆器/打包器）、指纹规则文件加载（`packerFingerprintsFile`——regex 型 + 元数据）、SO 级加壳特征检测（`SO_PACKED`）——均落地。
-- **下一竞争者（QARK——已停更 2019，POC 生成代表）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：POC 验证命令建议（`poc-commands.ts` + 报告节——EXPORTED 组件/深链/备份等生成 adb/drozer 验证命令——与 `docs/dynamic-analysis-bridge.md` 衔接）——均落地；已停更——活跃维护与纯 TS 自研解析已超越。
-- **下一竞争者（JAADAS——已停更 2017，Soot/FlowDroid 污点分析代表）**：~~差距（19 项）~~ **已全部实现并记录于 [1.0.1]——已追平/超越（四大功能面穷尽核对无遗漏 + 实效冒烟验证通过）**：生命周期入口/污点路径/源汇扩充、调用图完整性/跨组件/反射/跨函数/常量值/对象字段/库间/隐式流/可编程 IR 等 19 项——均落地；已停更——活跃维护已超越。
-- **下一竞争者（Androguard——活跃，通用可编程解析库）**：~~差距~~ **已全部实现并记录于 [1.0.1]——已追平/超越**：深度可编程解析（指令迭代器/内置反汇编/XREF/类级对象模型/交互 REPL/DEX 修改 API/资源条目对象模型）——均落地；单一解析库（非开箱审计）——审计+加固+发布闭环已超越。
-- **下一竞争者（Semgrep——活跃，通用规则引擎 SAST）差距**：① SARIF 报告导出（CI 生态标准——GitHub Code Scanning 等——中/易补）；② AST 级模式匹配（语法精确匹配——降误报——中/大）；③ JS 源码审计（混合应用的 JS 资源审计——中）；④ 规则生态（社区规则——跨语言——低/边界）。CI 集成（REST/batch/门禁）与活跃维护已同级。
-- **下一竞争者（SUPER——已停更，并行静态扫描）差距**：① 并行扫描（多 APK/多文件并发审计——当前审计串行（单 APK 14 步 + `batch-run` 逐项串行 + 服务端 409 串行化）——中）；其余功能面（源码/二进制检查、报告、插件）已覆盖——停更——活跃维护已超越。
-- **下一竞争者（apkleaks——活跃，专项密钥/端点提取）差距**：① 密钥格式库的广度（内置几十种多平台密钥正则（Amazon/Google/GitHub/Stripe/Slack 等）——当前凭据格式检测仅几种（AIzaSy/ghp_/AKIA/eyJ）——中）；② 端点深度提取（URL/子域名/路径的完整正则集——当前 ENDPOINT_INVENTORY 为 DEX 字符串 URL 提取——低）。文件级扫描与报告已覆盖/超越——活跃维护同级。
-- **下一竞争者（APKHunt——2023 停更，OWASP MASTG 检查工具）差距**：① MASTG 逐项检查清单的覆盖（按 MASTG-* 检查项逐项对照（通过/失败/未检查标注）——当前 `mastg-map` 为「发现 → MASTG 映射」（非完整逐项清单）——中）。静态分析检查项与报告已覆盖/超越——停更——活跃维护已超越。
-- **下一竞争者（mobsfscan——MobSF 静态规则集子集，基于 Semgrep）差距**：① Semgrep YAML 式规则格式导入（mobsfscan 规则为 Semgrep YAML——当前 `customRulesFile` 为 JSON 正则——导入 YAML 规则可复用 Semgrep 生态——低/边界）。其余功能面（MobSF 静态检查子集）已覆盖（MobSF 已追平/超越——子集随之覆盖）——无实质独立差距。
-- **下一竞争者（DroidStatx——学术型，已停更，Android 静态/污点分析）差距**：**无实质独立差距**——功能面（污点/数据流、调用链/可达性、静态检查）已由 JAADAS 污点 19 项 + 审计全覆盖——学术型停更——活跃维护与功能广度已超越。
-- **下一竞争者（Marvin——学术型，已停更，与 DroidStatx 同类）差距**：**无实质独立差距**——功能面（污点/数据流、权限分析、静态检查）已由 JAADAS 污点 19 项 + 审计 + 权限风险评分全覆盖——学术型停更——活跃维护与功能广度已超越。
 
 ### 边界说明（能力方向）
 
 - **审计质量与发布安全做到极致**：误报控制、置信度分级、交叉证据、失败关闭——把审计与发布安全做成核心竞争力。
 - **提供源码接入的加固能力**：字符串加密桩（`scripts/generate-string-crypto-stub.ts`）、反调试 stub（`src/assets/antidebug-stub`）、DEX 方法混淆受控子集（`docs/dex-method-obfuscation-plan.md`）——编译期接入、运行期生效，不对未知 APK 事后合成可执行代码。
 
-### 竞争定位与差异化
+### 可持续性准则
 
-- **审计质量是稀缺能力**：误报控制、置信度分级、交叉证据、失败关闭——多数免费工具“扫到即报”，DroidSeal 做“确认后才报”，这是稀缺的工程能力。
-- **差异化清晰**：本地优先 + 审计加固一体化（审计 → 归一化 → 混淆 → 签名 → 验证 → 报告闭环），而非孤立的静态分析。
-- **免费开源审计竞争者（APKHunt / SUPER / JAADAS 等——MobSF / AndroBugs / Quark-Engine / JAADAS / Androguard / APKiD / QARK 已追平/超越并移出竞争名单）**：它们以静态分析扫描与报告为主；DroidSeal 的差异在于失败关闭语义、置信度分级、交叉证据与发布安全闭环（门禁 / 证据 / SBOM / 修复包），并坚持本地优先、不联网、不事后改写未知 APK。
-
-### 竞争者分析（免费开源审计工具全景）
-
-- **综合框架**：~~MobSF~~（**已追平/超越——移出竞争名单**，功能面已全覆盖，见开发路线「下一阶段」）；~~QARK~~（**已追平/超越——移出竞争名单**——POC 验证命令建议已实现）；APKHunt（2023 停更——MASTG 正则模式）；SUPER（停更——并行扫描快）。
-- **字节码/语义分析**：~~AndroBugs~~（**已追平/超越——移出竞争名单**，见开发路线「下一阶段」）；JAADAS（2017 停更——Soot 污点分析）；DroidStatx / Marvin / AUSERA / Trueseeing / SPECK（学术型，多已停更）。
-- **基础设施**：~~Androguard~~（**已追平/超越——移出竞争名单**——深度可编程解析已实现）；~~APKiD~~（**已追平/超越——移出竞争名单**——指纹库 33 条/规则加载/SO 加壳已实现）；~~Quark-Engine~~（**已追平/超越——移出竞争名单**，见开发路线「下一阶段」）；apkleaks（URI/端点/密钥提取）；mobsfscan / Semgrep（规则引擎，CI 可用）。
-- **实证（arxiv 2410.20740，11 个 SAST 工具基准）**：分为源码/AST 模式匹配与字节码语义分析两类；召回差异大（MobSF 硬编码敏感数据 93.9%、AndroBugs 无效服务器校验 96.9%）；**共性痛点：误报率高、需人工验证**。
-- **DroidSeal 差异**：误报控制/置信度分级/交叉证据/失败关闭（正是免费工具的共同短板）；活跃维护（AndroBugs 已归档、QARK/APKHunt/JAADAS 停更）；本地优先 + 纯 TypeScript 自研解析；审计加固一体化 + 发布安全闭环。
-
-### 逐功能对比（竞争对手强于 DroidSeal 的功能）
-
-- ~~**MobSF**~~（**已追平/超越——移出竞争名单**）：其静态分析面（权限/组件/WebView/网络/存储/加密/证书/URL 提取/隐私收集/MASTG 映射/HTML 报告/历史趋势等）已由 DroidSeal 全覆盖（见开发路线「下一阶段」）；动态分析/多平台/恶意沙箱为边界项（已文档化）。
-- ~~**AndroBugs**~~（**已追平/超越——移出竞争名单**）：字节码数据/控制流语义分析（SSL 语义检测已由 `SOURCE_SSL_BYPASS` 覆盖）、海量批量分析（已由 `batch-run --dir` 覆盖）。
-- **JAADAS / Marvin / AUSERA / Trueseeing**：污点/数据流分析（Soot/FlowDroid 追踪敏感数据源→汇）、可达性/调用链分析。
-- ~~**QARK**~~（**已追平/超越——移出竞争名单**）：POC/exploit 验证命令已由 `poc-commands.ts` + 报告节实现。
-- ~~**APKiD**~~（**已追平/超越——移出竞争名单**）：打包器/保护器指纹已由 `packers.ts`（33 条 + regex/元数据 + 规则文件加载）+ SO 加壳检测实现。
-- ~~**Androguard**~~（**已追平/超越——移出竞争名单**——深度可编程解析已实现）/ apkleaks / mobsfscan / Semgrep / APKHunt：专项密钥提取工具、规则引擎生态、规则与 OWASP MASTG 对齐。
-- **汇总（12 项）**：动态分析、多平台、恶意检测、Web/REST 平台化、反编译浏览、数据流/污点分析、POC 生成、打包器指纹、规则生态、标准对齐、海量批量、教育性说明。
-- **平衡补充**：误报控制/置信度/交叉证据/失败关闭、审计加固一体化、发布安全闭环（门禁/证据/SBOM/修复包）、本地优先/纯 TS/活跃维护——竞争对手不具备；**最值得补的差距：① 数据流/污点跟踪 ② 打包器指纹识别 ③ Web/REST 平台化**。
-
-### 差距分析（竞争对手有而 DroidSeal 不具备）
-
-- **高补强价值**：① Web UI / REST API（企业/DevSecOps 平台化，与现有报告/门禁契合）；② 打包器/保护器指纹识别（APKiD 式——检测壳/混淆器并提示“建议配合商业加固核验”）；③ 敏感数据流/污点跟踪（数据流分析深度——把交叉证据升级为数据流证据，纯 TS 自研、失败关闭）。
-- **中价值**：反编译可读源码/资源浏览（供人工核验）；规则生态/自定义规则文件加载；POC 生成（仅生成 ADB 验证命令、不生成 APK）。
-- **边界内不做（故意）**：动态分析（需模拟器/联网，与本地优先冲突）；恶意软件检测（偏离发布安全定位）；在线/共享分析平台（本地优先冲突）。
-
-### 可持续性准则（从停更项目汲取的教训）
-
-- **持续跟进生态**：跟踪 Android 新版本 API、新混淆技术、新合规要求（Play 政策等）——避免“完成态”心态导致断更。
-- **用户反馈闭环**：误报控制、置信度分级、交叉证据已是最强差异化——保持“确认后才报”的口碑，形成正向反馈循环。
+- **持续跟进生态**：跟踪 Android 新版本 API、新混淆技术、新合规要求（Play 政策等）——避免"完成态"心态导致断更。
+- **用户反馈闭环**：误报控制、置信度分级、交叉证据已是最强差异化——保持"确认后才报"的口碑，形成正向反馈循环。
 - **可持续维护**：规则、文档、测试、发布门禁齐全（已具备），路线图公开（见本文件开发路线）——避免单点依赖与断更风险。
 
 ### 完善与优化方向（开发后混淆/加固边界内，持续增强）
