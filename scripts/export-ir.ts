@@ -9,6 +9,7 @@ import { writeFile } from "node:fs/promises"
 import { spawnSync } from "node:child_process"
 import { auditApk } from "../src/core/apk-audit.ts"
 import { extractCalledMethods, extractCallGraph, expandInterfaceDispatch } from "../src/core/dex-callgraph.ts"
+import { buildClassModel } from "../src/core/dex-class-model.ts"
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
@@ -43,26 +44,36 @@ async function main(): Promise<void> {
   const strings: string[] = []
   const called: string[] = []
   const callGraphEdges: Array<{ caller: string; called: string[] }> = []
+  const classes: Array<{ className: string; methodCount: number; methods: Array<{ name: string; instructionCount: number }> }> = []
   if (bytes && bytes.length > 0 && bytes[0] === 0x64) {
     const graph = expandInterfaceDispatch(extractCallGraph(bytes), bytes)
     called.push(...extractCalledMethods(bytes))
     for (const [caller, callees] of graph) {
       callGraphEdges.push({ caller, called: [...callees] })
     }
+    // 类级对象模型（⑤——类 → 方法 → 指令数 的 IR 深化）
+    for (const c of buildClassModel(bytes)) {
+      classes.push({
+        className: c.className,
+        methodCount: c.methodCount,
+        methods: c.methods.map((m) => ({ name: m.name, instructionCount: m.instructionCount })),
+      })
+    }
   }
 
   const ir = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     apk,
     metadata,
     strings: strings.slice(0, 200),
     calledMethods: [...called].sort().slice(0, 500),
     callGraph: callGraphEdges.slice(0, 500),
+    classes: classes.slice(0, 200),
     findings,
   }
   await writeFile(output, JSON.stringify(ir, null, 2), "utf8")
-  console.log(`已导出 IR：${output}（发现 ${findings.length} 条、调用图 ${callGraphEdges.length} 条边、被调方法 ${called.length} 个——供第三方编程分析）`)
+  console.log(`已导出 IR：${output}（发现 ${findings.length} 条、调用图 ${callGraphEdges.length} 条边、类模型 ${classes.length} 个类——供第三方编程分析）`)
 }
 
 main().catch((error) => {

@@ -17,6 +17,7 @@ import { buildPrivacyFindings } from "./privacy-collection.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
 import { extractCalledMethods, extractCallGraph, callersOf } from "./dex-callgraph.ts"
+import { disassembleNamed } from "./dex-disassembler.ts"
 import { matchBehaviorRules, maliciousScore, buildBehaviorFindings, matchDeobfuscatedRules, type BehaviorRule, BUILTIN_BEHAVIOR_RULES, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
 import { estimateEncryptableStrings } from "./dex-string-crypto.ts"
 import { buildEndpointFindings } from "./endpoint-extract.ts"
@@ -1022,6 +1023,15 @@ async function scanDexFiles(
             const callers = callersOf(graph, finding.evidence)
             if (callers.length > 0) {
               finding.detail = `${finding.detail ?? ""} 调用方：${callers.slice(0, 2).join("、")}。`
+            }
+            // 内置反汇编(⑥):命中方法的反汇编片段(前 5 条指令——替代外部 jadx 的内置形态)
+            const dot = finding.evidence.lastIndexOf(".")
+            if (dot > 0) {
+              const disasm = disassembleNamed(firstDexBytes, finding.evidence.slice(0, dot), finding.evidence.slice(dot + 1))
+              if (disasm) {
+                const snippet = disasm.split("\n").slice(0, 7).join(" | ")
+                finding.detail = `${finding.detail ?? ""} 反汇编：${snippet}。`
+              }
             }
           }
         }
