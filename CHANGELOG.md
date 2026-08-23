@@ -136,6 +136,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - Semgrep 剩余差距 4 项：SARIF 2.1.0 报告导出（`scripts/generate-sarif.ts`——CI 生态标准——GitHub Code Scanning 可导入）；自定义规则精确模式（`exact: true`——词边界整词匹配——降误报）；JS 资源审计（`js-audit.ts`——混合应用 JS 的硬编码密钥/危险 API（innerHTML/eval/动态脚本）/弱加密（MD5/SHA1）——`SOURCE_JS_*`）；规则生态示例集（`docs/rule-examples.md`——社区规则风格 7 条示例）。
 - SUPER 差距 3 项：并行扫描（服务端允许并发运行（每个 run 独立目录）+ `batch-run --parallel N` 并发池）；Web/混合应用审计（`web-audit.ts`——HTML 明文表单/内联 XSS 事件处理器/Web 存储敏感数据——`SOURCE_WEB_*`）；自动反混淆（`obfuscation-decode.ts`——eval/atob 编码层自动解码——JS 审计前预处理）。
 - apkleaks 差距 4 项：密钥格式库扩充（`secret-scan.ts`——8 → 31 种多平台密钥格式（Twilio/SendGrid/Discord/OpenAI/Gemini/Anthropic/GitLab 等）+ 厂商元数据（`vendor`——报告分类与针对性提示））；端点深度提取（`endpoint-extract.ts`——`pathDepth`/`subdomainLevel` + 子域名/深路径端点统计）；apkleaks 式密钥规则集导入（`keyFormatsFile`——自定义厂商/正则文件合并到密钥格式库——校验失败关闭）。
+- APKHunt 差距 3 项：MASTG 逐项检查清单 + MASVS L1/L2 合规级别（`mastg-checklist.ts`——16 项 MASTG-* 检查项（存储/网络/加密/代码质量/平台交互）——finding 驱动的状态推导（需核验/未检查）+ 合规摘要——报告 `mastgChecklist` 字段）；PDF 报告导出（`scripts/generate-pdf-report.ts`——极简 PDF 1.4（门禁/发现统计/发现列表/MASTG 清单——纯 TS 零依赖））。
 
 #### 文档
 
@@ -230,6 +231,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **下一竞争者（SUPER——已停更，并行静态扫描）差距**：① 并行扫描（多 APK/多文件并发审计——当前审计串行（单 APK 14 步 + `batch-run` 逐项串行 + 服务端 409 串行化）——中）；其余功能面（源码/二进制检查、报告、插件）已覆盖——停更——活跃维护已超越。
 - **下一竞争者（apkleaks——活跃，专项密钥/端点提取）差距**：① 密钥格式库的广度（内置几十种多平台密钥正则（Amazon/Google/GitHub/Stripe/Slack 等）——当前凭据格式检测仅几种（AIzaSy/ghp_/AKIA/eyJ）——中）；② 端点深度提取（URL/子域名/路径的完整正则集——当前 ENDPOINT_INVENTORY 为 DEX 字符串 URL 提取——低）。文件级扫描与报告已覆盖/超越——活跃维护同级。
 - **下一竞争者（APKHunt——2023 停更，OWASP MASTG 检查工具）差距**：① MASTG 逐项检查清单的覆盖（按 MASTG-* 检查项逐项对照（通过/失败/未检查标注）——当前 `mastg-map` 为「发现 → MASTG 映射」（非完整逐项清单）——中）。静态分析检查项与报告已覆盖/超越——停更——活跃维护已超越。
+- **下一竞争者（mobsfscan——MobSF 静态规则集子集，基于 Semgrep）差距**：① Semgrep YAML 式规则格式导入（mobsfscan 规则为 Semgrep YAML——当前 `customRulesFile` 为 JSON 正则——导入 YAML 规则可复用 Semgrep 生态——低/边界）。其余功能面（MobSF 静态检查子集）已覆盖（MobSF 已追平/超越——子集随之覆盖）——无实质独立差距。
 
 ### 边界说明（能力方向）
 
