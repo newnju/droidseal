@@ -14,6 +14,7 @@ import { resolveArscFilePath } from "./arsc-model.ts"
 import { runProcess } from "./process.ts"
 import { buildPermissionFindings, type CustomPermission } from "./permissions-catalog.ts"
 import { buildPrivacyFindings } from "./privacy-collection.ts"
+import { buildPermissionRiskFindings, linkPermissionDataflow } from "./permission-risk.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey, type SecretPattern } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
 import { extractCalledMethods, extractCallGraph, callersOf } from "./dex-callgraph.ts"
@@ -431,14 +432,18 @@ export function auditManifestAxml(bytes: Uint8Array, keyFormats?: readonly Secre
 
   const findings = manifestFindings(xmlTree)
   findings.push(...parseExportedComponents(xmlTree, metadata.packageName))
+  const permissions = parseUsesPermissions(xmlTree)
   findings.push(...buildPermissionFindings(
-    parseUsesPermissions(xmlTree),
+    permissions,
     parseCustomPermissions(xmlTree),
     "MANIFEST",
   ))
-  findings.push(...detectMaliciousIndicators(parseUsesPermissions(xmlTree)))
-  findings.push(...buildPrivacyFindings(parseUsesPermissions(xmlTree)))
+  findings.push(...detectMaliciousIndicators(permissions))
+  findings.push(...buildPrivacyFindings(permissions))
   findings.push(...metaDataSecretFindings(parseMetaDataValues(xmlTree), "MANIFEST", keyFormats))
+  // 权限风险评分 + 权限-数据流关联（DroidStatx 差距①——交叉证据升级）
+  findings.push(...buildPermissionRiskFindings(permissions))
+  findings.push(...linkPermissionDataflow(permissions, findings))
   return { findings, metadata, tree, xmlTree }
 }
 
