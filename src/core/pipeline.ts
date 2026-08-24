@@ -23,6 +23,7 @@ import { loadCustomRules, applyCustomRulesToProject } from "./custom-rules.ts"
 import { scanProjectPrivacyApis } from "./privacy-collection.ts"
 import { scanProjectStorageSecurity } from "./storage-security.ts"
 import { scanProjectSslBypass } from "./ssl-bypass.ts"
+import { scanSourceDetectors } from "./source-detectors.ts"
 import { runDynamicVerification } from "./adb-bridge.ts"
 import { mergeKeyFormats } from "./secret-scan.ts"
 import { scanProjectJsAudit } from "./js-audit.ts"
@@ -593,6 +594,8 @@ export class Pipeline {
     // (Semgrep 差距⑤:声明式污点规则——自定义 source/sink/sanitizer 合并)
     const taintRules = this.config.taintRulesFile ? mergeTaintRules(await loadTaintRules(this.config.taintRulesFile)) : undefined
     const dataflowFindings = await scanProjectDataflow(this.config.inputPath, taintRules)
+    // 源码加固检测器扩充（②a——加密/网络/存储/组件/权限 13 个新检测器）
+    const sourceDetectorFindings = await scanSourceDetectors(this.config.inputPath)
     this.context.audit.findings.push(...dataflowFindings)
     // 源码侧弱加密算法检测(短期②):AES-ECB/DES/硬编码 IV,失败关闭
     const weakCryptoFindings = await scanProjectWeakCrypto(this.config.inputPath)

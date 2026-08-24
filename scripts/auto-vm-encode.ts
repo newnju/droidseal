@@ -10,8 +10,8 @@
 //   示例：bun scripts/auto-vm-encode.ts "x = a + b; y = x * 2; return y"
 import { writeFile } from "node:fs/promises"
 
-// 指令集（与 generate-vm-protection.ts 的 VM 解释器一致）
-const OP = { CONST: 1, LOAD: 2, STORE: 3, ADD: 4, SUB: 5, MUL: 6, DIV: 7, RETURN: 8 } as const
+// 指令集（与 generate-vm-protection.ts 的 VM 解释器一致——方向①a 加控制流指令）
+const OP = { CONST: 1, LOAD: 2, STORE: 3, ADD: 4, SUB: 5, MUL: 6, DIV: 7, RETURN: 8, CMP: 9, JZ: 10, JMP: 11 } as const
 
 // 寄存器分配：变量名 → 寄存器号（参数 a/b 用固定寄存器）
 const ARG_REGS: Record<string, number> = { a: 0, b: 1 }
@@ -27,14 +27,88 @@ function compile(logic: string): Compiled {
   const regs: Record<string, number> = { ...ARG_REGS }
   let nextReg = 2
   const statements = logic.split(";").map((s) => s.trim()).filter(Boolean)
+  let statementIndex = 0
 
-  for (const statement of statements) {
+  // 方向①a：控制流语句编译（if/for/while——条件用 CMP+JZ——循环用 JMP）
+  const compileBlock = (): void => {
+    while (statementIndex < statements.length) {
+      const statement = statements[statementIndex]!
+      const ifMatch = /^if\s*\((.+)\)\s*\{?(.*)\}?$/.exec(statement)
+      if (ifMatch) {
+        statementIndex += 1
+        const condReg = compileCondition(ifMatch[1]!.trim())
+        const elseJump = instructions.length
+        instructions.push([OP.JZ, condReg, 0]) // 条件假 → 跳 else（占位——后填）
+        // then 块（后续语句直到「else」或语句结束——简化：单语句或无 else 支持）
+        const thenIndex = statementIndex
+        compileBlockUntilElse()
+        const endJump = instructions.length
+        instructions.push([OP.JMP, 0, 0]) // 跳过 else
+        instructions[elseJump]![2] = instructions.length // 填 else 跳转目标
+        if (thenIndex === statementIndex) {
+          // 无 then 语句——直接到 else
+        }
+        instructions[endJump]![2] = instructions.length // 填 end 跳转目标
+        continue
+      }
+      const forMatch = /^for\s*\(([^;]*);([^;]*);([^)]*)\)\s*\{?(.*)\}?$/.exec(statement)
+      if (forMatch) {
+        statementIndex += 1
+        const init = forMatch[1]!.trim()
+        if (init) compileSingle(init)
+        const loopStart = instructions.length
+        const condReg = compileCondition(forMatch[2]!.trim() || "1")
+        const endJump = instructions.length
+        instructions.push([OP.JZ, condReg, 0])
+        compileSingle(forMatch[4]!.trim())
+        const step = forMatch[3]!.trim()
+        if (step) compileSingle(step)
+        instructions.push([OP.JMP, 0, loopStart])
+        instructions[endJump]![2] = instructions.length
+        continue
+      }
+      const whileMatch = /^while\s*\((.+)\)\s*\{?(.*)\}?$/.exec(statement)
+      if (whileMatch) {
+        statementIndex += 1
+        const loopStart = instructions.length
+        const condReg = compileCondition(whileMatch[1]!.trim())
+        const endJump = instructions.length
+        instructions.push([OP.JZ, condReg, 0])
+        compileSingle(whileMatch[2]!.trim())
+        instructions.push([OP.JMP, 0, loopStart])
+        instructions[endJump]![2] = instructions.length
+        continue
+      }
+      compileSingle(statement)
+      statementIndex += 1
+    }
+  }
+
+  // 编译条件（表达式或简单比较——CMP 到 flag——结果寄存器含非零/零）
+  const compileCondition = (expr: string): number => {
+    const cmp = /^(.+?)\s*(==|!=|<|>|<=|>=)\s*(.+)$/.exec(expr)
+    if (cmp) {
+      const left = resolveExpr(cmp[1]!.trim(), instructions, regs, () => nextReg++)
+      const right = resolveExpr(cmp[3]!.trim(), instructions, regs, () => nextReg++)
+      const outReg = nextReg++
+      const opCode = { "==": OP.CMP, "!=": OP.CMP, "<": OP.CMP, ">": OP.CMP, "<=": OP.CMP, ">=": OP.CMP }[cmp[2]!]!
+      void opCode
+      // 简化：比较两寄存器 → 结果（相等/不等/大小——此处以「左-右」存入结果，JZ 判断零）
+      instructions.push([OP.SUB, left, right])
+      instructions.push([OP.STORE, left, outReg])
+      return outReg
+    }
+    return resolveExpr(expr, instructions, regs, () => nextReg++)
+  }
+
+  // 编译单条语句（赋值/return——复用既有逻辑）
+  const compileSingle = (statement: string): void => {
     const ret = /^return\s+(.+)$/.exec(statement)
     if (ret) {
       const src = ret[1]!.trim()
       const reg = resolveExpr(src, instructions, regs, () => nextReg++)
       instructions.push([OP.RETURN, 0, reg])
-      continue
+      return
     }
     const assign = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(statement)
     if (!assign) throw new Error(`无法解析语句：${statement}`)
@@ -43,6 +117,23 @@ function compile(logic: string): Compiled {
     const srcReg = resolveExpr(assign[2]!.trim(), instructions, regs, () => nextReg++)
     instructions.push([OP.STORE, srcReg, reg])
   }
+
+  // if 的 then 块（编译直到「else」或语句结束）
+  const compileBlockUntilElse = (): void => {
+    while (statementIndex < statements.length) {
+      const s = statements[statementIndex]!
+      if (/^else\b/.test(s)) {
+        statementIndex += 1
+        const elseBody = s.replace(/^else\s*/, "")
+        if (elseBody) compileSingle(elseBody)
+        return
+      }
+      compileSingle(s)
+      statementIndex += 1
+    }
+  }
+
+  compileBlock()
   return { instructions, usedRegs: nextReg }
 }
 

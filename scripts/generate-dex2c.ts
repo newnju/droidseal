@@ -23,7 +23,7 @@ function parseArgs(argv: string[]): { outputDir: string; func: string; lib: stri
   return { outputDir, func, lib, logic }
 }
 
-// 简单逻辑 → C 语句（赋值/运算/return——保持语义——方法级转 C）。
+// 简单逻辑 → C 语句（方向①b：支持 if/for/while 块——复杂逻辑转 C——保持语义——方法级转 C）。
 function logicToC(logic: string): string[] {
   const lines: string[] = []
   for (const statement of logic.split(";").map((s) => s.trim()).filter(Boolean)) {
@@ -39,9 +39,64 @@ function logicToC(logic: string): string[] {
   return lines
 }
 
+// 方向①b：把含 if/for/while 的复杂逻辑原样转为 C 块（块保留花括号——语句逐行转 C）。
+function logicBlockToC(logic: string): string[] {
+  const lines: string[] = []
+  let depth = 0
+  for (const statement of logic.split(";")) {
+    const trimmed = statement.trim()
+    if (trimmed === "") continue
+    // 行以「}」开头：先输出闭括号（缩进——depth 减一），再处理行其余部分（else/return/赋值）
+    if (trimmed.startsWith("}")) {
+      const rest = trimmed.slice(trimmed.indexOf("}") + 1).trim()
+      depth = Math.max(0, depth - 1)
+      lines.push(`${"    ".repeat(depth)}}`)
+      if (rest === "") continue
+      if (/^else\b/.test(rest)) {
+        const elseRest = rest.replace(/^else\s*/, "")
+        lines.push(`${"    ".repeat(depth)}else {`)
+        depth += 1
+        if (elseRest) {
+          const assign = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(elseRest)
+          if (assign) lines.push(`${"    ".repeat(depth)}${assign[1]!} = (${assign[2]!.trim()});`)
+        }
+        continue
+      }
+      const ret = /^return\s+(.+)$/.exec(rest)
+      if (ret) {
+        lines.push(`${"    ".repeat(depth)}return (${ret[1]!.trim()});`)
+        continue
+      }
+      const assign = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(rest)
+      if (!assign) throw new Error(`无法解析语句：${trimmed}`)
+      lines.push(`${"    ".repeat(depth)}${assign[1]!} = (${assign[2]!.trim()});`)
+      continue
+    }
+    // 处理块开始（花括号计数）
+    const opens = (trimmed.match(/\{/g) ?? []).length
+    const closes = (trimmed.match(/\}/g) ?? []).length
+    if (/^(if|for|while)\b/.test(trimmed) || opens > 0) {
+      const indent = "    ".repeat(depth)
+      lines.push(`${indent}${trimmed}`)
+      depth += opens - closes
+      continue
+    }
+    const ret = /^return\s+(.+)$/.exec(trimmed)
+    if (ret) {
+      lines.push(`${"    ".repeat(depth)}return (${ret[1]!.trim()});`)
+      continue
+    }
+    const assign = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(trimmed)
+    if (!assign) throw new Error(`无法解析语句：${trimmed}`)
+    lines.push(`${"    ".repeat(depth)}${assign[1]!} = (${assign[2]!.trim()});`)
+  }
+  return lines
+}
+
 async function generate(outputDir: string, func: string, lib: string, logic: string): Promise<string> {
   await mkdir(outputDir, { recursive: true })
-  const body = logicToC(logic).join("\n")
+  // 方向①b：用 logicBlockToC（支持 if/for/while 控制流块——复杂逻辑转 C）
+  const body = logicBlockToC(logic).join("\n")
   const header = `// 自动生成的 Dex2C（下一层③——简单逻辑转 C——NDK 编译——so 层执行——静态只见 C 语义）。
 // 原逻辑：${logic}
 // 把本文件放入 NDK 项目（CMake 添加 ${lib}.c + JNI 导出）——Java 层经 JNI 调用该函数。
