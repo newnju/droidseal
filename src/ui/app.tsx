@@ -1274,45 +1274,25 @@ export function App() {
                 ? `${SPINNER[spinnerIndex()]} ${t("headerProcessing")}`
                 : `● ${t("headerReady")}`}
             </text>
-            <Button
-              label={draft().keepIntermediates ? "测试与学习" : "经典模式"}
-              onPress={() => setDraft((current) => ({ ...current, keepIntermediates: !(current.keepIntermediates ?? false) }))}
-            />
-            <Button
-              label={language() === "en" ? "中文" : "English"}
-              onPress={() => setLanguage((current) => (current === "en" ? "zh" : "en"))}
-            />
+            <box flexDirection="row" alignItems="center" justifyContent="center" gap={zoomMetrics().actionGap}>
+              <Button
+                label={draft().keepIntermediates ? "测试学习" : "经典模式"}
+                onPress={() => setDraft((current) => ({ ...current, keepIntermediates: !(current.keepIntermediates ?? false) }))}
+              />
+              <Button
+                label={language() === "en" ? "中文" : "English"}
+                onPress={() => setLanguage((current) => (current === "en" ? "zh" : "en"))}
+              />
+            </box>
+            {/* 占用显示（按钮附近——btop++ 式紧凑条形） */}
+            <text fg={theme.accentStrong} selectable={false}>
+              内存 {memory().rss.toFixed(0)} MB {"█".repeat(Math.min(10, Math.round((memory().rss / 4096) * 10))).padEnd(10, "░")} · CPU {memory().cpu.toFixed(0)}% {"█".repeat(Math.min(10, Math.round((memory().cpu / 100) * 10))).padEnd(10, "░")}
+            </text>
           </box>
         </Show>
       </box>
 
       <box flexDirection="row" flexGrow={1} minHeight={0}>
-        {/* 仅本机占用（btop++ 式——左侧面板）：内存 RSS/堆 + CPU 条形仪表 */}
-        <Show when={screen() !== "welcome"}>
-          <box flexShrink={0} width={26} flexDirection="column" paddingLeft={1} paddingRight={1}>
-            <text fg={theme.textMuted} selectable={false}>
-              本机占用
-            </text>
-            <text fg={theme.textMuted} selectable={false}>
-              内存 RSS {memory().rss.toFixed(0)} MB
-            </text>
-            <text fg={theme.accentStrong} selectable={false}>
-              {"█".repeat(Math.min(10, Math.round((memory().rss / 4096) * 10))).padEnd(10, "░")}
-            </text>
-            <text fg={theme.textMuted} selectable={false}>
-              堆 {memory().heap.toFixed(0)} MB
-            </text>
-            <text fg={theme.accentStrong} selectable={false}>
-              {"█".repeat(Math.min(10, Math.round((memory().heap / 1024) * 10))).padEnd(10, "░")}
-            </text>
-            <text fg={theme.textMuted} selectable={false}>
-              CPU {memory().cpu.toFixed(0)}%
-            </text>
-            <text fg={theme.accentStrong} selectable={false}>
-              {"█".repeat(Math.min(10, Math.round((memory().cpu / 100) * 10))).padEnd(10, "░")}
-            </text>
-          </box>
-        </Show>
         <box
           flexDirection="column"
           flexGrow={1}

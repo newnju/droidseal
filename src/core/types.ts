@@ -85,7 +85,7 @@ export interface PipelineConfig {
   enableWebAssetMinification?: boolean
   enableArscObfuscation?: boolean
   // 默认 false(经典模式):流水线结束清理中间 APK,只保留最终 release 与报告;
-  // true(测试与学习模式):保留全部中间产物(学习/调试流水线内部阶段)。
+  // true(测试学习模式):保留全部中间产物(学习/调试流水线内部阶段)。
   keepIntermediates?: boolean
   // 加固覆盖度门禁阈值:核心审计/防护/验证步骤成功数低于该值给 review 提示(默认 3)。
   minimumHardeningCoverage?: number

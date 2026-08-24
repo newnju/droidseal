@@ -36,7 +36,7 @@ export function Button(props: {
     if (tone() === "danger") return theme.error
     if (tone() === "input") return theme.input
     if (tone() === "accent") return theme.accent
-    return hovered() ? theme.borderActive : theme.border
+    return theme.borderActive
   }
 
   const shortcutColor = () => {
