@@ -17,6 +17,7 @@ import { scanSourceDetectors } from "../src/core/source-detectors.ts"
 interface BenchmarkCase {
   name: string
   source: string
+  sourceDir?: string // DroidBench 源码目录（有则直接扫描目录——无则用 source 文本）
   expected: string[] // 预期检出的 code（空 = 预期无发现）
 }
 
@@ -64,10 +65,12 @@ interface EvalResult {
 
 // 跑一个基准用例（合成源码目录——scanSourceDetectors——统计 TP/FP/FN）。
 async function evalCase(testCase: BenchmarkCase): Promise<EvalResult> {
-  const dir = await mkdtemp(path.join(tmpdir(), "bench-"))
-  await mkdir(path.join(dir, "src"), { recursive: true })
-  await writeFile(path.join(dir, "src", "Main.kt"), testCase.source, "utf8")
-  const findings = await scanSourceDetectors(dir)
+  const findings = testCase.sourceDir ? await scanSourceDetectors(testCase.sourceDir) : await (async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "bench-"))
+    await mkdir(path.join(dir, "src"), { recursive: true })
+    await writeFile(path.join(dir, "src", "Main.kt"), testCase.source, "utf8")
+    return scanSourceDetectors(dir)
+  })()
   const detected = new Set(findings.map((f) => f.code))
   const expected = new Set(testCase.expected)
   const tp = [...expected].filter((c) => detected.has(c))
@@ -76,9 +79,54 @@ async function evalCase(testCase: BenchmarkCase): Promise<EvalResult> {
   return { name: testCase.name, tp, fp, fn }
 }
 
-// 从外部基准目录加载用例（每个子目录：Main.kt + expected.json——递归查找子目录——深度 3）。
+// 递归遍历目录收集 .java 文件（避免 readdir recursive 兼容性问题）。
+async function walkJava(dir: string, acc: string[] = []): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true })
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) await walkJava(full, acc)
+    else if (entry.name.endsWith(".java")) acc.push(full)
+  }
+  return acc
+}
+
+// 从外部基准目录加载用例（支持两种结构——失败关闭）：
+// ① 通用：每个子目录 Main.kt + expected.json；
+// ② DroidBench：projects/<用例类>/<用例>/app/src/main/java（源码目录——无 expected.json——检出统计）。
 async function loadExternalCases(dir: string): Promise<BenchmarkCase[]> {
   const cases: BenchmarkCase[] = []
+  // DroidBench 结构（projects/ 下嵌套用例）
+  const projectsDir = path.join(dir, "projects")
+  try {
+    const classes = await readdir(projectsDir, { withFileTypes: true })
+    for (const cls of classes) {
+      if (!cls.isDirectory()) continue
+      const clsDir = path.join(projectsDir, cls.name)
+      const names = await readdir(clsDir, { withFileTypes: true })
+      for (const name of names) {
+        if (!name.isDirectory()) continue
+        const caseDir = path.join(clsDir, name.name)
+        const srcCandidates = [
+          path.join(caseDir, "app", "src", "main", "java"),
+          path.join(caseDir, "src"),
+        ]
+        for (const src of srcCandidates) {
+          try {
+            const javaFiles = await walkJava(src)
+            if (javaFiles.length === 0) continue
+            cases.push({ name: `${cls.name}/${name.name}`, source: "", sourceDir: src, expected: [] })
+            break
+          } catch {
+            continue
+          }
+        }
+      }
+    }
+    if (cases.length > 0) return cases
+  } catch {
+    // 非 DroidBench 结构——回退到通用结构
+  }
+  // 通用结构：每个子目录 Main.kt + expected.json
   const stack: string[] = [dir]
   let depth = 0
   while (stack.length > 0 && depth < 3) {
