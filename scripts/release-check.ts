@@ -5,7 +5,7 @@ import path from "node:path"
 const root = path.resolve(import.meta.dir, "..")
 const requiredFiles = [
   "README.md",
-  "README.zh.md",
+  "README.zh-CN.md",
   "LICENSE",
   "NOTICE",
   "TRADEMARKS.md",
@@ -34,7 +34,7 @@ const expectedPackageFiles = [
   "bin/droidseal.cjs",
   "dist",
   "README.md",
-  "README.zh.md",
+  "README.zh-CN.md",
   "LICENSE",
   "NOTICE",
   "CHANGELOG.md",
@@ -442,7 +442,6 @@ if (await exists(executablePath) && await exists(buildMetadataPath)) {
         "package.json",
         "README.md",
         "README.zh-CN.md",
-        "README.zh.md",
         "LICENSE",
         "LICENSE.zh-CN.md",
         "NOTICE",
