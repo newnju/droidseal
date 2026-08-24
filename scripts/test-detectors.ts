@@ -171,6 +171,23 @@ const cases: Case[] = [
       return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——2048 位 RSA + SecureRandom——安全）` }
     },
   },
+  {
+    name: "②c 检测器命中(正——ECB/反序列化/剪贴板)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"AES/ECB/PKCS5Padding\"); val ois = ObjectInputStream(null); val cm = ClipboardManager(); cm.setPrimaryClip(ClipData.newPlainText(\"k\", \"password-1\")) } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_ECB_CIPHER_USAGE") && codes.includes("SOURCE_DESERIALIZATION_UNSAFE") && codes.includes("SOURCE_CLIPBOARD_SENSITIVE"), detail: `命中 ${findings.length} 类（应含 ECB/反序列化/剪贴板）` }
+    },
+  },
+  {
+    name: "②c 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"AES/GCM/NoPadding\"); val j = JSONObject() } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——GCM + JSON——安全）` }
+    },
+  },
 ]
 
 let failed = 0
