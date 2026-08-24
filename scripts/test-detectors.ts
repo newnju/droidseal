@@ -453,6 +453,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "record-audio"), detail: `命中 ${hits.length} 条（应含 录音——静默录音特征）` }
     },
   },
+  {
+    name: "②o 检测器命中(正——SSRF/SQLite PRAGMA/通知渠道敏感)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val u = URL(userInput); conn.connect(); db.execSQL(\"PRAGMA journal_mode = DELETE\"); NotificationChannel(\"secret\", \"安全\", 1).setLockscreenVisibility(1) } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_SOCKET_SSRF") && codes.includes("SOURCE_SQLITE_PRAGMA_INSECURE") && codes.includes("SOURCE_NOTIFICATION_CHANNEL_SENSITIVE"), detail: `命中 ${findings.length} 类（应含 SSRF/SQLite PRAGMA/通知渠道）` }
+    },
+  },
+  {
+    name: "②o 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { db.execSQL(\"PRAGMA journal_mode = WAL\"); val r = SecureRandom(); val c = Cipher.getInstance(\"AES/GCM/NoPadding\") } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——WAL + GCM——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为摄像头规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.hardware.camera2.CameraManager.open"]))
+      return { hit: hits.some((h) => h.rule.crimer === "camera-open"), detail: `命中 ${hits.length} 条（应含 摄像头——打开相机特征）` }
+    },
+  },
 ]
 
 let failed = 0
