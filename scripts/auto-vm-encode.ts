@@ -10,8 +10,8 @@
 //   示例：bun scripts/auto-vm-encode.ts "x = a + b; y = x * 2; return y"
 import { writeFile } from "node:fs/promises"
 
-// 指令集（与 generate-vm-protection.ts 的 VM 解释器一致——方向①a 加控制流指令）
-const OP = { CONST: 1, LOAD: 2, STORE: 3, ADD: 4, SUB: 5, MUL: 6, DIV: 7, RETURN: 8, CMP: 9, JZ: 10, JMP: 11 } as const
+// 指令集（与 generate-vm-protection.ts 的 VM 解释器一致——方向①a 加控制流指令——深化加函数/字符串）
+const OP = { CONST: 1, LOAD: 2, STORE: 3, ADD: 4, SUB: 5, MUL: 6, DIV: 7, RETURN: 8, CMP: 9, JZ: 10, JMP: 11, CALL: 12, CONST_STR: 13 } as const
 
 // 寄存器分配：变量名 → 寄存器号（参数 a/b 用固定寄存器）
 const ARG_REGS: Record<string, number> = { a: 0, b: 1 }
@@ -101,7 +101,7 @@ function compile(logic: string): Compiled {
     return resolveExpr(expr, instructions, regs, () => nextReg++)
   }
 
-  // 编译单条语句（赋值/return——复用既有逻辑）
+  // 编译单条语句（赋值/return/函数调用——复用既有逻辑——深化加函数调用）
   const compileSingle = (statement: string): void => {
     const ret = /^return\s+(.+)$/.exec(statement)
     if (ret) {
@@ -113,8 +113,21 @@ function compile(logic: string): Compiled {
     const assign = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(statement)
     if (!assign) throw new Error(`无法解析语句：${statement}`)
     const target = assign[1]!
+    const rhs = assign[2]!.trim()
+    // 深化：函数调用赋值（如 x = log(token)——CALL 指令——函数名编码为指令）
+    const call = /^([A-Za-z_]\w*)\s*\(([^)]*)\)$/.exec(rhs)
+    if (call) {
+      const outReg = regs[target] ?? (regs[target] = nextReg++)
+      const args = call[2]!.trim() === "" ? [] : call[2]!.split(",").map((a) => a.trim())
+      const argRegs = args.map((a) => resolveExpr(a, instructions, regs, () => nextReg++))
+      // CALL 指令：{ op, 函数名哈希, 结果寄存器 }——参数寄存器按顺序在前（VM 解释器扩展）
+      const funcHash = [...call[1]!].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
+      for (const argReg of argRegs) instructions.push([OP.CONST, argReg, argReg])
+      instructions.push([OP.CALL, funcHash, outReg])
+      return
+    }
     const reg = regs[target] ?? (regs[target] = nextReg++)
-    const srcReg = resolveExpr(assign[2]!.trim(), instructions, regs, () => nextReg++)
+    const srcReg = resolveExpr(rhs, instructions, regs, () => nextReg++)
     instructions.push([OP.STORE, srcReg, reg])
   }
 

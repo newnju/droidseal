@@ -74,6 +74,20 @@ export function runDynamicVerification(
           evidence: `设备 ${device.serial} logcat 命中 ${leaks.length} 类敏感模式`,
         })
       }
+      // 动态分析深化：崩溃/ANR 检测（logcat 的 FATAL EXCEPTION / ANR in——运行期稳定性证据）
+      const crashMatch = /FATAL EXCEPTION[\s\S]{0,200}/.exec(logText)
+      const anrMatch = /ANR in [\s\S]{0,200}/.exec(logText)
+      if (crashMatch || anrMatch) {
+        out.push({
+          severity: "medium",
+          confidence: "high",
+          code: "DYNAMIC_CRASH_ANR",
+          title: `动态验证：运行期崩溃/ANR${crashMatch ? "（崩溃）" : "（ANR）"}`,
+          detail: `设备 ${device.serial} 的 logcat 出现${crashMatch ? " FATAL EXCEPTION" : " ANR"}——运行期稳定性问题（可与主线程 IO/ANR 类静态发现交叉验证）。`,
+          recommendation: "核对崩溃/ANR 堆栈；主线程不应执行 IO/网络等耗时操作。",
+          evidence: `设备 ${device.serial} logcat ${crashMatch ? "崩溃" : "ANR"} 片段 ${(crashMatch ?? anrMatch)![0].slice(0, 120)}`,
+        })
+      }
     }
     // 4. dumpsys 运行时状态（验证静态发现的 debuggable）
     if (packageName) {
@@ -91,6 +105,47 @@ export function runDynamicVerification(
             evidence: `设备 ${device.serial} dumpsys DEBUGGABLE=${packageName}`,
           })
         }
+      }
+      // 动态分析深化：更多 dumpsys 服务采集（activity/netstats/device——运行期状态证据——失败关闭）
+      const activity = spawnSync("adb", ["-s", device.serial, "shell", "dumpsys", "activity", "top"], { timeout: 30000, maxBuffer: 4 * 1024 * 1024 })
+      if (activity.status === 0 && activity.stdout.toString().includes(packageName)) {
+        out.push({
+          severity: "info",
+          confidence: "medium",
+          code: "DYNAMIC_ACTIVITY_STATE",
+          title: "动态验证：前台 Activity 状态确认",
+          detail: `设备 ${device.serial} 的前台 Activity 属于 ${packageName}——应用运行期界面状态（可与 UI 敏感类静态发现交叉验证）。`,
+          recommendation: "核对前台界面；敏感界面应 FLAG_SECURE（防截屏）。",
+          evidence: `设备 ${device.serial} dumpsys activity top 显示 ${packageName}`,
+        })
+      }
+      const netstats = spawnSync("adb", ["-s", device.serial, "shell", "dumpsys", "netstats"], { timeout: 30000, maxBuffer: 4 * 1024 * 1024 })
+      if (netstats.status === 0) {
+        const netText = netstats.stdout.toString()
+        const uidMatch = /uid=(\d+)[\s\S]{0,120}?rxBytes=(\d+)[\s\S]{0,40}?txBytes=(\d+)/.exec(netText)
+        if (uidMatch) {
+          out.push({
+            severity: "info",
+            confidence: "medium",
+            code: "DYNAMIC_NETWORK_ACTIVITY",
+            title: "动态验证：应用网络流量活跃",
+            detail: `设备 ${device.serial} 的 netstats 显示 uid=${uidMatch[1]} 流量 rx=${uidMatch[2]}B/tx=${uidMatch[3]}B——应用运行期联网行为（可与网络类静态发现交叉验证）。`,
+            recommendation: "核对联网行为与端点清单；确认无未授权的网络通信。",
+            evidence: `设备 ${device.serial} netstats uid=${uidMatch[1]} rx=${uidMatch[2]}B`,
+          })
+        }
+      }
+      const devicePolicy = spawnSync("adb", ["-s", device.serial, "shell", "dumpsys", "device_policy"], { timeout: 30000, maxBuffer: 4 * 1024 * 1024 })
+      if (devicePolicy.status === 0 && /active admin/i.test(devicePolicy.stdout.toString())) {
+        out.push({
+          severity: "medium",
+          confidence: "high",
+          code: "DYNAMIC_DEVICE_ADMIN_ACTIVE",
+          title: "动态验证：设备管理管理员处于激活状态",
+          detail: `设备 ${device.serial} 的 dumpsys device_policy 显示存在激活的设备管理管理员——设备管理 API（锁屏/擦除）的动态交叉证据。`,
+          recommendation: "核对设备管理用途（企业 MDM 或滥用风险）；最小化设备管理能力。",
+          evidence: `设备 ${device.serial} dumpsys device_policy 存在 active admin`,
+        })
       }
     }
   }
