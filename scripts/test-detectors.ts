@@ -405,6 +405,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "call-answer"), detail: `命中 ${hits.length} 条（应含 呼叫欺诈——自动接听）` }
     },
   },
+  {
+    name: "②m 检测器命中(正——信任所有证书/账户令牌/明文传输)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { conn.setHostnameVerifier(ALLOW_ALL_HOSTNAME_VERIFIER); val am = AccountManager(); am.setAuthToken(acct, \"type\", \"tok\").putString(\"tok\", \"secret-1\"); dos.writeUTF(\"token-abc\") } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_CERTIFICATE_HOSTNAME_OFF") && codes.includes("SOURCE_ACCOUNT_TOKEN_RAW") && codes.includes("SOURCE_DATA_TRANSFER_PLAINTEXT"), detail: `命中 ${findings.length} 类（应含 主机名校验关闭/账户令牌/明文传输）` }
+    },
+  },
+  {
+    name: "②m 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val r = SecureRandom(); val c = Cipher.getInstance(\"AES/GCM/NoPadding\"); val k = KeyStore.getInstance(\"AndroidKeyStore\") } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——GCM + Keystore——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为键盘记录规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD"]))
+      return { hit: hits.some((h) => h.rule.crimer === "keylog-input"), detail: `命中 ${hits.length} 条（应含 键盘记录——密码输入监听）` }
+    },
+  },
 ]
 
 let failed = 0
