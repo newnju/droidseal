@@ -13,6 +13,7 @@ export const theme = {
   accent: "#34799c",
   accentStrong: "#79c9e7",
   ice: "#00a8cc",
+  deepIce: "#007a9e",
   input: "#66c8e8",
   complete: "#63d6aa",
   purple: "#00a8cc",
