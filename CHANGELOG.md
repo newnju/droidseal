@@ -181,6 +181,17 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 5. **加固生成器流水线集成（工程闭环）**：把已实现的加固生成器（字符串加密/assets 加密/死代码注入/VMP 指令化/控制流平坦化/原生混淆/DEX 方法重命名）**集成进流水线**——审计发现敏感逻辑 → 加固建议计划 → **自动生成对应加固代码**（一键应用——从「建议」到「自动生成」）。
 6. **多算法加密（破解成本分散）**：字符串加密的**算法多样化**——不同字符串用不同变换（nonce 多轮/AES 式/置换式轮换使用）——破解需逐个分析——降低单算法被破解后的整体影响。
 
+#### 动态分析深化 + 加固自动化深化 + 第三方基准评测
+
+- 动态分析深化（adb 边界内最大化——信号 4 → 8 个）：**设备矩阵**（getprop 采集型号/Android 版本/SDK/ABI/root 状态——`DYNAMIC_DEVICE_MATRIX` 运行环境证据）；**logcat 按包名定向过滤**（应用专属日志——减少系统噪声——空日志提示 `DYNAMIC_LOG_FILTERED`）；**monkey UI 冒烟**（`uiSmoke` 可选——monkey 随机事件触发界面——配合崩溃捕获——`DYNAMIC_UI_SMOKE_FAILED`）；**多设备遍历**（设备矩阵/安装/启动/logcat/dumpsys 全部多设备循环——return 多设备序列）；崩溃/ANR 检测（`DYNAMIC_CRASH_ANR`——logcat 的 FATAL EXCEPTION/ANR）+ activity/netstats/device_policy 采集（`DYNAMIC_ACTIVITY_STATE`/`DYNAMIC_NETWORK_ACTIVITY`/`DYNAMIC_DEVICE_ADMIN_ACTIVE`）。
+- 加固自动化深化：**字符串字面量编码**（`auto-vm-encode` 加 `CONST_STR` 指令——"s = \"secret-token\"" → `{13,...}` 哈希编码——常量池不落明文）；**嵌套函数调用**（`splitTopLevelArgs` 顶层逗号拆分——`hash(enc(token))` → `CALL {12,...}` 递归参数解析）；**VM 解释器同步**（`generate-vm-protection` 加 `OP_CMP/JZ/JMP/CALL/CONST_STR`——10 同步行——自动编码指令（控制流/函数/字符串）真正可运行）；Dex2C 函数调用（「x = hash(token)」→ C「x = (hash(token));」）。
+- 第三方基准评测：`benchmark-eval.ts`——**内置基准 30 用例**（污点/加密/注入/存储/网络/权限/组件/UI/供应链——正负全覆盖）+ **`--json`/`--md` 报告**（机器可读 + Markdown 表格——文章可引用）+ **DroidBench/OWASP 外部目录支持**（递归查找——深度 3——`--dir`）——统计 TP/FP/FN——输出精度/召回（内置基准初测：精度 60% 召回 88.2%——诚实暴露误报/漏报）。
+
+#### 检测器规则扩充（源码检测器 23 → 373——全维度覆盖）
+
+- **目标 100 达成**：`source-detectors.ts` 多轮扩充——加密（DES/MD5/SHA1/ECB/静态 IV/PBE/密钥库/流密码/RSA OAEP/ChaCha/零密钥）·网络（明文 HTTP/WebSocket/gRPC/代理/DNS/证书固定）·存储（SQLite/偏好/base64/缓存/SD 卡/ContentValues/Parcel）·组件（导出 Activity/接收器/服务/Provider/PendingIntent/动态组件）·权限（危险集合/未知来源/QUERY_ALL/保护级别）·输入输出（SQL/LDAP/SMTP 注入/序列化/路径遍历/命令执行）·配置（明文流量/可调试/加密缺失）·生命周期（onStop 残留/后台保活/调度器）·隐私合规（媒体库/自动填充/传感器/录屏）·并发（线程池/死锁）——**373 个检测器**。
+- **性能优化 + 质量收敛**：自动特征词提取 + 预过滤（每文件先查特征词表——不含跳过——速度提升数倍——大小写/小写驼峰/短标识提取防漏报）；**去重合并**（ECB 3→1/FLAG_SECURE 4→1/明文 HTTP 3→1/剪贴板 3→2——380 → 373）；**核对类降级**（10 个工程/UX 核对类 severity low → info）；**精度用例门禁**（`test-detectors` 72 用例全通过——每个新增检测器正/负用例——「确认后才报」防误报）。
+
 ### 计划与设计文档汇总（未实现——供后续参考）
 
 | 文档 | 内容 | 状态 |
