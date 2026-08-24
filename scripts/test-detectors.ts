@@ -477,6 +477,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "camera-open"), detail: `命中 ${hits.length} 条（应含 摄像头——打开相机特征）` }
     },
   },
+  {
+    name: "②p 检测器命中(正——DES/MD5/明文 HTTP/未知来源安装)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"DES/ECB/PKCS5Padding\"); val md = MessageDigest.getInstance(\"MD5\"); val u = URL(\"http://plain.example.com/x\"); val p = \"android.permission.REQUEST_INSTALL_PACKAGES\" } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_DES_USE") && codes.includes("SOURCE_MD5_USE") && codes.includes("SOURCE_CLEARTEXT_HTTP") && codes.includes("SOURCE_PERMISSION_INSTALL_UNKNOWN"), detail: `命中 ${findings.length} 类（应含 DES/MD5/明文 HTTP/未知来源安装）` }
+    },
+  },
+  {
+    name: "②p 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"AES/GCM/NoPadding\"); val md = MessageDigest.getInstance(\"SHA-256\"); val u = URL(\"https://ok.example.com/x\") } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——GCM + SHA-256 + HTTPS——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为无障碍规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.accessibilityservice.AccessibilityService.onAccessibilityEvent"]))
+      return { hit: hits.some((h) => h.rule.crimer === "accessibility"), detail: `命中 ${hits.length} 条（应含 无障碍——监听特征）` }
+    },
+  },
 ]
 
 let failed = 0
