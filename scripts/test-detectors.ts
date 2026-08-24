@@ -316,6 +316,30 @@ const cases: Case[] = [
       return { hit: findings.some((f) => f.code === "SUPPLYCHAIN_KNOWN_VULNERABILITY" && (f.evidence ?? "").includes("CVE-2021-0341")), detail: `命中 ${findings.length} 条（应含 okhttp CVE-2021-0341）` }
     },
   },
+  {
+    name: "②i 检测器命中(正——RSA 无填充/密钥存偏好/gRPC 明文)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"RSA/ECB/NoPadding\"); getSharedPreferences(\"prefs\", 0).putString(\"aes_key\", \"secret-key\"); ManagedChannelBuilder.forAddress(\"h\", 80).usePlaintext() } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_RSA_NO_PADDING") && codes.includes("SOURCE_KEY_IN_PREFERENCES") && codes.includes("SOURCE_GRPC_PLAINTEXT"), detail: `命中 ${findings.length} 类（应含 RSA 无填充/密钥存偏好/gRPC 明文）` }
+    },
+  },
+  {
+    name: "②i 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"RSA/ECB/OAEPWithSHA-256AndMGF1Padding\"); val r = SecureRandom(); ManagedChannelBuilder.forAddress(\"h\", 443).useTransportSecurity() } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——RSA OAEP + gRPC TLS——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为静默下载规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.app.DownloadManager.enqueue"]))
+      return { hit: hits.some((h) => h.rule.crimer === "rogue-download"), detail: `命中 ${hits.length} 条（应含 静默下载——流氓推广）` }
+    },
+  },
 ]
 
 let failed = 0

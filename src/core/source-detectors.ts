@@ -46,7 +46,7 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_HARDCODED_TEST_CONFIG", title: "硬编码测试配置（测试服务器/后门）", severity: "high", pattern: /(?:test\.|staging\.|http:\/\/[0-9.]+)/i, recommendation: "测试/暂存服务器与内网地址不应留在发布构建——核对配置管理。", note: "测试配置/内网地址泄露——发布风险。" },
   // 扩充②c（目标 100 个——加密/网络/存储/组件/输入校验/输出/配置——保障精度）
   { code: "SOURCE_WEAK_KEYSTORE_PASSWORD", title: "弱密钥库口令", severity: "medium", pattern: /KeyStore\.load\s*\([^)]*(?:"password"|"123456"|"changeme")/i, recommendation: "密钥库口令应使用强随机密码（Keystore 硬件背书优先）。", note: "弱密钥库口令可被暴力破解。" },
-  { code: "SOURCE_ECB_CIPHER_USAGE", title: "ECB 模式加密（AES/3DES）", severity: "high", pattern: /Cipher\.getInstance\s*\(\s*["'][^"']*\/ECB\/[^"']*["']/i, recommendation: "ECB 模式泄露明文模式——应使用 CBC/GCM（随机 IV）。", note: "ECB 的确定性加密——明文模式泄露。" },
+  { code: "SOURCE_ECB_CIPHER_USAGE", title: "ECB 模式加密（AES/3DES）", severity: "high", pattern: /Cipher\.getInstance\s*\(\s*["'][^"']*(?:AES|DES|3DES)\/ECB\/[^"']*["']/i, recommendation: "ECB 模式泄露明文模式——应使用 CBC/GCM（随机 IV）。", note: "ECB 的确定性加密——明文模式泄露。" },
   { code: "SOURCE_SYMMETRIC_KEY_HARDCODED", title: "硬编码对称密钥", severity: "high", pattern: /(?:AESKey|SecretKeySpec)\s*\([^)]*"[0-9A-Fa-f]{16,}"[^)]*\)/i, recommendation: "对称密钥不应硬编码——用 Keystore 生成并安全存储。", note: "硬编码密钥可被静态分析提取。" },
   { code: "SOURCE_PROXY_CLEARED", title: "清空代理设置（绕过企业代理）", severity: "medium", pattern: /setProxy\s*\(\s*null\s*\)/i, recommendation: "清空代理可绕过企业安全代理（流量监控）——核对网络策略。", note: "清空代理绕过安全监控。" },
   { code: "SOURCE_REDIRECT_UNVALIDATED", title: "未校验的重定向（URL 跳转）", severity: "medium", pattern: /setRedirectHandler\s*\([^)]*\)|URLConnection\s*[^;]{0,60}followRedirects\s*\(\s*true\s*\)/i, recommendation: "重定向目标需校验（防止跳转到恶意站点——钓鱼/SSRF）。", note: "未校验重定向——SSRF/钓鱼风险。" },
@@ -145,6 +145,22 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_TELEPHONY_SENSITIVE", title: "通话状态读取敏感", severity: "medium", pattern: /TelephonyManager[\s\S]{0,60}?getCallState|listen\s*\(/i, recommendation: "通话状态监听需权限合规（隐私）。", note: "通话监听——隐私。" },
   { code: "SOURCE_THREAD_POOL_UNBOUNDED", title: "无界线程池（资源耗尽）", severity: "low", pattern: /newCachedThreadPool|Executors\.newFixedThreadPool\s*\([^)]*[0-9]{3,}[^)]*\)/i, recommendation: "线程池应有界（防资源耗尽/DoS）。", note: "无界线程——资源耗尽。" },
   { code: "SOURCE_TIMER_SENSITIVE", title: "定时器执行敏感逻辑", severity: "low", pattern: /(?:Timer|ScheduledExecutorService)[\s\S]{0,60}?(?:schedule|scheduleAtFixedRate)[\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "定时器敏感逻辑需安全（防越权执行）。", note: "定时器敏感——越权风险。" },
+  // 扩充②i（推进 200——加密/网络/存储/组件/权限/配置/隐私合规——保障精度）
+  { code: "SOURCE_RSA_NO_PADDING", title: "RSA 无填充（原始 RSA）", severity: "high", pattern: /Cipher\.getInstance\s*\(\s*["']RSA\/ECB\/NoPadding["']/i, recommendation: "原始 RSA 无填充可被 Bleichenbacher 攻击——应使用 OAEP。", note: "原始 RSA——填充攻击。" },
+  { code: "SOURCE_RANDOM_FOR_CRYPTO", title: "随机数用于加密（非 SecureRandom）", severity: "high", pattern: /(?:new\s+Random|Math\.random)\s*\([\s\S]{0,80}?(?:key|iv|salt|token|nonce)/i, recommendation: "加密随机数必须用 SecureRandom（Random 可预测）。", note: "弱随机——密钥/IV 可预测。" },
+  { code: "SOURCE_KEY_IN_PREFERENCES", title: "密钥存偏好设置", severity: "high", pattern: /getSharedPreferences[\s\S]{0,80}?putString\s*\([^)]*(?:key|secret|aes)[^)]*\)/i, recommendation: "密钥应存 AndroidKeyStore（偏好可被读取）。", note: "偏好密钥——可提取。" },
+  { code: "SOURCE_WEBSOCKET_NO_TLS", title: "WebSocket 无 TLS（ws:// 已覆盖——升级检测）", severity: "medium", pattern: /WebSocketFactory[\s\S]{0,80}?(?:createConnection|newConnection)[\s\S]{0,60}?ws:\/\//i, recommendation: "WebSocket 库的明文连接需 wss://（TLS）。", note: "WebSocket 明文——窃听。" },
+  { code: "SOURCE_GRPC_PLAINTEXT", title: "gRPC 明文通道", severity: "medium", pattern: /ManagedChannelBuilder[\s\S]{0,60}?forAddress[\s\S]{0,80}?(?:plaintext|usePlaintext)/i, recommendation: "gRPC 应使用 TLS（usePlaintext 明文可窃听）。", note: "gRPC 明文——窃听。" },
+  { code: "SOURCE_OKHTTP_CLEARTEXT", title: "OkHttp 明文请求（http:// 硬编码）", severity: "medium", pattern: /(?:Request\.Builder|HttpUrl\.parse)[\s\S]{0,60}?["']http:\/\//i, recommendation: "OkHttp 请求应 HTTPS（http:// 可中间人）。", note: "OkHttp 明文——中间人。" },
+  { code: "SOURCE_DB_INDEX_SENSITIVE", title: "数据库敏感列未索引保护", severity: "low", pattern: /CREATE TABLE[\s\S]{0,120}?(?:password|token|secret)[\s\S]{0,60}?(?:TEXT|BLOB)/i, recommendation: "敏感列应加密存储（DB 文件可被提取读取）。", note: "敏感列明文——DB 提取。" },
+  { code: "SOURCE_CACHE_SENSITIVE_FILE", title: "缓存敏感文件（cacheDir）", severity: "medium", pattern: /(?:cacheDir|getCacheDir)[\s\S]{0,60}?(?:writeText|writeBytes|createNewFile)/i, recommendation: "缓存文件不应含敏感（可被系统清理/读取）——用加密存储。", note: "缓存敏感——清理/读取。" },
+  { code: "SOURCE_AUTOFILL_SENSITIVE", title: "敏感输入自动填充暴露", severity: "medium", pattern: /setAutofillHints\s*\(\s*View\.AUTOFILL_HINT_(?:PASSWORD|CREDIT_CARD|SENSITIVE)/i, recommendation: "敏感输入自动填充需核对（填充服务可见——合规）。", note: "自动填充——敏感暴露。" },
+  { code: "SOURCE_SCREENSHOT_BLOCK_ABSENT", title: "敏感界面未阻止截屏", severity: "medium", pattern: /(?:getWindow|setFlags)[\s\S]{0,80}?FLAG_SECURE[\s\S]{0,60}?(?:password|token|pin)/i, recommendation: "敏感界面应 FLAG_SECURE（防截屏/最近任务）——核对。", note: "敏感界面——截屏可见。" },
+  { code: "SOURCE_EXTERNAL_LINK_UNVALIDATED", title: "外部链接未校验（deep link 打开任意）", severity: "medium", pattern: /(?:Intent\.ACTION_VIEW|setData)[\s\S]{0,60}?(?:url|uri|link)[\s\S]{0,40}?startActivity/i, recommendation: "外部链接（深链）需白名单校验（防打开任意应用）。", note: "深链未校验——任意打开。" },
+  { code: "SOURCE_APP_LINK_VERIFY_ABSENT", title: "App Link 未验证（深链 hijack）", severity: "medium", pattern: /intent-filter[\s\S]{0,80}?android:autoVerify[\s\S]{0,40}?VIEW/i, recommendation: "深链应 autoVerify + HTTPS（防深链劫持）。", note: "深链未验证——劫持。" },
+  { code: "SOURCE_GDPR_DATA_ABSENT", title: "隐私数据收集未声明（GDPR/合规）", severity: "low", pattern: /(?:getDeviceId|getImei|getMacAddress)[\s\S]{0,80}?(?:收集|privacy|consent)/i, recommendation: "隐私数据收集需合规声明与用户同意（GDPR/CCPA）。", note: "隐私收集——合规风险。" },
+  { code: "SOURCE_LOGCAT_VERBOSE_SENSITIVE", title: "Logcat 详细日志含敏感", severity: "medium", pattern: /Log\.v\s*\([^)]*(?:password|token|secret|credential)[^)]*\)/i, recommendation: "verbose 日志不应含敏感（logcat 可读）——脱敏。", note: "Verbose 日志——敏感泄露。" },
+  { code: "SOURCE_BLUETOOTH_SENSITIVE", title: "蓝牙传输敏感（无加密）", severity: "medium", pattern: /(?:BluetoothSocket|BluetoothGatt)[\s\S]{0,80}?(?:connect|write)[\s\S]{0,60}?(?:password|token|secret)/i, recommendation: "蓝牙传输敏感需加密/配对校验（明文可被嗅探）。", note: "蓝牙明文——嗅探。" },
 ]
 
 // 扫描项目源码文件（Java/Kotlin——递归——有界）——返回检测到的 finding（失败关闭）。
