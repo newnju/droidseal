@@ -429,6 +429,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "keylog-input"), detail: `命中 ${hits.length} 条（应含 键盘记录——密码输入监听）` }
     },
   },
+  {
+    name: "②n 检测器命中(正——哈希存储/查询凭据/通话记录)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { MessageDigest.getInstance(\"MD5\").digest(pwd).store(); HttpURLConnection(\"http://h/x?token=abc\"); CallLog.Calls.query(cr, null, null, null, null) } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_HASH_FOR_STORAGE") && codes.includes("SOURCE_QUERY_PARAM_CREDENTIAL") && codes.includes("SOURCE_CALL_LOG_READ"), detail: `命中 ${findings.length} 类（应含 哈希存储/查询凭据/通话记录）` }
+    },
+  },
+  {
+    name: "②n 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val r = SecureRandom(); val k = KeyGenerator.getInstance(\"AES\"); k.init(256); val c = Cipher.getInstance(\"AES/GCM/NoPadding\") } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——AES-256 + GCM——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为录音规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.media.MediaRecorder.start"]))
+      return { hit: hits.some((h) => h.rule.crimer === "record-audio"), detail: `命中 ${hits.length} 条（应含 录音——静默录音特征）` }
+    },
+  },
 ]
 
 let failed = 0
