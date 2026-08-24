@@ -2,6 +2,9 @@
 // 新增 15 个左右源码侧检测器（加密/网络/存储/组件/权限——正则模式——扫描项目源码——
 // 失败关闭）。与 ssl-bypass/weak-crypto 等模块化检测器并列，集成进源码审计。
 import { readFile, readdir } from "node:fs/promises"
+
+// 扫描内容缓存（性能优化：同文件重复扫描时复用内容——避免重复 readFile——如多次调用/重叠目录）。
+const contentCache = new Map<string, string>()
 import path from "node:path"
 import type { Finding } from "./types.ts"
 
@@ -46,7 +49,7 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_HARDCODED_TEST_CONFIG", title: "硬编码测试配置（测试服务器/后门）", severity: "high", pattern: /(?:test\.|staging\.|http:\/\/[0-9.]+)/i, recommendation: "测试/暂存服务器与内网地址不应留在发布构建——核对配置管理。", note: "测试配置/内网地址泄露——发布风险。" },
   // 扩充②c（目标 100 个——加密/网络/存储/组件/输入校验/输出/配置——保障精度）
   { code: "SOURCE_WEAK_KEYSTORE_PASSWORD", title: "弱密钥库口令", severity: "medium", pattern: /KeyStore\.load\s*\([^)]*(?:"password"|"123456"|"changeme")/i, recommendation: "密钥库口令应使用强随机密码（Keystore 硬件背书优先）。", note: "弱密钥库口令可被暴力破解。" },
-  { code: "SOURCE_ECB_CIPHER_USAGE", title: "ECB 模式加密（AES/3DES）", severity: "high", pattern: /Cipher\.getInstance\s*\(\s*["'][^"']*(?:AES|DES|3DES)\/ECB\/[^"']*["']/i, recommendation: "ECB 模式泄露明文模式——应使用 CBC/GCM（随机 IV）。", note: "ECB 的确定性加密——明文模式泄露。" },
+  { code: "SOURCE_ECB_CIPHER_USAGE", title: "ECB 模式加密（AES）", severity: "high", pattern: /Cipher\.getInstance\s*\(\s*["'][^"']*AES\/ECB\/[^"']*["']/i, recommendation: "ECB 模式泄露明文模式——应使用 CBC/GCM（随机 IV）。", note: "ECB 的确定性加密——明文模式泄露。（DES/3DES 的 ECB 由 SOURCE_DES_USE 统一报告——避免双报）" },
   { code: "SOURCE_SYMMETRIC_KEY_HARDCODED", title: "硬编码对称密钥", severity: "high", pattern: /(?:AESKey|SecretKeySpec)\s*\([^)]*"[0-9A-Fa-f]{16,}"[^)]*\)/i, recommendation: "对称密钥不应硬编码——用 Keystore 生成并安全存储。", note: "硬编码密钥可被静态分析提取。" },
   { code: "SOURCE_PROXY_CLEARED", title: "清空代理设置（绕过企业代理）", severity: "medium", pattern: /setProxy\s*\(\s*null\s*\)/i, recommendation: "清空代理可绕过企业安全代理（流量监控）——核对网络策略。", note: "清空代理绕过安全监控。" },
   { code: "SOURCE_REDIRECT_UNVALIDATED", title: "未校验的重定向（URL 跳转）", severity: "medium", pattern: /setRedirectHandler\s*\([^)]*\)|URLConnection\s*[^;]{0,60}followRedirects\s*\(\s*true\s*\)/i, recommendation: "重定向目标需校验（防止跳转到恶意站点——钓鱼/SSRF）。", note: "未校验重定向——SSRF/钓鱼风险。" },
@@ -113,7 +116,7 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_SERVICE_INTENT_SENSITIVE", title: "服务 Intent 传递敏感", severity: "medium", pattern: /startService\s*\(\s*[^)]*(?:password|token|secret)[^)]*\)/i, recommendation: "服务 Intent 含敏感数据需校验（跨进程可见）。", note: "服务 Intent——敏感数据。" },
   { code: "SOURCE_DEX_EXEC_DYNAMIC", title: "动态执行代码（DexClassLoader 加载外部）", severity: "high", pattern: /DexClassLoader\s*\([^)]*(?:http|download|sdcard|external)[^)]*\)/i, recommendation: "动态加载外部 DEX 需校验来源与签名（防恶意载荷）。", note: "动态 DEX 加载——恶意载荷。" },
   { code: "SOURCE_JS_INJECTION_SRC", title: "源码 JS 注入（拼接 JS）", severity: "high", pattern: /loadUrl\s*\(\s*["']javascript:["']\s*\+/i, recommendation: "JS 注入需严格校验内容（防 XSS 于 WebView）。", note: "JS 注入——WebView XSS。" },
-  { code: "SOURCE_SQL_INJECTION_SRC", title: "SQL 注入（字符串拼接查询）", severity: "high", pattern: /(?:execSQL|rawQuery)\s*\(\s*["'][^"']*["']\s*\+/i, recommendation: "SQL 应使用参数化（selectionArgs）——拼接可注入。", note: "SQL 拼接——注入风险。" },
+  { code: "SOURCE_SQL_INJECTION_SRC", title: "SQL 注入（多段拼接查询）", severity: "high", pattern: /(?:execSQL|rawQuery)\s*\(\s*["'][^"']*["']\s*\+\s*[^"']*\+\s*[^"']/i, recommendation: "SQL 应使用参数化（selectionArgs）——拼接可注入。", note: "SQL 多段拼接——注入风险。（单段拼接由 SOURCE_SQL_RAW_STRING 报告——避免双报）" },
   { code: "SOURCE_CUSTOM_HEADER_SENSITIVE", title: "自定义 Header 含敏感（认证令牌）", severity: "medium", pattern: /setRequestProperty\s*\(\s*["'](?:Authorization|X-Api-Key)["']\s*,\s*["'][^"']{6,}["']/i, recommendation: "认证 Header 的令牌不应硬编码（应动态获取）。", note: "Header 令牌硬编码——泄露。" },
   { code: "SOURCE_PREFERENCE_INSECURE_BACKUP", title: "偏好设置未排除敏感备份", severity: "low", pattern: /android:fullBackupContent|dataExtractionRules[\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "备份规则应排除敏感偏好（防备份提取）。", note: "备份含敏感——提取风险。" },
   // 扩充②g（推进 100——达标——加密/网络/存储/组件/输入输出/生命周期——保障精度）
@@ -258,7 +261,7 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_SQLITE_PRAGMA_INSECURE", title: "SQLite 不安全 PRAGMA（journal 弱）", severity: "low", pattern: /PRAGMA\s+(?:journal_mode|synchronous)\s*=\s*(?:DELETE|OFF|0)/i, recommendation: "SQLite journal/synchronous 弱（崩溃一致性/取证）——WAL/FULL。", note: "SQLite PRAGMA——一致性。" },
   { code: "SOURCE_PROVIDER_OPEN_FILE", title: "Provider 开放文件句柄", severity: "medium", pattern: /openFile\s*\([\s\S]{0,80}?ParcelFileDescriptor|openAssetFile\s*\(/i, recommendation: "Provider openFile 需校验（防任意文件读取）。", note: "Provider 文件——任意读取。" },
   { code: "SOURCE_SERVICE_FOREGROUND_TYPE", title: "前台服务类型未声明（Android 14+）", severity: "low", pattern: /startForeground\s*\([^)]*,\s*[^)]*\)[\s\S]{0,40}?(?!FOREGROUND_SERVICE_TYPE)/i, recommendation: "Android 14+ 需声明前台服务类型（foregroundServiceType）。", note: "前台类型——兼容。" },
-  { code: "SOURCE_RECEIVER_ORDER_SENSITIVE", title: "接收器顺序依赖（有序广播）", severity: "low", pattern: /setOrderedHint|setPriority[\s\S]{0,40}?RECEIVER[\s\S]{0,40}?password|token|secret/i, recommendation: "接收器顺序敏感——核对（可被高优先级拦截）。", note: "接收器顺序——拦截。" },
+  { code: "SOURCE_RECEIVER_ORDER_SENSITIVE", title: "接收器顺序依赖（有序广播）", severity: "low", pattern: /setOrderedHint|(?:setPriority[\s\S]{0,40}?RECEIVER[\s\S]{0,40}?(?:password|token|secret))/i, recommendation: "接收器顺序敏感——核对（可被高优先级拦截）。", note: "接收器顺序——拦截。" },
   { code: "SOURCE_PERMISSION_MAX_SDK", title: "权限 maxSdk 误用（权限降级）", severity: "medium", pattern: /uses-permission[\s\S]{0,60}?maxSdkVersion/i, recommendation: "maxSdkVersion 降级权限需核对（低版本缺保护）。", note: "maxSdk 降级——保护缺失。" },
   { code: "SOURCE_SPLIT_CONFIG_ABSENT", title: "拆分配置缺失（可访问性/兼容）", severity: "info", pattern: /targetSdk[\s\S]{0,80}?split_config|android:extractNativeLibs/i, recommendation: "拆分配置需核对（多 ABI/兼容）。", note: "拆分配置——兼容。" },
   { code: "SOURCE_LIFECYCLE_DIALOG_SENSITIVE", title: "对话框显示敏感（锁屏可见）", severity: "low", pattern: /(?:AlertDialog|Dialog)[\s\S]{0,80}?(?:password|token|secret)[\s\S]{0,40}?setMessage|show/i, recommendation: "对话框敏感数据需防窥（锁屏/截屏）。", note: "对话框敏感——锁屏可见。" },
@@ -452,7 +455,8 @@ export async function scanSourceDetectors(projectDir: string): Promise<Finding[]
       filesScanned += 1
       let content: string
       try {
-        content = await readFile(full, "utf8")
+        content = contentCache.get(full) ?? await readFile(full, "utf8")
+        contentCache.set(full, content)
       } catch {
         continue
       }

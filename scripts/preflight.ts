@@ -15,6 +15,7 @@ const GATES: Array<{ name: string; command: string; args: string[] }> = [
   { name: "test", command: "bun", args: ["test", "--timeout", "30000"] },
   { name: "release-check", command: "bun", args: ["run", "release:check"] },
   { name: "data-tables", command: "bun", args: ["scripts/known-vuln-check.ts"] },
+  { name: "benchmark", command: "bun", args: ["scripts/benchmark-eval.ts", "--min-precision", "60"] },
 ]
 
 function main(): void {
