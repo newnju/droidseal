@@ -525,6 +525,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "mining-pool"), detail: `命中 ${hits.length} 条（应含 挖矿池/远控特征）` }
     },
   },
+  {
+    name: "②r 检测器命中(正——Java 序列化/键盘监听/字符串未加密)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val oos = ObjectOutputStream(fos); oos.writeObject(data); val k = InputMethodService(); val secret = \"AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/=\" } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_SERIALIZATION_JAVA") && codes.includes("SOURCE_KEYBOARD_LISTENER") && codes.includes("SOURCE_STRING_ENCRYPTION_ABSENT"), detail: `命中 ${findings.length} 类（应含 Java 序列化/键盘监听/字符串未加密）` }
+    },
+  },
+  {
+    name: "②r 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val json = JSONObject(); val r = SecureRandom(); val c = Cipher.getInstance(\"AES/GCM/NoPadding\") } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——JSON + GCM——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为勒索锁屏规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.app.admin.DevicePolicyManager.setLockTaskPackages"]))
+      return { hit: hits.some((h) => h.rule.crimer === "ransom-lock"), detail: `命中 ${hits.length} 条（应含 勒索锁屏特征）` }
+    },
+  },
 ]
 
 let failed = 0
