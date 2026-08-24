@@ -61,10 +61,13 @@ interface EvalResult {
   tp: string[]
   fp: string[]
   fn: string[]
+  ms: number // 单个用例耗时（监控）
+  rssMB: number // 用例结束时 RSS（监控）
 }
 
-// 跑一个基准用例（合成源码目录——scanSourceDetectors——统计 TP/FP/FN）。
+// 跑一个基准用例（合成源码目录——scanSourceDetectors——统计 TP/FP/FN——记录耗时/内存）。
 async function evalCase(testCase: BenchmarkCase): Promise<EvalResult> {
+  const start = performance.now()
   const findings = testCase.sourceDir ? await scanSourceDetectors(testCase.sourceDir) : await (async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "bench-"))
     await mkdir(path.join(dir, "src"), { recursive: true })
@@ -76,7 +79,7 @@ async function evalCase(testCase: BenchmarkCase): Promise<EvalResult> {
   const tp = [...expected].filter((c) => detected.has(c))
   const fp = [...detected].filter((c) => !expected.has(c))
   const fn = [...expected].filter((c) => !detected.has(c))
-  return { name: testCase.name, tp, fp, fn }
+  return { name: testCase.name, tp, fp, fn, ms: Math.round(performance.now() - start), rssMB: Math.round(process.memoryUsage().rss / 1024 / 1024) }
 }
 
 // 递归遍历目录收集 .java 文件（避免 readdir recursive 兼容性问题）。
@@ -171,12 +174,23 @@ function main(): void {
   const jsonOut = jsonIndex >= 0 ? argv[jsonIndex + 1] : undefined
   const mdIndex = argv.indexOf("--md")
   const mdOut = mdIndex >= 0 ? argv[mdIndex + 1] : undefined
+  const monitor = argv.includes("--monitor")
 
   ;(async () => {
     const cases = externalDir ? await loadExternalCases(externalDir) : [...BENCHMARK_CASES]
     if (cases.length === 0) throw new Error(`基准目录无有效用例：${externalDir ?? "(内置)"}`)
+    const runStart = performance.now()
+    const cpuStart = process.cpuUsage()
+    let rssPeak = 0
     const results: EvalResult[] = []
-    for (const testCase of cases) results.push(await evalCase(testCase))
+    for (const testCase of cases) {
+      const r = await evalCase(testCase)
+      results.push(r)
+      rssPeak = Math.max(rssPeak, r.rssMB)
+    }
+    const totalMs = Math.round(performance.now() - runStart)
+    const cpu = process.cpuUsage(cpuStart)
+    const cpuMs = Math.round((cpu.user + cpu.system) / 1000)
 
     let tp = 0
     let fp = 0
@@ -203,7 +217,7 @@ function main(): void {
         totals: { tp, fp, fn },
         precision: Number(precision.toFixed(1)),
         recall: Number(recall.toFixed(1)),
-        cases: results.map((r) => ({ name: r.name, tp: r.tp, fp: r.fp, fn: r.fn })),
+        cases: results.map((r) => ({ name: r.name, tp: r.tp, fp: r.fp, fn: r.fn, ms: r.ms, rssMB: r.rssMB })),
       }
       await writeFile(jsonOut, JSON.stringify(report, null, 2), "utf8")
       console.log(`已输出 JSON 报告：${jsonOut}`)
@@ -216,6 +230,38 @@ function main(): void {
       const md = `# DroidSeal 基准评测报告\n\n- 来源：${externalDir ?? "内置基准"}\n- 用例数：${cases.length}\n- 合计：TP=${tp} FP=${fp} FN=${fn}\n- **精度 ${precision.toFixed(1)}% · 召回 ${recall.toFixed(1)}%**\n\n| 用例 | TP | FP | FN |\n|---|---|---|---|\n${rows}\n`
       await writeFile(mdOut, md, "utf8")
       console.log(`已输出 Markdown 报告：${mdOut}`)
+    }
+
+    // --monitor：耗时/内存/CPU 监控报告（在完整报告写入后合并——避免被覆盖）
+    if (monitor) {
+      const sorted = [...results].sort((a, b) => b.ms - a.ms)
+      console.log(`\n== 监控报告（--monitor） ==`)
+      console.log(`总耗时 ${totalMs}ms · 峰值 RSS ${rssPeak}MB · CPU ${cpuMs}ms（user+system）`)
+      console.log("耗时 Top 5：")
+      for (const r of sorted.slice(0, 5)) console.log(`  ${r.ms}ms  ${r.name}（检出 ${r.tp.length + r.fp.length + r.fn.length} 项）`)
+      console.log("最慢用例：" + sorted[0]?.name + `（${sorted[0]?.ms}ms）`)
+      console.log("最快用例：" + sorted[sorted.length - 1]?.name + `（${sorted[sorted.length - 1]?.ms}ms）`)
+      const monitorOut = { totalMs, rssPeakMB: rssPeak, cpuMs, cases: results.map((r) => ({ name: r.name, ms: r.ms, rssMB: r.rssMB })) }
+      if (jsonOut) {
+        const fs = await import("node:fs/promises")
+        try {
+          const report = JSON.parse(await fs.readFile(jsonOut, "utf8")) as Record<string, unknown>
+          report.monitor = monitorOut
+          await fs.writeFile(jsonOut, JSON.stringify(report, null, 2), "utf8")
+        } catch {
+          await fs.writeFile(jsonOut, JSON.stringify({ monitor: monitorOut }, null, 2), "utf8")
+        }
+      }
+      if (mdOut) {
+        const rows = sorted.map((r) => `| ${r.name} | ${r.ms} | ${r.rssMB} |`).join("\n")
+        const monMd = `\n## 监控报告\n\n- 总耗时：${totalMs}ms\n- 峰值 RSS：${rssPeak}MB\n- CPU：${cpuMs}ms（user+system）\n\n| 用例 | 耗时(ms) | RSS(MB) |\n|---|---|---|\n${rows}\n`
+        const fs = await import("node:fs/promises")
+        try {
+          await fs.appendFile(mdOut, monMd, "utf8")
+        } catch {
+          await fs.writeFile(mdOut, monMd, "utf8")
+        }
+      }
     }
   })().catch((error) => {
     console.error(`基准评测失败：${error instanceof Error ? error.message : String(error)}`)
