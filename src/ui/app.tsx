@@ -1513,7 +1513,7 @@ export function App() {
             flexShrink={0}
             flexDirection="column"
             backgroundColor={theme.panel}
-            border={["left"]}
+            border={["left", "top", "bottom"]}
             borderColor={theme.border}
             paddingLeft={2}
             paddingRight={2}
