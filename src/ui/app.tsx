@@ -1276,12 +1276,10 @@ export function App() {
             </text>
             <Button
               label={draft().keepIntermediates ? "测试与学习" : "经典模式"}
-              detail={draft().keepIntermediates ? "保留全部中间产物" : "只留最终 release 与报告"}
               onPress={() => setDraft((current) => ({ ...current, keepIntermediates: !(current.keepIntermediates ?? false) }))}
             />
             <Button
               label={language() === "en" ? "中文" : "English"}
-              detail={language() === "en" ? "切换到中文" : "Switch to English"}
               onPress={() => setLanguage((current) => (current === "en" ? "zh" : "en"))}
             />
           </box>
