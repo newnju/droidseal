@@ -81,6 +81,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 层面 4 运行时环境深度检测：stub 加 `checkSystemProperties`（ro.debuggable/ro.secure——不只是调试器）+ `signalsToJson` 接线（xposedPresence/reverseToolTraces/systemPropertiesDebug）。
 - 层面 5 资源与内存运行时保护：字符串加密桩加 `--clear-after-use`（`decryptChars`——解密到 CharArray——用后立即清零——内存不留明文痕迹）。
 - 死代码注入：`generate-dead-code.ts`——生成无害死代码桩（恒假分支/冗余方法/伪逻辑——不改变行为——提高逆向噪声——`--count`/`--class`——失败关闭）。
+- 加固深化六方向（追求更强更硬）：字符串加密算法增强（`dex-string-crypto.ts`——单轮 XOR → **带 nonce 的 8 轮变换**——密文随机化（同值不同密——抗已知明文/频率分析））；密钥内存保护（字符串加密桩 `--key` 的模板改**掩码存储**——`MASKED_KEY` + `deriveMask` 运行时重建——常量池无明文密钥）；多文件完整性检测（stub `checkMultiFileIntegrity`——APK 内 DEX/so/资源多文件 SHA-256 与期望清单比对——篡改定位文件级——`signalsToJson` 接线）；原生层反调试（`droidseal_antidebug.c` 加 **ptrace 自跟踪检测**（PTRACE_TRACEME——已被跟踪时失败）——`nativePtraceTraced` + Kotlin `checkPtraceTraced`——native 侧主动防御）；控制流多层平坦化（`generate-control-flow-obfuscation.ts` 深化——**嵌套 switch 分发**（外层状态机 + 内层块分发）+ **opaque predicates 复杂化**（6 种不透明表达式——静态不可判定））；VMP 自动指令化（`auto-vm-encode.ts`——把简单逻辑**自动转 VM 指令数组**（赋值/二元运算/常量/变量——如 `x=a+b;y=x*2;return y` → 8 条指令——粘贴进 VM 框架运行期解释执行——分阶段：简单表达式 → 复杂表达式 → 控制流）。
 
 ### Fixed
 
