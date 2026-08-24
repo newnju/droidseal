@@ -501,6 +501,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "accessibility"), detail: `命中 ${hits.length} 条（应含 无障碍——监听特征）` }
     },
   },
+  {
+    name: "②q 检测器命中(正——RSA 无 OAEP/设备所有者/明文网络配置)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"RSA/ECB/PKCS1Padding\"); val m = \"android:usesCleartextTraffic=true\"; val p = \"android.permission.BIND_DEVICE_ADMIN\" } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_RSA_ECB_NO_OAEP") && codes.includes("SOURCE_NETWORK_SECURITY_CONFIG") && codes.includes("SOURCE_DEVICE_OWNER"), detail: `命中 ${findings.length} 类（应含 RSA 无 OAEP/明文网络/设备所有者）` }
+    },
+  },
+  {
+    name: "②q 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"RSA/ECB/OAEPWithSHA-256AndMGF1Padding\"); val m = \"android:usesCleartextTraffic=false\"; val r = SecureRandom() } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——OAEP + 禁明文——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为挖矿规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["java.net.URL.openConnection"]))
+      return { hit: hits.some((h) => h.rule.crimer === "mining-pool"), detail: `命中 ${hits.length} 条（应含 挖矿池/远控特征）` }
+    },
+  },
 ]
 
 let failed = 0
