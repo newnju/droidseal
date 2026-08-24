@@ -32,7 +32,7 @@
     "bin/droidseal.cjs",
     "dist",
     "README.md",
-    "README.zh.md",
+    "README.zh-CN.md",
     "LICENSE",
     "NOTICE",
     "CHANGELOG.md",
