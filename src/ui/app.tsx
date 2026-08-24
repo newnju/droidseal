@@ -19,35 +19,14 @@ import { language, setLanguage, t, tGuidance, translateDetail, translateProgress
 import { totalmem } from "node:os"
 import { dlopen, FFIType } from "bun:ffi"
 
-// Windows:让系统忽略 Ctrl+C 控制台事件(CTRL_C_EVENT)。
-// 日志已证实 Bun 编译 exe 未挂钩该事件——无处理器时 Windows 会直接终止进程,
-// process.on("SIGINT") 从不触发。SetConsoleCtrlHandler(NULL, TRUE) 令系统忽略,
-// 之后 raw mode 下 Ctrl+C 仅以 \x03 字节到达按键处理器,照常复制。
-function ignoreConsoleCtrlC(): void {
-  try {
-    const kernel32 = dlopen("kernel32.dll", {
-      SetConsoleCtrlHandler: { args: [FFIType.ptr, FFIType.bool], returns: FFIType.bool },
-    })
-    kernel32.symbols.SetConsoleCtrlHandler(null, true)
-  } catch {
-    // 非 Windows 或 FFI 不可用时忽略
-  }
-}
-if (process.platform === "win32") ignoreConsoleCtrlC()
-
-// Ctrl+C 永不退出:模块级拦截 SIGINT/SIGTERM/SIGBREAK,任意次数都只复制,绝不退出。
-// 挂接点由 App 在 onMount 时设置;信号处理器本身永不抛错。
-let clipboardInterruptHook: (() => void) | undefined
+// Ctrl+C 实际退出:不再忽略系统 Ctrl+C——按下即中断退出(标准终端行为)。
+// 移除原先"只复制不退出"的拦截——剪贴板复制不再绑定 Ctrl+C。
 export function setClipboardInterruptHook(hook: (() => void) | undefined): void {
-  clipboardInterruptHook = hook
+  void hook
 }
 
 const interruptHandler = (): void => {
-  try {
-    clipboardInterruptHook?.()
-  } catch {
-    // 复制失败也绝不退出
-  }
+  process.exit(130)
 }
 process.on("SIGINT", interruptHandler)
 process.on("SIGTERM", interruptHandler)
@@ -1564,24 +1543,28 @@ export function App() {
             </scrollbox>
             <box height={1} />
             <box flexShrink={0} border={["top"]} borderColor={theme.border}>
+              <box height={1} />
               <text fg={theme.text}><b>{t("sidebarCurrentArtifact")}</b></text>
+              <box height={1} />
               <text fg={theme.textMuted} wrapMode="word">
                 {currentArtifactName() ?? t("sidebarNotGenerated")}
               </text>
               <Show when={artifactInfo()}>
                 {(info) => (
                   <>
+                    <box height={1} />
                     <text fg={theme.textMuted}>
                       {formatBytes(info().size)} · SHA-256 {info().sha256.slice(0, 12)}…
                     </text>
+                    <box height={1} />
                     <text fg={theme.accentStrong} selectable={false} onMouseUp={() => openArtifactFolder()}>
                       {t("sidebarOpenFolder")}
                     </text>
                   </>
                 )}
               </Show>
+              <box height={1} />
               <text fg={theme.textMuted}>{t("sidebarNoOverwrite")}</text>
-              <text fg={theme.textMuted}>{t("shortcutHints")}</text>
             </box>
           </box>
         </Show>
