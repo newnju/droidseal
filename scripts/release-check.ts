@@ -440,6 +440,7 @@ if (await exists(executablePath) && await exists(buildMetadataPath)) {
         "package.json",
         "README.md",
         "README.zh-CN.md",
+        "README.zh.md",
         "LICENSE",
         "LICENSE.zh-CN.md",
         "NOTICE",

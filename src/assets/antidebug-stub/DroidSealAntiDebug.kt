@@ -393,6 +393,27 @@ object DroidSealAntiDebug {
         }
     }
 
+    // 完整性自检定期化（运行时防护扩展）：onResume 节流——避免每次生命周期回调都重算哈希
+    //（性能）；超过节流间隔（默认 60s）才重新检查——满足「周期自检、不拖慢交互」。
+    private object IntegrityCheckThrottle {
+        private const val INTERVAL_MS = 60_000L
+        private var lastCheckMs = 0L
+        fun shouldRun(nowMs: Long = System.currentTimeMillis()): Boolean {
+            if (nowMs - lastCheckMs < INTERVAL_MS) return false
+            lastCheckMs = nowMs
+            return true
+        }
+    }
+
+    /** 宿主在 onResume 调用：节流后执行完整性自检（返回是否本次真正执行了检查）。 */
+    fun periodicIntegrityCheck(apkPath: String?, expectedSha256: String?, expectedMultiFileHashes: Map<String, String>): Boolean {
+        if (!IntegrityCheckThrottle.shouldRun()) return false
+        if (apkPath == null) return false
+        checkApkIntegrity(apkPath, expectedSha256)
+        checkMultiFileIntegrity(apkPath, expectedMultiFileHashes)
+        return true
+    }
+
     /**
      * 服务端协作上报：把当前检测信号汇总为 JSON 字符串（只报告，不阻断）。
      * 字段含 inspect() 快照、完整性、签名、模拟器、VPN/代理、时钟异常；宿主上报后由服务端决策。
