@@ -12,10 +12,22 @@ import { buildHardeningSuggestions } from "../src/core/report.ts"
 import { matchBehaviorRules } from "../src/core/behavior-rules.ts"
 import { compareKnownVulnerabilities } from "../src/core/known-vulnerabilities.ts"
 import { scanCollectionTaint } from "../src/core/collection-taint.ts"
+import { scanSourceDetectors } from "../src/core/source-detectors.ts"
+import { mkdtemp, writeFile, mkdir } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import path from "node:path"
+
+// 构造合成源码目录（供 scanSourceDetectors 的正/负用例）。
+async function makeSourceDir(source: string): Promise<string> {
+  const dir = await mkdtemp(path.join(tmpdir(), "det-"))
+  await mkdir(path.join(dir, "src"), { recursive: true })
+  await writeFile(path.join(dir, "src", "Main.kt"), source, "utf8")
+  return dir
+}
 
 interface Case {
   name: string
-  run: () => { hit: boolean; detail: string }
+  run: () => { hit: boolean; detail: string } | Promise<{ hit: boolean; detail: string }>
 }
 
 const cases: Case[] = [
@@ -142,11 +154,28 @@ const cases: Case[] = [
       return { hit: flows.length === 0, detail: `误报 ${flows.length} 条（应 0——put 但无 get→汇）` }
     },
   },
+  {
+    name: "源码检测器命中(正——日志/WebView/RSA)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { Log.d(\"token\", \"secret-1\"); w.settings.setAllowFileAccess(true); KeyPairGenerator.getInstance(\"RSA\").initialize(1024) } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_LOG_SENSITIVE") && codes.includes("SOURCE_WEBVIEW_FILE_ACCESS") && codes.includes("SOURCE_INSECURE_RSA"), detail: `命中 ${findings.length} 类（应含 日志/WebView/RSA）` }
+    },
+  },
+  {
+    name: "源码检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val kp = KeyPairGenerator.getInstance(\"RSA\"); kp.initialize(2048); val r = SecureRandom() } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——2048 位 RSA + SecureRandom——安全）` }
+    },
+  },
 ]
 
 let failed = 0
 for (const testCase of cases) {
-  const result = testCase.run()
+  const result = await testCase.run()
   const ok = result.hit
   if (!ok) failed += 1
   console.log(`${ok ? "✓" : "✗"} ${testCase.name}：${result.detail}`)
