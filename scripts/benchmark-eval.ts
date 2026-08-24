@@ -95,8 +95,8 @@ async function walkJava(dir: string, acc: string[] = []): Promise<string[]> {
 
 // 从外部基准目录加载用例（支持两种结构——失败关闭）：
 // ① 通用：每个子目录 Main.kt + expected.json；
-// ② DroidBench：projects/<用例类>/<用例>/app/src/main/java（源码目录——无 expected.json——检出统计）。
-async function loadExternalCases(dir: string): Promise<BenchmarkCase[]> {
+// ② DroidBench：projects/<用例类>/<用例>/app/src/main/java（源码目录——expected 由 --expected 映射提供）。
+async function loadExternalCases(dir: string, expectedMap: Record<string, string[]> = {}): Promise<BenchmarkCase[]> {
   const cases: BenchmarkCase[] = []
   // DroidBench 结构（projects/ 下嵌套用例）
   const projectsDir = path.join(dir, "projects")
@@ -117,7 +117,7 @@ async function loadExternalCases(dir: string): Promise<BenchmarkCase[]> {
           try {
             const javaFiles = await walkJava(src)
             if (javaFiles.length === 0) continue
-            cases.push({ name: `${cls.name}/${name.name}`, source: "", sourceDir: src, expected: [] })
+            cases.push({ name: `${cls.name}/${name.name}`, source: "", sourceDir: src, expected: expectedMap[`${cls.name}/${name.name}`] ?? [] })
             break
           } catch {
             continue
@@ -175,9 +175,11 @@ function main(): void {
   const mdIndex = argv.indexOf("--md")
   const mdOut = mdIndex >= 0 ? argv[mdIndex + 1] : undefined
   const monitor = argv.includes("--monitor")
+  const expectedIndex = argv.indexOf("--expected")
 
   ;(async () => {
-    const cases = externalDir ? await loadExternalCases(externalDir) : [...BENCHMARK_CASES]
+    const expectedMap = expectedIndex >= 0 ? (JSON.parse(await readFile(argv[expectedIndex + 1]!, "utf8")) as Record<string, string[]>) : {}
+    const cases = externalDir ? await loadExternalCases(externalDir, expectedMap) : [...BENCHMARK_CASES]
     if (cases.length === 0) throw new Error(`基准目录无有效用例：${externalDir ?? "(内置)"}`)
     const runStart = performance.now()
     const cpuStart = process.cpuUsage()
@@ -206,6 +208,18 @@ function main(): void {
     const recall = tp + fn > 0 ? (tp / (tp + fn)) * 100 : 100
     console.log(`\n合计：TP=${tp} FP=${fp} FN=${fn}（${cases.length} 用例）`)
     console.log(`精度（precision）=${precision.toFixed(1)}% 召回（recall）=${recall.toFixed(1)}%`)
+
+    // --min-precision：发布门禁（内置基准精度低于阈值时失败关闭——防止检测器退化）
+    const minPrecisionIndex = argv.indexOf("--min-precision")
+    if (minPrecisionIndex >= 0) {
+      const minPrecision = parseFloat(argv[minPrecisionIndex + 1] ?? "60")
+      if (precision < minPrecision) {
+        console.error(`✗ 基准精度 ${precision.toFixed(1)}% 低于门禁阈值 ${minPrecision}%——发布门禁失败`)
+        process.exitCode = 1
+      } else {
+        console.log(`✓ 基准精度 ${precision.toFixed(1)}% ≥ 门禁阈值 ${minPrecision}%——通过`)
+      }
+    }
 
     // --json 报告（机器可读——文章/CI 可复现数据）
     if (jsonOut) {
