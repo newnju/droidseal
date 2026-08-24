@@ -177,6 +177,22 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_MIN_SDK_OLD", title: "minSdk 过旧（已知漏洞设备）", severity: "low", pattern: /minSdkVersion\s*=\s*1[0-9]/i, recommendation: "minSdk 过旧——旧设备已知漏洞（应用层无法修复）。", note: "minSdk 旧——漏洞设备。" },
   { code: "SOURCE_LIFECYCLE_LEAK", title: "生命周期泄漏（Handler/回调未移除）", severity: "low", pattern: /onDestroy\s*\([\s\S]{0,160}?(?:removeCallbacks|unregisterReceiver)|(?:Handler|postDelayed)[\s\S]{0,60}?(?:password|token|secret)/i, recommendation: "生命周期回调需移除（防泄漏/越权）。", note: "生命周期泄漏——资源/越权。" },
   { code: "SOURCE_NFC_SENSITIVE", title: "NFC 读写敏感（无加密）", severity: "medium", pattern: /NfcAdapter[\s\S]{0,80}?(?:enableForegroundDispatch|writeNdefMessage)[\s\S]{0,60}?(?:password|token|secret)/i, recommendation: "NFC 敏感数据需加密/校验（NFC 可被中继）。", note: "NFC 敏感——中继风险。" },
+  // 扩充②k（推进 200——加密/网络/存储/组件/权限/配置/隐私合规/输入输出——保障精度）
+  { code: "SOURCE_CIPHER_TRANSFORM_FIXED", title: "固定加密变换（算法/模式硬编码）", severity: "low", pattern: /Cipher\.getInstance\s*\(\s*["'](?:AES|DES|RSA)["']\s*\)/i, recommendation: "加密变换应集中配置（算法升级时统一替换）。", note: "固定变换——升级困难。" },
+  { code: "SOURCE_QR_CODE_SENSITIVE", title: "二维码含敏感（支付/令牌）", severity: "medium", pattern: /QRCodeWriter[\s\S]{0,80}?(?:token|secret|password|url)[\s\S]{0,60}?encode/i, recommendation: "二维码内容含敏感需时效/签名（防冒用）。", note: "二维码敏感——冒用风险。" },
+  { code: "SOURCE_PAYMENT_SENSITIVE", title: "支付敏感（明文金额/回调）", severity: "high", pattern: /(?:BillingClient|purchase)[\s\S]{0,80}?(?:amount|price)[\s\S]{0,60}?putExtra|onPurchasesUpdated/i, recommendation: "支付金额/回调需服务端校验（防篡改）。", note: "支付敏感——篡改风险。" },
+  { code: "SOURCE_BIOMETRIC_KEY_INSECURE", title: "生物识别密钥无用户认证绑定", severity: "medium", pattern: /KeyGenParameterSpec\.Builder[\s\S]{0,80}?setUserAuthenticationRequired[\s\S]{0,40}?false/i, recommendation: "生物识别密钥应 setUserAuthenticationRequired(true)（防无认证使用）。", note: "生物识别密钥——无认证使用。" },
+  { code: "SOURCE_HARDCODED_USER_AGENT", title: "硬编码 User-Agent（设备指纹）", severity: "low", pattern: /setUserAgent[\s\S]{0,80}?["'][^"']*Android[^"']*["']/i, recommendation: "User-Agent 含设备信息——核对隐私（设备指纹）。", note: "UA 指纹——跟踪风险。" },
+  { code: "SOURCE_APK_EXPANSION_SENSITIVE", title: "APK 扩展文件含敏感（OBB 明文）", severity: "medium", pattern: /getExpansionFilePath|ObbFile[\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "OBB 扩展文件可被读取——敏感数据避免放入（加密）。", note: "OBB 明文——数据泄露。" },
+  { code: "SOURCE_ASSET_ENCRYPTION_ABSENT", title: "资产未加密（敏感资源明文）", severity: "medium", pattern: /assets\.open\s*\(\s*["'][^"']*(?:key|secret|token)[^"']*["']/i, recommendation: "敏感资源（密钥/令牌文件）应加密存储。", note: "资产明文——密钥泄露。" },
+  { code: "SOURCE_GLOBAL_EXCEPTION_SENSITIVE", title: "全局异常处理泄露敏感", severity: "low", pattern: /setDefaultUncaughtExceptionHandler[\s\S]{0,120}?(?:password|token|secret)/i, recommendation: "全局异常处理不应记录敏感（崩溃日志第三方可见）。", note: "全局异常——敏感泄露。" },
+  { code: "SOURCE_THEME_SECURE_ABSENT", title: "敏感界面主题未设 FLAG_SECURE", severity: "medium", pattern: /setTheme[\s\S]{0,120}?(?:password|token|pin|otp)[\s\S]{0,40}?(?!FLAG_SECURE)/i, recommendation: "敏感界面需 FLAG_SECURE（防截屏/最近任务）。", note: "敏感界面——截屏可见。" },
+  { code: "SOURCE_EMULATOR_CHECK_SRC", title: "源码模拟器检测（合规）", severity: "low", pattern: /Build\.FINGERPRINT|Build\.MODEL[\s\S]{0,60}?(?:generic|sdk|emulator)/i, recommendation: "模拟器检测需合规（防滥用/反欺诈——核对用途）。", note: "模拟器检测——用途核对。" },
+  { code: "SOURCE_USB_DEBUG_SENSITIVE", title: "USB 调试相关（ADB 暴露）", severity: "medium", pattern: /UsbManager[\s\S]{0,80}?(?:openDevice|requestPermission)[\s\S]{0,60}?(?:password|token|secret)/i, recommendation: "USB 通信含敏感需加密/校验（ADB 可读）。", note: "USB 敏感——ADB 暴露。" },
+  { code: "SOURCE_CHROME_TABS_SENSITIVE", title: "Chrome 自定义标签含敏感", severity: "low", pattern: /CustomTabsIntent[\s\S]{0,80}?(?:password|token|secret)[\s\S]{0,40}?launchUrl/i, recommendation: "Custom Tabs URL 含敏感需 HTTPS（浏览器缓存可见）。", note: "Custom Tabs——缓存可见。" },
+  { code: "SOURCE_FLOATING_WINDOW_SENSITIVE", title: "悬浮窗显示敏感", severity: "medium", pattern: /(?:TYPE_APPLICATION_OVERLAY|WindowManager)[\s\S]{0,120}?(?:password|token|secret)/i, recommendation: "悬浮窗含敏感需防截屏（悬浮窗可被录屏捕获）。", note: "悬浮窗敏感——录屏捕获。" },
+  { code: "SOURCE_ANR_DEADLOCK", title: "死锁风险（同步锁嵌套）", severity: "low", pattern: /synchronized\s*\([\s\S]{0,120}?synchronized\s*\(/i, recommendation: "嵌套同步锁需核对（死锁风险）。", note: "嵌套锁——死锁风险。" },
+  { code: "SOURCE_WEBVIEW_CACHE_SENSITIVE", title: "WebView 缓存含敏感", severity: "medium", pattern: /setCacheMode[\s\S]{0,80}?LOAD_CACHE_ELSE_NETWORK[\s\S]{0,60}?(?:password|token|secret)/i, recommendation: "WebView 缓存敏感需清空/加密（缓存可读）。", note: "WebView 缓存——敏感可读。" },
 ]
 
 // 扫描项目源码文件（Java/Kotlin——递归——有界）——返回检测到的 finding（失败关闭）。

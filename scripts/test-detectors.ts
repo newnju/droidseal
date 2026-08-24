@@ -357,6 +357,30 @@ const cases: Case[] = [
       return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——内部 DB + 非敏感 extra——安全）` }
     },
   },
+  {
+    name: "②k 检测器命中(正——支付敏感/生物识别密钥/WebView 缓存)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { BillingClient.newBuilder(ctx).build(); onPurchasesUpdated(); val kb = KeyGenParameterSpec.Builder(\"k\", 3); kb.setUserAuthenticationRequired(false); webView.settings.setCacheMode(LOAD_CACHE_ELSE_NETWORK); cache.put(\"token\", \"secret-1\") } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_PAYMENT_SENSITIVE") && codes.includes("SOURCE_BIOMETRIC_KEY_INSECURE") && codes.includes("SOURCE_WEBVIEW_CACHE_SENSITIVE"), detail: `命中 ${findings.length} 类（应含 支付敏感/生物识别密钥/WebView 缓存）` }
+    },
+  },
+  {
+    name: "②k 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val kb = KeyGenParameterSpec.Builder(\"k\", 3); kb.setUserAuthenticationRequired(true); webView.settings.setCacheMode(LOAD_DEFAULT) } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——生物识别认证 + 默认缓存——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为广告欺诈规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.view.View.setVisibility"]))
+      return { hit: hits.some((h) => h.rule.crimer === "ad-fraud-hide"), detail: `命中 ${hits.length} 条（应含 广告欺诈——隐藏视图）` }
+    },
+  },
 ]
 
 let failed = 0
