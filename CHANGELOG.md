@@ -20,6 +20,13 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **报告（7 格式）**：HTML/SARIF 2.1.0/极简 PDF/MASTG 逐项清单 + MASVS L1/L2/语义深度/加固建议/POC/历史对比/PR 评论/MobSF JSON 导出。
 - **运行时服务**：REST（并发 + Bearer token + 进度/取消）/ 批量（`--parallel`/`--retry`/门禁阻断）/ TUI（一键·i18n·占用）/ 工具安装引导（`setup-tools`）。
 - **基准评测**：30 用例评测器（TP/FP/FN——精度/召回）+ 外部 DroidBench/OWASP 目录支持。
+- **R8 规则模板库**：`generate-r8-templates.ts`——Retrofit/Room/协程/序列化 4 组 keep 规则模板（发布构建开启 minifyEnabled 时避免误删反射/序列化依赖）。
+- **签名指纹管理脚本**：`signing-rotation.ts`——多签名/轮换清单（generate/rotate/verify 三动作——轮换期新旧签名兼容校验）。
+- **加固覆盖度评分**：`hardening-coverage.ts`——7 类资产（APK/DEX/so/资源/字符串池/assets/运行时）检查覆盖量化——评分 0-100。
+- **完整性自检定期化**：stub 加 `IntegrityCheckThrottle`（60s 节流）+ `periodicIntegrityCheck`（onResume 周期自检——不拖慢交互）。
+- **ARSC 值混淆扩展**：`generate-arsc-value-obfuscation.ts`——资源字符串值/维度保守子集（长度不变、可逆——静态难直接识别原始字符串）。
+- **服务端协作上报协议**：`signals-server.ts`——解析 stub 的 signalsToJson 信号——服务端风险决策（高/中/低 + 原因——仍只报告、不远程阻断）。
+- **供应链深化（SBOM × OSV 离线快照）**：`supplychain-osv.ts`——SBOM 与 OSV 离线漏洞快照比对（affected 区间命中 + Gradle 修复版本建议——不联网清单级）。
 
 ### Changed
 
