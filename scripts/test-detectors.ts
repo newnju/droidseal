@@ -268,6 +268,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "rogue-install"), detail: `命中 ${hits.length} 条（应含 静默安装——流氓推广）` }
     },
   },
+  {
+    name: "②g 检测器命中(正——OTP 日志/设备管理/ADB 备份)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { Log.d(\"otp\", \"123456\"); val dpm = DevicePolicyManager(); dpm.lockNow(); val m = \"android:allowBackup=true\" } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_OTP_LOG") && codes.includes("SOURCE_DEVICE_ADMIN_ABUSE") && codes.includes("SOURCE_ADB_BACKUP_ALLOWED"), detail: `命中 ${findings.length} 类（应含 OTP 日志/设备管理/ADB 备份）` }
+    },
+  },
+  {
+    name: "②g 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val m = \"android:allowBackup=false\"; val r = SecureRandom(); val c = Cipher.getInstance(\"AES/GCM/NoPadding\") } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——allowBackup=false + GCM——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——供应链 commons-collections)",
+    run: () => {
+      const findings = compareKnownVulnerabilities(["org.apache.commons:commons-collections"])
+      return { hit: findings.some((f) => f.code === "SUPPLYCHAIN_KNOWN_VULNERABILITY" && (f.evidence ?? "").includes("CVE-2015-7501")), detail: `命中 ${findings.length} 条（应含 commons-collections CVE-2015-7501）` }
+    },
+  },
 ]
 
 let failed = 0
