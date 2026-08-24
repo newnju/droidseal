@@ -22,6 +22,10 @@ const BUILTIN_SNAPSHOT: readonly OsvVuln[] = [
   { id: "OSV-2023-0002", ecosystem: "maven", package: "com.github.bumptech.glide:glide", affected: ["<4.16.0"], fixed: "4.16.0" },
   { id: "OSV-2023-0003", ecosystem: "maven", package: "com.google.code.gson:gson", affected: ["<2.8.9"], fixed: "2.8.9" },
   { id: "OSV-2023-0004", ecosystem: "maven", package: "org.jsoup:jsoup", affected: ["<=1.15.3"], fixed: "1.16.1" },
+  { id: "OSV-2023-0005", ecosystem: "maven", package: "com.android.volley:volley", affected: ["<=1.2.1"], fixed: "1.2.1" },
+  { id: "OSV-2023-0006", ecosystem: "maven", package: "com.squareup.picasso:picasso", affected: ["<2.8.0"], fixed: "2.8.0" },
+  { id: "OSV-2023-0007", ecosystem: "maven", package: "org.greenrobot:eventbus", affected: ["<3.3.1"], fixed: "3.3.1" },
+  { id: "OSV-2023-0008", ecosystem: "maven", package: "com.google.zxing:core", affected: ["<3.4.1"], fixed: "3.4.1" },
 ]
 
 // 简化的版本比较（三段式 major.minor.patch——快照内区间足够）。

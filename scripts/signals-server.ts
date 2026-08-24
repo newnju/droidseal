@@ -21,28 +21,24 @@ interface Signals {
   [key: string]: unknown
 }
 
-function decide(signals: Signals): { level: "high" | "medium" | "low"; reasons: string[] } {
+function decide(signals: Signals, minHigh = 1): { level: "high" | "medium" | "low"; reasons: string[] } {
   const reasons: string[] = []
   let level: "high" | "medium" | "low" = "low"
+  const highSignals: string[] = []
   if (signals.debuggable) {
-    level = "high"
-    reasons.push("可调试（debuggable=true）——发布构建不应可调试")
+    highSignals.push("可调试（debuggable=true）——发布构建不应可调试")
   }
   if (signals.tampered && (Array.isArray(signals.tampered) ? signals.tampered.length > 0 : signals.tampered)) {
-    level = "high"
-    reasons.push("完整性校验失败——文件被篡改")
+    highSignals.push("完整性校验失败——文件被篡改")
   }
   if (signals.frida) {
-    level = "high"
-    reasons.push("检测到 Frida 注入")
+    highSignals.push("检测到 Frida 注入")
   }
   if (signals.xposed) {
-    level = "high"
-    reasons.push("检测到 Xposed 框架")
+    highSignals.push("检测到 Xposed 框架")
   }
   if (signals.ptraceTraced) {
-    level = "high"
-    reasons.push("检测到 ptrace 跟踪")
+    highSignals.push("检测到 ptrace 跟踪")
   }
   if (signals.emulator) {
     if (level === "low") level = "medium"
@@ -54,16 +50,27 @@ function decide(signals: Signals): { level: "high" | "medium" | "low"; reasons: 
   }
   if (signals.vpn) reasons.push("VPN 连接")
   if (signals.proxy) reasons.push("代理连接")
+  // 阈值/频率控制（服务端决策深化）：高风险信号数达到 minHigh 才报 high——降低偶发误报
+  if (highSignals.length >= minHigh) {
+    level = "high"
+    reasons.push(...highSignals)
+  } else if (highSignals.length > 0) {
+    if (level === "low") level = "medium"
+    reasons.push(...highSignals)
+    reasons.push(`高风险信号数 ${highSignals.length} < 阈值 ${minHigh}——降级 medium（服务端决策深化）`)
+  }
   return { level, reasons }
 }
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   const signalsPath = argv[0]
-  if (!signalsPath) throw new Error("用法: signals-server <signals.json> [--json 输出.json]")
+  if (!signalsPath) throw new Error("用法: signals-server <signals.json> [--min-high <n>] [--json 输出.json]")
   const signals = JSON.parse(await readFile(signalsPath, "utf8")) as Signals
-  const decision = decide(signals)
-  console.log(`== 服务端信号决策 ==\n风险级别：${decision.level.toUpperCase()}`)
+  const thresholdIndex = argv.indexOf("--min-high")
+  const minHigh = thresholdIndex >= 0 ? Math.max(1, parseInt(argv[thresholdIndex + 1] ?? "1", 10) || 1) : 1
+  const decision = decide(signals, minHigh)
+  console.log(`== 服务端信号决策（min-high=${minHigh}） ==\n风险级别：${decision.level.toUpperCase()}`)
   if (decision.reasons.length === 0) console.log("  无高风险信号——运行环境正常（只报告、不阻断）")
   for (const r of decision.reasons) console.log(`  - ${r}`)
   const jsonIndex = argv.indexOf("--json")

@@ -27,6 +27,9 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **ARSC 值混淆扩展**：`generate-arsc-value-obfuscation.ts`——资源字符串值/维度保守子集（长度不变、可逆——静态难直接识别原始字符串）。
 - **服务端协作上报协议**：`signals-server.ts`——解析 stub 的 signalsToJson 信号——服务端风险决策（高/中/低 + 原因——仍只报告、不远程阻断）。
 - **供应链深化（SBOM × OSV 离线快照）**：`supplychain-osv.ts`——SBOM 与 OSV 离线漏洞快照比对（affected 区间命中 + Gradle 修复版本建议——不联网清单级）。
+- **字节码级保守自动化入口**：`extract-method-logic.ts`——从 DEX 方法字节码提取「可安全变换的简单逻辑」（保守子集：无异常/同步/反射——常量/算术/return——供 `auto-vm-encode` 自动编码）——复杂方法跳过并说明（全自动 VMP/Dex2C 阶段①②）。
+- **服务端决策阈值深化**：`signals-server.ts` 加 `--min-high`——高风险信号数达到阈值才报 high——降低偶发误报（频率/阈值控制）。
+- **供应链快照扩充**：OSV 内置快照 4 → 8 条（新增 volley/picasso/eventbus/zxing——常见 Android 库覆盖）。
 
 ### Changed
 
@@ -98,24 +101,3 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - 选择"暂不签名"处理已签名 APK 时，Release 归一化会为剔除残留条目（如 `DebugProbesKt.bin`）重建 ZIP，使原有签名失效，产出无法安装的 APK。现在检测到需保护的现有签名时跳过剔除（`HARDEN_SKIPPED_TO_PRESERVE_SIGNATURE`）；仅当必须修复 `debuggable=true` 时才改写，并以 `HARDEN_SIGNATURE_INVALIDATED` 明确告知签名已失效。
 - 签名失败时最终产物仍被命名为 `guarded-signed`，使未签名、无法安装的 APK 看起来已签名。产物后缀改为依据最终验证的实际结果，而非配置意图。
 - 签名库校验失败后，签名步骤仍会重试 apksigner 并报出更含糊的 `KEYSTORE_PASSWORD_INVALID`，掩盖"别名不存在""文件不存在"等真实根因。现在直接跳过签名并保留原始错误；最终验证改报 `SIGNATURE_MISSING_AFTER_FAILED_SIGNING`，指向真正失败的步骤。
-
-## 开发路线（剩余 / 长期 / 大工程）
-
-### 全自动 VMP/Dex2C（保守自动化——大工程——长期）
-
-- **目标**：从「半自动」（逻辑文本编码——表达式/控制流/函数/字符串已实现）到「字节码级自动」——任意 DEX 方法自动转 VM 指令 / C 代码。
-- **保守路径（风险可控）**：不做全量全自动——**字节码解析 → 自动识别「可安全变换的方法子集」**（无异常 / 无同步 / 无反射的简单方法——自动转 VM / C）——复杂方法跳过或仅建议。
-- **分阶段**：① DEX 方法字节码解析（→ 中间表示 IR）；② 保守子集识别与自动变换；③ 流水线集成（审计发现敏感逻辑 → 自动生成——衔接 `apply-hardening-suggestions --apply`）；④ 语义等价验证（前后行为对比 + 真机冒烟——需真机矩阵）。
-- **难点与风险（诚实）**：DEX 200+ 指令的语义还原；try/catch、synchronized、lambda / 内部类、泛型桥方法的语义等价（变换后行为必须一致）；VM 解释器 / 运行时映射；Dex2C 的 GC / JNI 引用交互；ART 各版本兼容性（需真机矩阵）。
-
-### 运行时防护扩展（长期——需真机矩阵）
-
-- 服务端协作上报协议已实现（`signals-server.ts`——只报告不阻断）——剩余：真机矩阵验证 + 上报协议的服务端决策深化（阈值 / 频率控制）。
-
-### 供应链深化（长期）
-
-- SBOM × OSV 离线比对已实现（`supplychain-osv.ts`——affected 区间命中 + Gradle 修复建议）——剩余：离线快照扩充（更大 OSV 库）+ Gradle 坐标批量修复建议。
-
-### 动态分析（长期——需真机矩阵）
-
-- adb 8 信号已实现（边界内最大化）——剩余：真机矩阵验证 + 流量捕获（需 root——边界内可选）。
