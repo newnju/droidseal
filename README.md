@@ -1,125 +1,39 @@
 # DroidSeal · Android Release Seal
 
-[English](README.md) | [中文](README.zh-CN.md)
-
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-181717.svg?logo=github&logoColor=white)](https://github.com/noontiger/droidseal/blob/main/LICENSE)
-[![npm](https://img.shields.io/npm/v/droidseal.svg?logo=npm&logoColor=white&color=cb3837)](https://www.npmjs.com/package/droidseal)
-[![PyPI](https://img.shields.io/pypi/v/droidseal.svg?logo=pypi&logoColor=white&color=3775a9)](https://pypi.org/project/droidseal)
-
-**Android Release Seal** helps you do most of what you can do before commercial hardening — environment diagnostics, source & APK audit, R8 obfuscation, zipalign, apksigner signing, and final verification. One command, end to end.
+**One command, end-to-end release security.** — a local-first Android release-security pipeline: static audit → hardening → release gate, for source and APK inputs, with a CLI, REST and TUI.
 
 ## What it does
 
-- **Audit**: static audit of projects and APKs — permissions, targetSdk, signing schemes, hardcoded secrets, DEX/TLS heuristics, native library hardening, third-party dependencies, and a CycloneDX SBOM;
-- **Release**: runs `zipalign → apksigner sign → verify` in the official order, with automatic rollback on failure and independent artifacts per step;
-- **Outputs**: APK + SHA-256 + JSON/Markdown reports + a release gate + SBOM.
+- **Static audit** — 373 source detectors across ten dimensions (crypto, network, storage, components, permissions, I/O, config, lifecycle, privacy, concurrency), APK manifest/signing/DEX/ELF checks, 19 taint-flow analyses, 30 behavior rules, and a 30-entry offline supply-chain snapshot — with **confidence tiers, cross-evidence and precision gates** (confirmed before reported).
+- **Hardening** — 18+ source-included generators: packer (DEX encryption), VMP instruction encoding, control-flow flattening, anti-debug + ptrace, integrity and environment checks, runtime no-trace protection, dead-code injection, native (so) obfuscation, Dex2C, and more.
+- **Release gate** — pass/review/block decision, evidence package, CycloneDX SBOM, re-test closure, dual-mode and signing verification.
+- **Reporting** — 7 formats, MASTG checklist and MASVS levels, semantic depth, hardening suggestions, POC, historical comparison.
+- **Dynamic cross-check** — ADB bridge adds 8 runtime signals (device matrix, filtered logcat, UI smoke, crash/ANR, multi-device) attached back to static findings.
+- **Benchmark-driven** — a 30-case evaluator reports precision/recall and accepts external DroidBench/OWASP directories.
 
-<img width="960" alt="DroidSeal interface screenshot" src="droidseal-screenshot.png" />
+## Quick start
 
-## Install
-
-| Channel | How |
-|---|---|
-| npm | `npm install --global droidseal` |
-| PyPI | `pip install droidseal` |
-| GitHub Releases | Download the Windows zip / Linux tar.gz directly |
-
-> **Windows note**: if SmartScreen blocks the exe when double-clicked, right-click → Properties → Unblock. The TUI needs a terminal: run `droidseal` in PowerShell, or double-click the bundled `droidseal-gui.cmd` launcher.
-
-## Usage
-
-```powershell
-droidseal              # Interactive TUI wizard (one-click / guided)
-droidseal doctor       # Non-interactive environment diagnostics
-droidseal --version
+```bash
+npm install -g droidseal        # or: bun x droidseal
+droidseal audit <source-or-apk> # one command, end to end
+droidseal one-click             # TUI: audit → harden → release gate
 ```
 
-## Platform & status
+## Platform
 
-- **Platforms**: Windows x64 / Linux x64;
-- **Status**: 1.0.0 stable — the CLI, output layout, and report format are now stable;
-- **Software requirements**: an ANSI/Unicode-capable interactive monospace terminal (required for the TUI); Bun 1.3+ for source runs; JDK/Gradle/Android Build Tools are auto-discovered or downloaded per flow (Node only for Capacitor Web builds);
-- **Hardware (practical, not hard limits)**: ~500 MB disk (the 100 MB executable + toolchain + outputs), ≥2 GB RAM (more for large APKs — parsing is memory-sensitive with failure-safe limits), x64 dual-core CPU.
+- Run platforms: Windows x64, Linux x64.
+- Runtime dependencies: **zero**. Third-party packages are dev-time only; external tools (adb/apksigner/zipalign/aapt/dexdump/keytool/java/unzip) are invoked as user-side CLIs — not embedded, not distributed.
 
 ## Security boundary
 
-A defensive tool: by default it does not unpack, pack, inject hooks, or add anti-debug code; everything runs locally and never uploads your APK, paths, or signing information.
+- **Local-first** — no uploads, no model calls; supply-chain checks are offline snapshots.
+- **Source-included hardening** — generators act at build time; unknown APKs are never rewritten post-hoc.
+- **Report-only runtime checks** — anti-debug stubs report and never block unless EXIT is explicitly enabled.
 
-## Architecture, innovation & self-developed parts
+## Innovation
 
-### Innovation highlights
-
-1. **Fully self-developed APK format handling**: byte-level ZIP/ARSC/AXML/DEX/ELF parsing and rewriting with no heavy parser dependencies (supply-chain convergence, explicit failure semantics);
-2. **Deterministic post-processing**: unmodified ZIP entries reuse the original compressed bytes to avoid reordering/recompression/signature-digest churn;
-3. **Failure rollback**: each step uses an independent APK artifact; "skip and roll back" keeps the last valid output;
-4. **Self-developed anti-debug stub** (C + Kotlin + CMake, opt-in source integration);
-5. **Auditable results**: signature verification + SHA-256 + JSON/Markdown reports + CycloneDX SBOM + confidence-aware release gate;
-6. **Local-first by default**: never uploads APKs, paths or signing info; no unpacking/packing/hook injection out of the box;
-7. **Single binary, three channels**: Bun-compiled single-file executable with zero runtime npm dependencies, published to npm/PyPI/GitHub Releases from one source;
-8. **Bilingual TUI with three entry points** (guided / one-click / doctor).
-
-### Self-developed vs third-party calls
-
-- **Self-developed (business core)**: `src/core` (30 modules — ZIP/DEX/ELF/ARSC/AXML parsing & audit, pipeline orchestration, signing policy, release gate), `src/ui` (TUI + i18n), the anti-debug stub, `scripts` (build/release/gate tooling), dual launchers;
-- **Third-party (rendering/build layer)**: OpenTUI (terminal rendering), Solid.js (reactive UI), Terser (build compression; only for opt-in Web JS handling), TypeScript/Bun (toolchain), external Android tools (keytool/Gradle/zipalign/apksigner/aapt — discovered and validated by DroidSeal itself).
-
-### Pipeline visualization (per-step self/third-party)
-
-The route winds top-to-bottom: left column ①-⑦ goes down, then the flow turns at the bottom and the right column ⑧-⑭ goes back up (S-shape). Each box shows "Self: …" or "3rd-party: …".
-
-```text
-┌──────────────────────────────────────────┐      ┌──────────────────────────────────────────┐
-│ ① Environment check                      │      │ ⑭ Report                                 │
-│ Self: tool discovery/validation/restore  │      │ Self: report/gate/SBOM/fix packs         │
-└──────────────────────────────────────────┘      └──────────────────────────────────────────┘
-                      │                            ▲
-                      ▼                            │
-┌──────────────────────────────────────────┐      ┌──────────────────────────────────────────┐
-│ ② Prepare workspace                      │      │ ⑬ Final verification                     │
-│ Self: input validation/APK copy          │      │ 3rd-party: apksigner verify              │
-└──────────────────────────────────────────┘      │ Self: SHA-256 calc/order                 │
-                                                  └──────────────────────────────────────────┘
-                      │                            ▲
-                      ▼                            │
-┌──────────────────────────────────────────┐      ┌──────────────────────────────────────────┐
-│ ③ Keystore                               │      │ ⑫ APK signing                            │
-│ 3rd-party: keytool + Self: secret-safe   │      │ 3rd-party: apksigner                     │
-└──────────────────────────────────────────┘      │ Self: key handling/redaction             │
-                                                  └──────────────────────────────────────────┘
-                      │                            ▲
-                      ▼                            │
-┌──────────────────────────────────────────┐      ┌──────────────────────────────────────────┐
-│ ④ Source audit                           │      │ ⑪ ZIP alignment                          │
-│ Self: project-audit/r8-rules             │      │ 3rd-party: zipalign                      │
-└──────────────────────────────────────────┘      └──────────────────────────────────────────┘
-                      │                            ▲
-                      ▼                            │
-┌──────────────────────────────────────────┐      ┌──────────────────────────────────────────┐
-│ ⑤ Build release APK                      │      │ ⑩ Resource obfuscation (opt-in)          │
-│ 3rd-party: Gradle Wrapper                │      │ Self: arsc-obfuscate                     │
-└──────────────────────────────────────────┘      └──────────────────────────────────────────┘
-                      │                            ▲
-                      ▼                            │
-┌──────────────────────────────────────────┐      ┌──────────────────────────────────────────┐
-│ ⑥ APK audit                              │      │ ⑨ Web JS handling (opt-in)               │
-│ Self: ZIP/DEX/ELF/ARSC/AXML              │      │ 3rd-party: Terser                        │
-│ 3rd-party: aapt fallback                 │      │ Self: whitelist/atomic write             │
-└──────────────────────────────────────────┘      └──────────────────────────────────────────┘
-                      │                            ▲
-                      ▼                            │
-┌──────────────────────────────────────────┐      ┌──────────────────────────────────────────┐
-│ ⑦ Local hardening                        │      │ ⑧ Release normalization                  │
-│ Self: evidence/confidence                │      │ Self: manifest rewrite/debug cleanup     │
-└──────────────────────────────────────────┘      └──────────────────────────────────────────┘
-                     └────────► flow ──►────┘
-```
-
-All format parsing/rewriting/audit/reporting is self-developed (offline, low supply-chain footprint); rendering uses OpenTUI/Solid (third-party); external tools are only invoked where the official toolchain requires them, always through DroidSeal's own discovery, SHA-256 validation and fallback orchestration.
+Confirmed-before-reported precision semantics, the audit → harden → gate closure, the widest source-included hardening set outside commercial VMP/Dex2C, zero runtime dependencies, local-first privacy, and static–dynamic cross-validation.
 
 ## License & brand
 
-- Open-source license: [Apache License 2.0](https://github.com/noontiger/droidseal/blob/main/LICENSE)
-- Name & logo usage: [TRADEMARKS.md](https://github.com/noontiger/droidseal/blob/main/TRADEMARKS.md) (reviews, tutorials and sharing with attribution are welcome)
-- Third-party notices: [THIRD_PARTY_NOTICES.md](https://github.com/noontiger/droidseal/blob/main/THIRD_PARTY_NOTICES.md)
-
-<img src="https://raw.githubusercontent.com/noontiger/droidseal/main/droidseal-logo.png" width="420" alt="DroidSeal" />
+MIT license. OWASP MASTG content is attributed (CC BY-SA).
