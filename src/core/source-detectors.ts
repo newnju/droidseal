@@ -64,6 +64,8 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_ACCESSIBILITY_SENSITIVE", title: "无障碍服务读取敏感", severity: "high", pattern: /AccessibilityEvent\.TYPE_VIEW_TEXT_CHANGED/i, recommendation: "无障碍读取输入内容（密码/验证码）——需合规与最小化。", note: "无障碍监听敏感输入——隐私风险。" },
   { code: "SOURCE_ANR_MAIN_THREAD_IO", title: "主线程执行 IO（ANR 风险）", severity: "low", pattern: /onCreate\s*\([^)]*\)\s*\{[^}]{0,200}?(?:openFileInput|SQLiteDatabase|InputStream)/i, recommendation: "主线程 IO 导致 ANR——用协程/线程池异步。", note: "主线程 IO——ANR 与性能。" },
   { code: "SOURCE_SECURE_FLAG_MISSING", title: "敏感界面缺 FLAG_SECURE", severity: "medium", pattern: /setContentView\s*\([^)]*\)\s*[^;]{0,120}?(?:password|token|pin|otp)/i, recommendation: "敏感界面（密码/OTP）应设 FLAG_SECURE（防截屏/最近任务可见）。", note: "敏感界面可被截屏/最近任务捕获。" },
+  // 去重:FLAG_SECURE 类已由 SOURCE_SECURE_FLAG_MISSING 覆盖——SCREENSHOT_BLOCK_ABSENT/THEME_SECURE_ABSENT/ACTIVITY_FLAG_SECURE_MISSING 已删
+  // 去重:明文 HTTP 类已由 SOURCE_CLEARTEXT_HTTP 覆盖——OKHTTP_CLEARTEXT/HTTP2_CLEARTEXT 已删
   { code: "SOURCE_CLIPBOARD_SENSITIVE", title: "剪贴板写入敏感数据", severity: "medium", pattern: /ClipboardManager[\s\S]{0,120}?setPrimaryClip\s*\([^)]*(?:password|token|secret|code)[^)]*\)/i, recommendation: "剪贴板全局可读——敏感数据（密码/令牌）不应写入。", note: "剪贴板敏感数据——跨应用读取。" },
   // 扩充②d（推进 100——输入校验/输出/配置/生命周期/组件——保障精度）
   { code: "SOURCE_REFLECTION_UNRESTRICTED", title: "反射调用未受控（Class.forName 动态类）", severity: "medium", pattern: /Class\s*\.\s*forName\s*\([^)]*\)[\s\S]{0,80}?getMethod\s*\(/i, recommendation: "反射调用需白名单校验（防任意方法调用/混淆兼容问题）。", note: "反射动态调用——不可控目标风险。" },
@@ -71,6 +73,7 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_CUSTOM_LOGGER", title: "自定义日志器记录敏感", severity: "low", pattern: /class\s+\w+Logger[\s\S]{0,120}?Log\.(?:d|e|i|w)\s*\(/i, recommendation: "自定义日志器也需脱敏（敏感数据不入日志）。", note: "自定义日志器可能泄露敏感。" },
   { code: "SOURCE_ACTIVITY_RESULT_UNSAFE", title: "Activity 结果未校验（startActivityForResult）", severity: "medium", pattern: /startActivityForResult\s*\([\s\S]{0,120}?onActivityResult\s*\(/i, recommendation: "返回结果需校验来源与数据（防恶意回调注入）。", note: "Activity 结果回调——来源未校验。" },
   { code: "SOURCE_SERVICE_START_UNSAFE", title: "前台服务启动未设类型", severity: "low", pattern: /startForegroundService\s*\(/i, recommendation: "前台服务需声明类型（Android 14+）——核对用途。", note: "前台服务类型未声明——兼容/合规风险。" },
+  // 去重:FLAG_SECURE 类已由 SOURCE_SECURE_FLAG_MISSING 覆盖——SCREENSHOT_BLOCK_ABSENT 已删
   { code: "SOURCE_BROADCAST_ORDERED_SENSITIVE", title: "有序广播敏感数据（可被拦截）", severity: "medium", pattern: /sendOrderedBroadcast\s*\([\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "有序广播可被高优先级接收器拦截——敏感数据避免经广播传递。", note: "有序广播拦截——敏感数据泄露。" },
   { code: "SOURCE_PARCELABLE_SENSITIVE", title: "Parcelable 序列化敏感数据", severity: "low", pattern: /writeToParcel\s*\([\s\S]{0,120}?(?:password|token|secret)/i, recommendation: "Parcel 内容可被跨进程读取——敏感数据避免放入 Parcel。", note: "Parcel 序列化——跨进程可见。" },
   { code: "SOURCE_TIMING_INSECURE", title: "不安全的计时（敏感操作未定时）", severity: "low", pattern: /System\.currentTimeMillis\s*\(\s*\)[\s\S]{0,60}?(?:token|otp|password)/i, recommendation: "敏感操作（OTP/令牌）需定时——核对计时逻辑。", note: "计时操作——敏感场景。" },
@@ -143,7 +146,7 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_LOCATION_BACKGROUND", title: "后台位置获取（隐私）", severity: "medium", pattern: /requestLocationUpdates[\s\S]{0,80}?(?:BACKGROUND|AccessLocation)/i, recommendation: "后台位置需权限与合规（Android 10+ 后台位置受限）。", note: "后台位置——隐私风险。" },
   { code: "SOURCE_SMS_SEND_AUTO", title: "自动发送短信（扣费/欺诈）", severity: "high", pattern: /SmsManager[\s\S]{0,80}?send(?:Text|Data)Message\s*\(/i, recommendation: "自动短信发送需用户确认（防扣费/欺诈）。", note: "自动短信——扣费风险。" },
   { code: "SOURCE_TELEPHONY_SENSITIVE", title: "通话状态读取敏感", severity: "medium", pattern: /TelephonyManager[\s\S]{0,60}?getCallState|listen\s*\(/i, recommendation: "通话状态监听需权限合规（隐私）。", note: "通话监听——隐私。" },
-  { code: "SOURCE_THREAD_POOL_UNBOUNDED", title: "无界线程池（资源耗尽）", severity: "low", pattern: /newCachedThreadPool|Executors\.newFixedThreadPool\s*\([^)]*[0-9]{3,}[^)]*\)/i, recommendation: "线程池应有界（防资源耗尽/DoS）。", note: "无界线程——资源耗尽。" },
+  { code: "SOURCE_THREAD_POOL_UNBOUNDED", title: "无界线程池（资源耗尽）", severity: "info", pattern: /newCachedThreadPool|Executors\.newFixedThreadPool\s*\([^)]*[0-9]{3,}[^)]*\)/i, recommendation: "线程池应有界（防资源耗尽/DoS）。", note: "无界线程——资源耗尽。" },
   { code: "SOURCE_TIMER_SENSITIVE", title: "定时器执行敏感逻辑", severity: "low", pattern: /(?:Timer|ScheduledExecutorService)[\s\S]{0,60}?(?:schedule|scheduleAtFixedRate)[\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "定时器敏感逻辑需安全（防越权执行）。", note: "定时器敏感——越权风险。" },
   // 扩充②i（推进 200——加密/网络/存储/组件/权限/配置/隐私合规——保障精度）
   { code: "SOURCE_RSA_NO_PADDING", title: "RSA 无填充（原始 RSA）", severity: "high", pattern: /Cipher\.getInstance\s*\(\s*["']RSA\/ECB\/NoPadding["']/i, recommendation: "原始 RSA 无填充可被 Bleichenbacher 攻击——应使用 OAEP。", note: "原始 RSA——填充攻击。" },
@@ -151,11 +154,9 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_KEY_IN_PREFERENCES", title: "密钥存偏好设置", severity: "high", pattern: /getSharedPreferences[\s\S]{0,80}?putString\s*\([^)]*(?:key|secret|aes)[^)]*\)/i, recommendation: "密钥应存 AndroidKeyStore（偏好可被读取）。", note: "偏好密钥——可提取。" },
   { code: "SOURCE_WEBSOCKET_NO_TLS", title: "WebSocket 无 TLS（ws:// 已覆盖——升级检测）", severity: "medium", pattern: /WebSocketFactory[\s\S]{0,80}?(?:createConnection|newConnection)[\s\S]{0,60}?ws:\/\//i, recommendation: "WebSocket 库的明文连接需 wss://（TLS）。", note: "WebSocket 明文——窃听。" },
   { code: "SOURCE_GRPC_PLAINTEXT", title: "gRPC 明文通道", severity: "medium", pattern: /ManagedChannelBuilder[\s\S]{0,60}?forAddress[\s\S]{0,80}?(?:plaintext|usePlaintext)/i, recommendation: "gRPC 应使用 TLS（usePlaintext 明文可窃听）。", note: "gRPC 明文——窃听。" },
-  { code: "SOURCE_OKHTTP_CLEARTEXT", title: "OkHttp 明文请求（http:// 硬编码）", severity: "medium", pattern: /(?:Request\.Builder|HttpUrl\.parse)[\s\S]{0,60}?["']http:\/\//i, recommendation: "OkHttp 请求应 HTTPS（http:// 可中间人）。", note: "OkHttp 明文——中间人。" },
   { code: "SOURCE_DB_INDEX_SENSITIVE", title: "数据库敏感列未索引保护", severity: "low", pattern: /CREATE TABLE[\s\S]{0,120}?(?:password|token|secret)[\s\S]{0,60}?(?:TEXT|BLOB)/i, recommendation: "敏感列应加密存储（DB 文件可被提取读取）。", note: "敏感列明文——DB 提取。" },
   { code: "SOURCE_CACHE_SENSITIVE_FILE", title: "缓存敏感文件（cacheDir）", severity: "medium", pattern: /(?:cacheDir|getCacheDir)[\s\S]{0,60}?(?:writeText|writeBytes|createNewFile)/i, recommendation: "缓存文件不应含敏感（可被系统清理/读取）——用加密存储。", note: "缓存敏感——清理/读取。" },
   { code: "SOURCE_AUTOFILL_SENSITIVE", title: "敏感输入自动填充暴露", severity: "medium", pattern: /setAutofillHints\s*\(\s*View\.AUTOFILL_HINT_(?:PASSWORD|CREDIT_CARD|SENSITIVE)/i, recommendation: "敏感输入自动填充需核对（填充服务可见——合规）。", note: "自动填充——敏感暴露。" },
-  { code: "SOURCE_SCREENSHOT_BLOCK_ABSENT", title: "敏感界面未阻止截屏", severity: "medium", pattern: /(?:getWindow|setFlags)[\s\S]{0,80}?FLAG_SECURE[\s\S]{0,60}?(?:password|token|pin)/i, recommendation: "敏感界面应 FLAG_SECURE（防截屏/最近任务）——核对。", note: "敏感界面——截屏可见。" },
   { code: "SOURCE_EXTERNAL_LINK_UNVALIDATED", title: "外部链接未校验（deep link 打开任意）", severity: "medium", pattern: /(?:Intent\.ACTION_VIEW|setData)[\s\S]{0,60}?(?:url|uri|link)[\s\S]{0,40}?startActivity/i, recommendation: "外部链接（深链）需白名单校验（防打开任意应用）。", note: "深链未校验——任意打开。" },
   { code: "SOURCE_APP_LINK_VERIFY_ABSENT", title: "App Link 未验证（深链 hijack）", severity: "medium", pattern: /intent-filter[\s\S]{0,80}?android:autoVerify[\s\S]{0,40}?VIEW/i, recommendation: "深链应 autoVerify + HTTPS（防深链劫持）。", note: "深链未验证——劫持。" },
   { code: "SOURCE_GDPR_DATA_ABSENT", title: "隐私数据收集未声明（GDPR/合规）", severity: "low", pattern: /(?:getDeviceId|getImei|getMacAddress)[\s\S]{0,80}?(?:收集|privacy|consent)/i, recommendation: "隐私数据收集需合规声明与用户同意（GDPR/CCPA）。", note: "隐私收集——合规风险。" },
@@ -165,7 +166,7 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_CIPHER_PADDING_MISMATCH", title: "加密填充不匹配（算法/填充混用）", severity: "low", pattern: /Cipher\.getInstance\s*\(\s*["'][^"']*(?:RSA|AES)[^"']*\/[^"']*\/(?:PKCS1|PKCS7)[^"']*["']/i, recommendation: "算法/填充组合需匹配（如 RSA 用 OAEP——AES 用 GCM）。", note: "填充混用——兼容/安全风险。" },
   { code: "SOURCE_ANDROID_IDS_SENSITIVE", title: "设备标识组合跟踪（多标识拼接）", severity: "medium", pattern: /(?:getDeviceId|getImei)[\s\S]{0,40}?\+[\s\S]{0,40}?(?:getSubscriberId|getSimSerialNumber)/i, recommendation: "多设备标识拼接用于跟踪——隐私合规（不可重置标识）。", note: "标识拼接——跟踪风险。" },
   { code: "SOURCE_SOCKET_KEEPALIVE_ABUSE", title: "Socket 保活滥用（长连接敏感）", severity: "low", pattern: /setKeepAlive\s*\(\s*true\s*\)[\s\S]{0,60}?(?:password|token|secret)/i, recommendation: "长连接含敏感需加密（保活连接可被嗅探）。", note: "长连接——敏感泄露。" },
-  { code: "SOURCE_HTTP2_CLEARTEXT", title: "HTTP/2 明文（h2c）", severity: "medium", pattern: /(?:OkHttpClient|Http2)[\s\S]{0,80}?h2c|clearText\s*\(\s*true\s*\)/i, recommendation: "HTTP/2 明文（h2c）可被中间人——应使用 TLS（h2）。", note: "h2c 明文——中间人。" },
+  { code: "SOURCE_GRPC_PLAINTEXT", title: "gRPC 明文通道", severity: "medium", pattern: /ManagedChannelBuilder[\s\S]{0,60}?forAddress[\s\S]{0,80}?(?:plaintext|usePlaintext)/i, recommendation: "gRPC 应使用 TLS（usePlaintext 明文可窃听）。", note: "gRPC 明文——窃听。" },
   { code: "SOURCE_INTERCEPTOR_LOGGING", title: "OkHttp 拦截器日志敏感", severity: "medium", pattern: /(?:HttpLoggingInterceptor|setLevel)[\s\S]{0,80}?BODY/i, recommendation: "OkHttp 日志 BODY 级别含请求/响应体——生产应 NONE/BASIC。", note: "拦截器日志——敏感体。" },
   { code: "SOURCE_DB_WRITE_EXTERNAL", title: "数据库写入外部存储", severity: "high", pattern: /(?:getExternalFilesDir|Environment\.getExternalStorageDirectory)[\s\S]{0,80}?(?:SQLiteDatabase|openOrCreateDatabase)/i, recommendation: "数据库不应写入外部存储（可被读取）——用内部存储加密。", note: "外部 DB——数据泄露。" },
   { code: "SOURCE_SDCARD_EXEC", title: "SD 卡执行代码（动态加载）", severity: "high", pattern: /(?:DexClassLoader|PathClassLoader)[\s\S]{0,80}?(?:getExternalStorageDirectory|sdcard|\/mnt\/)/i, recommendation: "从 SD 卡加载代码——可被替换（防恶意载荷）。", note: "SD 卡加载——代码替换。" },
@@ -186,12 +187,11 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_APK_EXPANSION_SENSITIVE", title: "APK 扩展文件含敏感（OBB 明文）", severity: "medium", pattern: /getExpansionFilePath|ObbFile[\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "OBB 扩展文件可被读取——敏感数据避免放入（加密）。", note: "OBB 明文——数据泄露。" },
   { code: "SOURCE_ASSET_ENCRYPTION_ABSENT", title: "资产未加密（敏感资源明文）", severity: "medium", pattern: /assets\.open\s*\(\s*["'][^"']*(?:key|secret|token)[^"']*["']/i, recommendation: "敏感资源（密钥/令牌文件）应加密存储。", note: "资产明文——密钥泄露。" },
   { code: "SOURCE_GLOBAL_EXCEPTION_SENSITIVE", title: "全局异常处理泄露敏感", severity: "low", pattern: /setDefaultUncaughtExceptionHandler[\s\S]{0,120}?(?:password|token|secret)/i, recommendation: "全局异常处理不应记录敏感（崩溃日志第三方可见）。", note: "全局异常——敏感泄露。" },
-  { code: "SOURCE_THEME_SECURE_ABSENT", title: "敏感界面主题未设 FLAG_SECURE", severity: "medium", pattern: /setTheme[\s\S]{0,120}?(?:password|token|pin|otp)[\s\S]{0,40}?(?!FLAG_SECURE)/i, recommendation: "敏感界面需 FLAG_SECURE（防截屏/最近任务）。", note: "敏感界面——截屏可见。" },
   { code: "SOURCE_EMULATOR_CHECK_SRC", title: "源码模拟器检测（合规）", severity: "low", pattern: /Build\.FINGERPRINT|Build\.MODEL[\s\S]{0,60}?(?:generic|sdk|emulator)/i, recommendation: "模拟器检测需合规（防滥用/反欺诈——核对用途）。", note: "模拟器检测——用途核对。" },
   { code: "SOURCE_USB_DEBUG_SENSITIVE", title: "USB 调试相关（ADB 暴露）", severity: "medium", pattern: /UsbManager[\s\S]{0,80}?(?:openDevice|requestPermission)[\s\S]{0,60}?(?:password|token|secret)/i, recommendation: "USB 通信含敏感需加密/校验（ADB 可读）。", note: "USB 敏感——ADB 暴露。" },
   { code: "SOURCE_CHROME_TABS_SENSITIVE", title: "Chrome 自定义标签含敏感", severity: "low", pattern: /CustomTabsIntent[\s\S]{0,80}?(?:password|token|secret)[\s\S]{0,40}?launchUrl/i, recommendation: "Custom Tabs URL 含敏感需 HTTPS（浏览器缓存可见）。", note: "Custom Tabs——缓存可见。" },
   { code: "SOURCE_FLOATING_WINDOW_SENSITIVE", title: "悬浮窗显示敏感", severity: "medium", pattern: /(?:TYPE_APPLICATION_OVERLAY|WindowManager)[\s\S]{0,120}?(?:password|token|secret)/i, recommendation: "悬浮窗含敏感需防截屏（悬浮窗可被录屏捕获）。", note: "悬浮窗敏感——录屏捕获。" },
-  { code: "SOURCE_ANR_DEADLOCK", title: "死锁风险（同步锁嵌套）", severity: "low", pattern: /synchronized\s*\([\s\S]{0,120}?synchronized\s*\(/i, recommendation: "嵌套同步锁需核对（死锁风险）。", note: "嵌套锁——死锁风险。" },
+  { code: "SOURCE_ANR_DEADLOCK", title: "死锁风险（同步锁嵌套）", severity: "info", pattern: /synchronized\s*\([\s\S]{0,120}?synchronized\s*\(/i, recommendation: "嵌套同步锁需核对（死锁风险）。", note: "嵌套锁——死锁风险。" },
   { code: "SOURCE_WEBVIEW_CACHE_SENSITIVE", title: "WebView 缓存含敏感", severity: "medium", pattern: /setCacheMode[\s\S]{0,80}?LOAD_CACHE_ELSE_NETWORK[\s\S]{0,60}?(?:password|token|secret)/i, recommendation: "WebView 缓存敏感需清空/加密（缓存可读）。", note: "WebView 缓存——敏感可读。" },
   // 扩充②l（推进 200——加密/网络/存储/组件/权限/配置/隐私合规/输入输出——保障精度）
   { code: "SOURCE_KEYSTORE_ALIAS_DERIVED", title: "密钥别名可预测（Keystore 别名弱）", severity: "low", pattern: /KeyStore\.getInstance\s*\(\s*["']AndroidKeyStore["'][\s\S]{0,80}?getEntry\s*\(\s*["'][^"']{1,12}["']/i, recommendation: "Keystore 别名应随机/不可预测（防别名枚举）。", note: "别名可预测——枚举风险。" },
@@ -223,7 +223,7 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_PRINT_SENSITIVE", title: "打印敏感数据（System.out）", severity: "medium", pattern: /System\.(?:out|err)\.print(?:ln)?\s*\([^)]*(?:password|token|secret)[^)]*\)/i, recommendation: "System.out 打印敏感（日志可见）——脱敏。", note: "System.out——敏感泄露。" },
   { code: "SOURCE_RUNTIME_MODULE_REF", title: "运行时模块反射（反射滥用变体）", severity: "low", pattern: /getDeclaredMethod\s*\([^)]*(?:password|token|secret)[^)]*\)/i, recommendation: "反射调用敏感方法需白名单（防任意调用）。", note: "反射敏感——任意调用。" },
   { code: "SOURCE_INTENT_FILTER_IMPLICIT_ACTION", title: "隐式 Intent 过滤敏感 Action", severity: "medium", pattern: /addAction\s*\(\s*["'][^"']*(?:OPEN|VIEW|SEND|SHARE)[^"']*["']/i, recommendation: "隐式 Intent 过滤需校验（任意应用可触发）。", note: "隐式过滤——任意触发。" },
-  { code: "SOURCE_SCREEN_ORIENTATION_LOCK", title: "锁定屏幕方向（UX/合规）", severity: "low", pattern: /setRequestedOrientation[\s\S]{0,40}?SCREEN_ORIENTATION_LOCKED|setRequestedOrientation[\s\S]{0,40}?PORTRAIT/i, recommendation: "锁定方向影响无障碍/UX——核对。", note: "方向锁定——UX。" },
+  { code: "SOURCE_SCREEN_ORIENTATION_LOCK", title: "锁定屏幕方向（UX/合规）", severity: "info", pattern: /setRequestedOrientation[\s\S]{0,40}?SCREEN_ORIENTATION_LOCKED|setRequestedOrientation[\s\S]{0,40}?PORTRAIT/i, recommendation: "锁定方向影响无障碍/UX——核对。", note: "方向锁定——UX。" },
   { code: "SOURCE_VOICE_RECORDING_BG", title: "后台录音（隐私）", severity: "high", pattern: /(?:MediaRecorder|AudioRecord)[\s\S]{0,80}?(?:start|startRecording)[\s\S]{0,60}?(?:service|background)/i, recommendation: "后台录音需合规（隐私——用户知情）。", note: "后台录音——隐私。" },
   { code: "SOURCE_CAMERA_BG", title: "后台相机（隐私）", severity: "high", pattern: /CameraManager[\s\S]{0,80}?openCamera[\s\S]{0,60}?(?:service|background)/i, recommendation: "后台相机需合规（隐私——用户知情）。", note: "后台相机——隐私。" },
   { code: "SOURCE_APP_BACKUP_SENSITIVE", title: "应用备份含敏感（allowBackup+数据）", severity: "medium", pattern: /allowBackup\s*=\s*["']true["'][\s\S]{0,120}?(?:password|token|secret)/i, recommendation: "allowBackup=true 且含敏感——备份可提取——禁用或排除。", note: "备份+敏感——提取。" },
@@ -260,12 +260,11 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_SERVICE_FOREGROUND_TYPE", title: "前台服务类型未声明（Android 14+）", severity: "low", pattern: /startForeground\s*\([^)]*,\s*[^)]*\)[\s\S]{0,40}?(?!FOREGROUND_SERVICE_TYPE)/i, recommendation: "Android 14+ 需声明前台服务类型（foregroundServiceType）。", note: "前台类型——兼容。" },
   { code: "SOURCE_RECEIVER_ORDER_SENSITIVE", title: "接收器顺序依赖（有序广播）", severity: "low", pattern: /setOrderedHint|setPriority[\s\S]{0,40}?RECEIVER[\s\S]{0,40}?password|token|secret/i, recommendation: "接收器顺序敏感——核对（可被高优先级拦截）。", note: "接收器顺序——拦截。" },
   { code: "SOURCE_PERMISSION_MAX_SDK", title: "权限 maxSdk 误用（权限降级）", severity: "medium", pattern: /uses-permission[\s\S]{0,60}?maxSdkVersion/i, recommendation: "maxSdkVersion 降级权限需核对（低版本缺保护）。", note: "maxSdk 降级——保护缺失。" },
-  { code: "SOURCE_SPLIT_CONFIG_ABSENT", title: "拆分配置缺失（可访问性/兼容）", severity: "low", pattern: /targetSdk[\s\S]{0,80}?split_config|android:extractNativeLibs/i, recommendation: "拆分配置需核对（多 ABI/兼容）。", note: "拆分配置——兼容。" },
+  { code: "SOURCE_SPLIT_CONFIG_ABSENT", title: "拆分配置缺失（可访问性/兼容）", severity: "info", pattern: /targetSdk[\s\S]{0,80}?split_config|android:extractNativeLibs/i, recommendation: "拆分配置需核对（多 ABI/兼容）。", note: "拆分配置——兼容。" },
   { code: "SOURCE_LIFECYCLE_DIALOG_SENSITIVE", title: "对话框显示敏感（锁屏可见）", severity: "low", pattern: /(?:AlertDialog|Dialog)[\s\S]{0,80}?(?:password|token|secret)[\s\S]{0,40}?setMessage|show/i, recommendation: "对话框敏感数据需防窥（锁屏/截屏）。", note: "对话框敏感——锁屏可见。" },
   { code: "SOURCE_ANIMATION_SENSITIVE", title: "动画泄露敏感（过渡动画）", severity: "low", pattern: /overridePendingTransition[\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "敏感界面过渡动画需核对（截屏捕获）。", note: "动画——截屏捕获。" },
   { code: "SOURCE_NOTIFICATION_CHANNEL_SENSITIVE", title: "通知渠道敏感（锁屏可见性）", severity: "low", pattern: /NotificationChannel[\s\S]{0,80}?(?:password|token|secret)[\s\S]{0,40}?setLockscreenVisibility/i, recommendation: "敏感通知渠道应 VISIBILITY_SECRET（锁屏隐藏）。", note: "通知渠道——锁屏可见。" },
   // 扩充②p（推进上限——230 → 260——加密/网络/存储/组件/权限/配置/隐私合规/输入输出——保障精度）
-  { code: "SOURCE_AES_ECB_MODE", title: "AES ECB 模式（重复块泄露）", severity: "high", pattern: /AES\/ECB/i, recommendation: "AES ECB 重复块泄露模式——应 GCM/CBC+随机 IV。", note: "ECB 重复块——模式泄露。" },
   { code: "SOURCE_DES_USE", title: "DES 使用（56 位密钥不安全）", severity: "high", pattern: /(?:DES|DESede)\/ECB|DES\.getInstance/i, recommendation: "DES 56 位密钥已破解——应 AES-256。", note: "DES——密钥太短。" },
   { code: "SOURCE_MD5_USE", title: "MD5 使用（碰撞/降级）", severity: "medium", pattern: /MessageDigest\.getInstance\s*\(\s*["']MD5["']/i, recommendation: "MD5 碰撞已现实——应 SHA-256+。", note: "MD5——碰撞风险。" },
   { code: "SOURCE_SHA1_USE", title: "SHA1 使用（弱哈希）", severity: "medium", pattern: /MessageDigest\.getInstance\s*\(\s*["']SHA-?1["']/i, recommendation: "SHA1 弱哈希——应 SHA-256+。", note: "SHA1——弱哈希。" },
@@ -280,7 +279,6 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_CACHE_BASE64_SENSITIVE", title: "缓存 base64 敏感（可解码）", severity: "medium", pattern: /Base64\.encodeToString[\s\S]{0,80}?(?:password|token|secret)[\s\S]{0,40}?(?:cache|write)/i, recommendation: "base64 不是加密——敏感数据缓存需真加密。", note: "base64 缓存——可解码。" },
   { code: "SOURCE_ASSET_OBFUSCATED_NAME", title: "资产名含敏感语义", severity: "low", pattern: /assets\.open\s*\(\s*["'][^"']*(?:password|secret|key|token)[^"']*["']/i, recommendation: "资产名避免敏感语义（逆向可定位）。", note: "资产名——语义泄露。" },
   { code: "SOURCE_SDCARD_SENSITIVE_FILE", title: "SD 卡写敏感文件", severity: "high", pattern: /(?:getExternalStorageDirectory|getExternalFilesDir)[\s\S]{0,80}?(?:password|token|secret)[\s\S]{0,40}?write/i, recommendation: "SD 卡可读——敏感数据避免写入。", note: "SD 卡敏感——可读。" },
-  { code: "SOURCE_ACTIVITY_FLAG_SECURE_MISSING", title: "Activity 未设 FLAG_SECURE（敏感）", severity: "medium", pattern: /(?:setFlags|addFlags)\s*\(\s*FLAG_SECURE[\s\S]{0,40}?(?:password|token|secret)|(?:password|token|secret)[\s\S]{0,40}?FLAG_SECURE/i, recommendation: "敏感界面需 FLAG_SECURE（防截屏）。", note: "敏感界面——截屏。" },
   { code: "SOURCE_INTENT_COMPONENT_DYNAMIC", title: "动态组件 Intent（反射组件）", severity: "medium", pattern: /setComponent[\s\S]{0,80}?(?:getClass|forName|componentName)[\s\S]{0,40}?startActivity/i, recommendation: "动态组件 Intent 需校验（防任意组件启动）。", note: "动态组件——任意启动。" },
   { code: "SOURCE_RECEIVER_EXPORTED", title: "导出接收器（显式 exported）", severity: "medium", pattern: /registerReceiver[\s\S]{0,80}?RECEIVER_EXPORTED|exported\s*=\s*["']true["'][\s\S]{0,40}?receiver/i, recommendation: "导出接收器需权限（防任意触发）。", note: "导出接收器——任意触发。" },
   { code: "SOURCE_SERVICE_EXPORTED", title: "导出服务（显式 exported）", severity: "medium", pattern: /exported\s*=\s*["']true["'][\s\S]{0,40}?service|startForegroundService[\s\S]{0,40}?exported/i, recommendation: "导出服务需权限（防任意调用）。", note: "导出服务——任意调用。" },
@@ -329,7 +327,7 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   // 扩充②r（推进上限——290 → 320——加密/网络/存储/组件/权限/配置/生命周期/隐私合规——保障精度）
   { code: "SOURCE_PKCS5_PADDING_CBC", title: "CBC+PKCS5（填充预言——无认证）", severity: "medium", pattern: /(?:AES|DES)\/CBC\/PKCS5Padding/i, recommendation: "CBC+PKCS5 无认证（填充预言攻击）——应 GCM 或加 HMAC。", note: "CBC PKCS5——填充预言。" },
   { code: "SOURCE_KEYGEN_INSECURE_ALGO", title: "密钥生成弱算法（AES/KeyGen 默认）", severity: "medium", pattern: /KeyGenerator\.getInstance\s*\(\s*["'][^"']*(?:DES|DESede|RC4)["']/i, recommendation: "密钥生成应 AES-256（DES/RC4 不安全）。", note: "弱密钥算法——强度不足。" },
-  { code: "SOURCE_DEFAULT_ENCODING", title: "默认编码依赖（平台差异）", severity: "low", pattern: /\.getBytes\s*\(\s*\)|new\s+String\s*\(\s*[^)]*getBytes\s*\(\s*\)/i, recommendation: "编码应显式 UTF-8（默认编码平台差异——乱码/注入）。", note: "默认编码——平台差异。" },
+  { code: "SOURCE_DEFAULT_ENCODING", title: "默认编码依赖（平台差异）", severity: "info", pattern: /\.getBytes\s*\(\s*\)|new\s+String\s*\(\s*[^)]*getBytes\s*\(\s*\)/i, recommendation: "编码应显式 UTF-8（默认编码平台差异——乱码/注入）。", note: "默认编码——平台差异。" },
   { code: "SOURCE_FILE_PATH_FROM_USER", title: "文件路径来自用户输入", severity: "high", pattern: /(?:File|FileOutputStream|openFileOutput)\s*\(\s*[^)]*(?:userInput|fileName|path)[^)]*\)/i, recommendation: "文件路径来自用户需校验（路径遍历/任意写）。", note: "用户路径——遍历。" },
   { code: "SOURCE_JSON_PARSER_POLICY", title: "JSON 解析策略不安全（宽松模式）", severity: "medium", pattern: /JsonReader\.setLenient\s*\(\s*true\s*\)|setFeature[\s\S]{0,60}?(?:ALLOW|LENIENT)/i, recommendation: "宽松 JSON 解析可接受恶意输入——严格校验。", note: "宽松解析——恶意输入。" },
   { code: "SOURCE_HTTPS_URL_MANUAL", title: "HTTPS 手动处理（绕过库）", severity: "medium", pattern: /(?:SSLSocket|HttpsURLConnection)[\s\S]{0,80}?(?:hostnameVerifier|trustManager)[\s\S]{0,40}?custom/i, recommendation: "手动 HTTPS 处理易出错——用库（OkHttp）默认安全。", note: "手动 HTTPS——配置错。" },
@@ -340,9 +338,8 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_VPN_SERVICE", title: "VPN 服务声明（流量拦截）", severity: "medium", pattern: /VpnService|establish\s*\(\s*\)[\s\S]{0,40}?VpnService/i, recommendation: "VPN 服务可拦截流量——核对（合规/滥用）。", note: "VPN 服务——流量拦截。" },
   { code: "SOURCE_WIFI_HOTSPOT", title: "WiFi 热点开启（开放网络）", severity: "medium", pattern: /WifiManager[\s\S]{0,80}?(?:startLocalOnlyHotspot|startSoftAp)/i, recommendation: "热点开启需核对（开放网络风险）。", note: "热点——开放网络。" },
   { code: "SOURCE_BLUETOOTH_ADVERTISE", title: "蓝牙广播（可被发现）", severity: "low", pattern: /BluetoothLeAdvertiser[\s\S]{0,80}?startAdvertising|setDiscoverable/i, recommendation: "蓝牙广播可被扫描——敏感数据避免。", note: "蓝牙广播——可发现。" },
-  { code: "SOURCE_SCREEN_BRIGHTNESS", title: "屏幕亮度操作（UX/耗电）", severity: "low", pattern: /setScreenBrightness|getScreenBrightness[\s\S]{0,40}?(?:password|token)/i, recommendation: "亮度操作含敏感界面——核对（UX）。", note: "亮度操作——UX。" },
-  { code: "SOURCE_RINGTONE_PLAY", title: "铃声/媒体播放（无声录音混淆）", severity: "low", pattern: /(?:RingtoneManager|MediaPlayer)[\s\S]{0,80}?play[\s\S]{0,40}?(?:record|mic)/i, recommendation: "播放与录音并存——核对（无声录音混淆）。", note: "播放+录音——混淆。" },
-  { code: "SOURCE_CLIPBOARD_LISTENER", title: "剪贴板监听（持续嗅探）", severity: "medium", pattern: /addPrimaryClipChangedListener/i, recommendation: "剪贴板持续监听需核对（嗅探风险）。", note: "剪贴板监听——嗅探。" },
+  { code: "SOURCE_SCREEN_BRIGHTNESS", title: "屏幕亮度操作（UX/耗电）", severity: "info", pattern: /setScreenBrightness|getScreenBrightness[\s\S]{0,40}?(?:password|token)/i, recommendation: "亮度操作含敏感界面——核对（UX）。", note: "亮度操作——UX。" },
+  { code: "SOURCE_RINGTONE_PLAY", title: "铃声/媒体播放（无声录音混淆）", severity: "info", pattern: /(?:RingtoneManager|MediaPlayer)[\s\S]{0,80}?play[\s\S]{0,40}?(?:record|mic)/i, recommendation: "播放与录音并存——核对（无声录音混淆）。", note: "播放+录音——混淆。" },
   { code: "SOURCE_KEYBOARD_LISTENER", title: "键盘监听（IME 拦截）", severity: "high", pattern: /InputMethodService|onKeyDown[\s\S]{0,80}?(?:password|token)/i, recommendation: "键盘监听可截获输入——高敏感核对。", note: "键盘监听——输入截获。" },
   { code: "SOURCE_TOAST_SENSITIVE", title: "Toast 显示敏感", severity: "low", pattern: /Toast\.makeText[\s\S]{0,80}?(?:password|token|secret)[\s\S]{0,40}?show/i, recommendation: "Toast 含敏感——避免（临时可见）。", note: "Toast 敏感——可见。" },
   { code: "SOURCE_ACTION_BAR_SENSITIVE", title: "ActionBar 标题敏感", severity: "low", pattern: /setTitle\s*\(\s*["'][^"']*(?:password|token|secret)[^"']*["']/i, recommendation: "界面标题含敏感——避免（截屏可见）。", note: "标题敏感——截屏。" },
@@ -380,8 +377,8 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_SENSOR_LOCK", title: "传感器锁定（方向/运动——滥用）", severity: "low", pattern: /(?:SensorManager|registerListener)[\s\S]{0,80}?(?:lock|unlock)[\s\S]{0,40}?(?:screen|device)/i, recommendation: "传感器控制锁屏/设备——核对（滥用）。", note: "传感器锁定——滥用。" },
   { code: "SOURCE_MEDIA_PROJECTION_SENSITIVE", title: "媒体投影含敏感（录屏变体）", severity: "medium", pattern: /MediaProjection[\s\S]{0,80}?(?:password|token|secret)[\s\S]{0,40}?(?:getVirtualDisplay|createVirtualDisplay)/i, recommendation: "媒体投影捕获敏感界面——需确认（录屏）。", note: "媒体投影——录屏捕获。" },
   { code: "SOURCE_WALLPAPER_SENSITIVE", title: "壁纸含敏感（自定义壁纸）", severity: "low", pattern: /WallpaperManager[\s\S]{0,80}?(?:setBitmap|setStream)[\s\S]{0,40}?(?:password|token)/i, recommendation: "自定义壁纸含敏感——避免（锁屏可见）。", note: "壁纸敏感——锁屏。" },
-  { code: "SOURCE_VIBRATOR_PATTERN", title: "振动模式（侧信道）", severity: "low", pattern: /Vibrator[\s\S]{0,80}?vibrate\s*\(\s*["']?[0-9,]+["']?[\s\S]{0,40}?(?:password|token)/i, recommendation: "振动模式可作侧信道（事件推断）。", note: "振动——侧信道。" },
-  { code: "SOURCE_TORCH_CONTROL", title: "手电筒控制（闪光灯滥用）", severity: "low", pattern: /setTorchMode[\s\S]{0,40}?(?:true|false)[\s\S]{0,40}?(?:background|service)/i, recommendation: "手电筒后台控制——核对（滥用）。", note: "手电筒——滥用。" },
+  { code: "SOURCE_VIBRATOR_PATTERN", title: "振动模式（侧信道）", severity: "info", pattern: /Vibrator[\s\S]{0,80}?vibrate\s*\(\s*["']?[0-9,]+["']?[\s\S]{0,40}?(?:password|token)/i, recommendation: "振动模式可作侧信道（事件推断）。", note: "振动——侧信道。" },
+  { code: "SOURCE_TORCH_CONTROL", title: "手电筒控制（闪光灯滥用）", severity: "info", pattern: /setTorchMode[\s\S]{0,40}?(?:true|false)[\s\S]{0,40}?(?:background|service)/i, recommendation: "手电筒后台控制——核对（滥用）。", note: "手电筒——滥用。" },
   { code: "SOURCE_APP_STANDBY_BYPASS", title: "应用待机绕过（后台常驻）", severity: "medium", pattern: /REQUEST_IGNORE_BATTERY_OPTIMIZATIONS|ACTION_REQUEST_IGNORE_BATTERY/i, recommendation: "电池优化豁免需核对（后台常驻滥用）。", note: "待机绕过——常驻。" },
   { code: "SOURCE_RUN_IN_BACKGROUND", title: "后台运行权限（常驻）", severity: "medium", pattern: /FOREGROUND_SERVICE|REQUEST_BACKGROUND|runInBackground/i, recommendation: "后台运行/前台服务需核对（常驻）。", note: "后台运行——常驻。" },
   { code: "SOURCE_NOTIFICATION_BADGE_SENSITIVE", title: "通知角标敏感", severity: "low", pattern: /setNumber\s*\(\s*[^)]*\)[\s\S]{0,40}?(?:password|token|otp)/i, recommendation: "通知角标含敏感数字——避免（锁屏可见）。", note: "角标敏感——锁屏。" },
@@ -391,7 +388,6 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   // 扩充②t（推进上限——350 → 380——加密/网络/存储/组件/权限/配置/生命周期/隐私合规——保障精度）
   { code: "SOURCE_CHACHA_KEY_REUSE", title: "ChaCha20 密钥复用（nonce 重用）", severity: "high", pattern: /ChaCha20[\s\S]{0,80}?(?:setKey|init)[\s\S]{0,60}?["'][0-9A-Fa-f]{32,}["']/i, recommendation: "ChaCha 密钥+nonce 复用=流泄露——每次随机 nonce。", note: "ChaCha 复用——流泄露。" },
   { code: "SOURCE_AES_KEY_ZERO", title: "AES 全零密钥", severity: "high", pattern: /(?:SecretKeySpec|AESKey)\s*\(\s*["']0{16,}["']/i, recommendation: "全零密钥可被猜测——随机密钥。", note: "零密钥——可猜测。" },
-  { code: "SOURCE_CIPHER_MODE_OMITTED", title: "Cipher 模式省略（默认 ECB 风险）", severity: "medium", pattern: /Cipher\.getInstance\s*\(\s*["']AES["']\s*\)/i, recommendation: "Cipher 省略模式默认不安全——显式 GCM。", note: "模式省略——默认风险。" },
   { code: "SOURCE_HTTP_VERB_SENSITIVE", title: "HTTP 方法含敏感（自定义动词）", severity: "low", pattern: /Request\.Builder[\s\S]{0,80}?(?:method|post|put)\s*\(\s*["'][^"']*(?:token|secret)[^"']*["']/i, recommendation: "HTTP 方法/路径含敏感——避免（日志可见）。", note: "HTTP 动词——敏感。" },
   { code: "SOURCE_HEADER_INJECTION", title: "Header 注入（CRLF）", severity: "medium", pattern: /(?:setHeader|addHeader|setRequestProperty)\s*\(\s*[^)]*\\r\\n/i, recommendation: "Header 含 CRLF 可注入——校验输入。", note: "Header 注入——CRLF。" },
   { code: "SOURCE_URI_LOGGED", title: "URI 日志（查询参数泄露）", severity: "medium", pattern: /Log\.(?:d|e|i|w)\s*\([^)]*(?:getQueryParameter|getQuery|uri\.toString)[^)]*\)/i, recommendation: "URI 日志含查询参数——敏感泄露。", note: "URI 日志——查询泄露。" },
@@ -418,14 +414,26 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_ANALYTICS_SENSITIVE", title: "分析 SDK 上报敏感", severity: "medium", pattern: /(?:FirebaseAnalytics|Mixpanel|Amplitude)[\s\S]{0,120}?(?:logEvent|track)\s*\([^)]*(?:password|token|secret)[^)]*\)/i, recommendation: "分析上报含敏感——脱敏（第三方可见）。", note: "分析上报——敏感。" },
   { code: "SOURCE_CRASHLYTICS_CUSTOM_KEY", title: "Crashlytics 自定义键含敏感", severity: "medium", pattern: /(?:Crashlytics|setCustomKey|log\s*\()[\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "Crashlytics 自定义键含敏感——脱敏（面板可见）。", note: "Crashlytics——面板敏感。" },
   { code: "SOURCE_GPS_ONLY_LOCATION", title: "GPS 仅定位（耗电/精度）", severity: "low", pattern: /LocationManager\.GPS_PROVIDER|getLastKnownLocation\s*\(\s*GPS_PROVIDER/i, recommendation: "GPS 仅定位——耗电——核对（Fused 优先）。", note: "GPS 仅——耗电。" },
-  { code: "SOURCE_BATTERY_INFO_READ", title: "电池信息读取（侧信道）", severity: "low", pattern: /ACTION_BATTERY_CHANGED|BatteryManager[\s\S]{0,80}?registerReceiver/i, recommendation: "电池信息可作侧信道（行为推断）。", note: "电池信息——侧信道。" },
+  { code: "SOURCE_BATTERY_INFO_READ", title: "电池信息读取（侧信道）", severity: "info", pattern: /ACTION_BATTERY_CHANGED|BatteryManager[\s\S]{0,80}?registerReceiver/i, recommendation: "电池信息可作侧信道（行为推断）。", note: "电池信息——侧信道。" },
 ]
 
+// 从检测器正则自动提取特征词（性能优化：预过滤——文件不含特征词则跳过该检测器，不跑全正则）。
+// 提取 pattern 中的显式 API/类名片段（大小写开头均提取——含 execSQL/writeUTF 等小写驼峰；短标识如 URL 也保留）。
+export function extractKeywords(pattern: RegExp): string[] {
+  const source = pattern.source
+  const matches = source.match(/[A-Za-z][A-Za-z0-9_]{2,}(?:\.[A-Za-z0-9_]{2,})*/g) ?? []
+  const stopWords = new Set(["com", "org", "net", "new", "and", "the", "for", "with", "into", "true", "false", "null", "final", "const", "val", "fun", "class", "import", "public", "private", "static", "void", "int", "long", "byte", "char", "this", "super", "return", "throw", "catch", "try", "when", "else", "if", "case", "open", "close", "read", "write", "send", "get", "set", "put", "add", "remove", "clear", "start", "stop", "init", "load", "save", "parse", "exec", "query"])
+  const keywords = matches.filter((m) => m.length >= 3 && m.length <= 40 && !stopWords.has(m.toLowerCase()))
+  return [...new Set(keywords)].slice(0, 6)
+}
+
 // 扫描项目源码文件（Java/Kotlin——递归——有界）——返回检测到的 finding（失败关闭）。
+// 性能优化：先做特征词预过滤（每文件先查特征词表——不含则跳过该检测器——避免跑全部正则）。
 export async function scanSourceDetectors(projectDir: string): Promise<Finding[]> {
   const findings: Finding[] = []
   const stack = [projectDir]
   let filesScanned = 0
+  const detectorKeywords = SOURCE_DETECTORS.map((d) => extractKeywords(d.pattern))
   while (stack.length > 0 && filesScanned < 2000) {
     const dir = stack.pop()!
     let entries: Array<{ name: string; isDirectory(): boolean }>
@@ -449,7 +457,12 @@ export async function scanSourceDetectors(projectDir: string): Promise<Finding[]
         continue
       }
       const relative = path.relative(projectDir, full).replaceAll("\\", "/")
-      for (const detector of SOURCE_DETECTORS) {
+      const contentLower = content.toLowerCase()
+      for (let di = 0; di < SOURCE_DETECTORS.length; di += 1) {
+        const detector = SOURCE_DETECTORS[di]!
+        // 特征词预过滤：文件不含任何特征词——跳过（避免跑全正则——速度提升；大小写不敏感防漏报）
+        const keywords = detectorKeywords[di]!
+        if (keywords.length > 0 && !keywords.some((k) => contentLower.includes(k.toLowerCase()))) continue
         if (!detector.pattern.test(content)) continue
         const line = content.split(/\r?\n/).findIndex((l) => detector.pattern.test(l)) + 1
         findings.push({
