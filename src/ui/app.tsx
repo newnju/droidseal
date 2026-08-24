@@ -257,7 +257,7 @@ export function App() {
   const [messageId, setMessageId] = createSignal(2)
   const [composer, setComposer] = createSignal("")
   const [secretBuffer, setSecretBuffer] = createSignal("")
-  const [draft, setDraft] = createSignal<WizardDraft>(createDraft("guided"))
+  const [draft, setDraft] = createSignal<WizardDraft>(createDraft("one-click"))
   const [answered, setAnswered] = createSignal<Set<string>>(new Set())
   const [pipeline, setPipeline] = createSignal<Pipeline>()
   const [steps, setSteps] = createSignal<StepState[]>(
@@ -269,11 +269,19 @@ export function App() {
   const [needsFailureAdvance, setNeedsFailureAdvance] = createSignal(false)
   const [pipelineDone, setPipelineDone] = createSignal(false)
   const [spinnerIndex, setSpinnerIndex] = createSignal(0)
-  // 占用显示（③）：RSS/堆内存——每 2 秒采样一次实时显示
-  const [memory, setMemory] = createSignal<{ rss: number; heap: number }>({ rss: 0, heap: 0 })
+  // 占用显示（③）：RSS/堆/CPU——每 2 秒采样一次实时显示（btop++ 式左侧面板）
+  const [memory, setMemory] = createSignal<{ rss: number; heap: number; cpu: number }>({ rss: 0, heap: 0, cpu: 0 })
+  let lastCpu = process.cpuUsage()
   const memoryTimer = setInterval(() => {
     const usage = process.memoryUsage()
-    setMemory({ rss: usage.rss / 1024 / 1024, heap: usage.heapUsed / 1024 / 1024 })
+    const nowCpu = process.cpuUsage()
+    const cpuDelta = nowCpu.user + nowCpu.system - lastCpu.user - lastCpu.system
+    lastCpu = nowCpu
+    setMemory({
+      rss: usage.rss / 1024 / 1024,
+      heap: usage.heapUsed / 1024 / 1024,
+      cpu: Math.min(100, Math.max(0, (cpuDelta / (2 * 1_000_000)) * 100)),
+    })
   }, 2000)
   void memoryTimer
   const [toolRecovery, setToolRecovery] = createSignal<ToolRecoveryState>()
@@ -1266,35 +1274,47 @@ export function App() {
                 ? `${SPINNER[spinnerIndex()]} ${t("headerProcessing")}`
                 : `● ${t("headerReady")}`}
             </text>
-            <box
-              border
-              borderColor={theme.borderActive}
-              paddingLeft={1}
-              paddingRight={1}
-              marginTop={0}
-              onMouseUp={() => setLanguage((current) => (current === "en" ? "zh" : "en"))}
-            >
-              <text fg={theme.accentStrong} selectable={false}>
-                {language() === "en" ? "中文" : "English"}
-              </text>
-            </box>
-            <box
-              border
-              borderColor={theme.borderActive}
-              paddingLeft={1}
-              paddingRight={1}
-              marginTop={0}
-              onMouseUp={() => setDraft((current) => ({ ...current, keepIntermediates: !(current.keepIntermediates ?? false) }))}
-            >
-              <text fg={theme.accentStrong} selectable={false}>
-                {draft().keepIntermediates ? "测试与学习" : "经典模式"}
-              </text>
-            </box>
+            <Button
+              label={draft().keepIntermediates ? "测试与学习" : "经典模式"}
+              detail={draft().keepIntermediates ? "保留全部中间产物" : "只留最终 release 与报告"}
+              onPress={() => setDraft((current) => ({ ...current, keepIntermediates: !(current.keepIntermediates ?? false) }))}
+            />
+            <Button
+              label={language() === "en" ? "中文" : "English"}
+              detail={language() === "en" ? "切换到中文" : "Switch to English"}
+              onPress={() => setLanguage((current) => (current === "en" ? "zh" : "en"))}
+            />
           </box>
         </Show>
       </box>
 
       <box flexDirection="row" flexGrow={1} minHeight={0}>
+        {/* 仅本机占用（btop++ 式——左侧面板）：内存 RSS/堆 + CPU 条形仪表 */}
+        <Show when={screen() !== "welcome"}>
+          <box flexShrink={0} width={26} flexDirection="column" paddingLeft={1} paddingRight={1}>
+            <text fg={theme.textMuted} selectable={false}>
+              本机占用
+            </text>
+            <text fg={theme.textMuted} selectable={false}>
+              内存 RSS {memory().rss.toFixed(0)} MB
+            </text>
+            <text fg={theme.accentStrong} selectable={false}>
+              {"█".repeat(Math.min(10, Math.round((memory().rss / 4096) * 10))).padEnd(10, "░")}
+            </text>
+            <text fg={theme.textMuted} selectable={false}>
+              堆 {memory().heap.toFixed(0)} MB
+            </text>
+            <text fg={theme.accentStrong} selectable={false}>
+              {"█".repeat(Math.min(10, Math.round((memory().heap / 1024) * 10))).padEnd(10, "░")}
+            </text>
+            <text fg={theme.textMuted} selectable={false}>
+              CPU {memory().cpu.toFixed(0)}%
+            </text>
+            <text fg={theme.accentStrong} selectable={false}>
+              {"█".repeat(Math.min(10, Math.round((memory().cpu / 100) * 10))).padEnd(10, "░")}
+            </text>
+          </box>
+        </Show>
         <box
           flexDirection="column"
           flexGrow={1}
@@ -1525,9 +1545,6 @@ export function App() {
             <text fg={theme.textMuted}>
               {t("sidebarSuccess")} {successCount()} · {t("sidebarSkipped")} {skippedCount()} · {t("sidebarFailed")} {failedCount()}
             </text>
-            <text fg={theme.textMuted}>
-              内存 RSS {memory().rss.toFixed(1)} MB / 堆 {memory().heap.toFixed(1)} MB
-            </text>
             <box height={1} />
             <scrollbox ref={(el: ScrollBoxRenderable) => { progressScrollBox = el }} flexGrow={1} minHeight={0}>
               <For each={steps()}>
@@ -1535,8 +1552,9 @@ export function App() {
                   <>
                     <Show when={index() === 0 || steps()[index() - 1]?.phase !== step.phase}>
                       <text fg={theme.borderActive} selectable={false}>
-                        ── {({ prepare: t("phasePrepare"), audit: t("phaseAudit"), harden: t("phaseHarden"), release: t("phaseRelease") })[step.phase]} ──
+                        <b>▸ {({ prepare: t("phasePrepare"), audit: t("phaseAudit"), harden: t("phaseHarden"), release: t("phaseRelease") })[step.phase]}</b>
                       </text>
+                      <box height={1} />
                     </Show>
                     <box flexDirection="column" flexShrink={0} paddingBottom={1}>
                       <text fg={stepColor(step.status)} selectable={false}>
