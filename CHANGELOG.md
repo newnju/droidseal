@@ -72,6 +72,16 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 - 入口按钮（一键/分步/诊断——一键置首）/ 门禁横幅（发现数 + 严重度统计 + 原因 code）/ 阶段分组侧栏（可选步骤「可选未开启」标注）/ 快捷键提示 / i18n 完整中英文键（`t()` 参数化——语言切换即时生效）。
 
+#### 加固深化（加壳 + 五层 + 死代码注入——全部源码接入形态）
+
+- 加壳（轻量 DEX 加密/动态加载）：`generate-dex-loader.ts`——Loader 类 + 加密 assets 资源（敏感类 DEX 字节码加密——运行期 `DexClassLoader` 解密加载——反射调用——静态分析只见 Loader——不事后改写未知 APK）。
+- 层面 1 轻量 VMP/Dex2C：`generate-vm-protection.ts`——VM 解释器 + 指令化样例（自定义指令集 CONST/LOAD/STORE/ADD/SUB/OPAQUE/RETURN——敏感逻辑编码为指令数组——运行期解释执行——静态只见解释器与指令）。
+- 层面 2 控制流混淆升级：`generate-control-flow-obfuscation.ts`——伪 switch 分发（状态变量 + 每块更新跳回分发器——CFG 变平）+ opaque predicates（静态分析难解析可达性）。
+- 层面 3 反调试对抗升级（主动防御）：stub 加 `checkXposedPresence`（Xposed 框架痕迹）/ `checkReverseToolTraces`（frida-server/Substrate/objection 进程痕迹）。
+- 层面 4 运行时环境深度检测：stub 加 `checkSystemProperties`（ro.debuggable/ro.secure——不只是调试器）+ `signalsToJson` 接线（xposedPresence/reverseToolTraces/systemPropertiesDebug）。
+- 层面 5 资源与内存运行时保护：字符串加密桩加 `--clear-after-use`（`decryptChars`——解密到 CharArray——用后立即清零——内存不留明文痕迹）。
+- 死代码注入：`generate-dead-code.ts`——生成无害死代码桩（恒假分支/冗余方法/伪逻辑——不改变行为——提高逆向噪声——`--count`/`--class`——失败关闭）。
+
 ### Fixed
 
 - 修复传递依赖已知漏洞：`brace-expansion` 升级至 `^2.1.4`（GHSA-rgw5-rvv9-x895，无界中间数组 DoS）、`@babel/core` 升级至 `^7.29.1`（GHSA-4x5r-pxfx-6jf8，sourceMappingURL 注释任意文件读）；`bun audit` 现报告无已知漏洞，release-check 的依赖覆盖断言同步更新。
