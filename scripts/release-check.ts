@@ -5,6 +5,7 @@ import path from "node:path"
 const root = path.resolve(import.meta.dir, "..")
 const requiredFiles = [
   "README.md",
+  "README.zh.md",
   "LICENSE",
   "NOTICE",
   "TRADEMARKS.md",
@@ -33,6 +34,7 @@ const expectedPackageFiles = [
   "bin/droidseal.cjs",
   "dist",
   "README.md",
+  "README.zh.md",
   "LICENSE",
   "NOTICE",
   "CHANGELOG.md",
