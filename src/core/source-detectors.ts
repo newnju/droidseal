@@ -129,6 +129,22 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_PUSH_SENSITIVE", title: "推送通知含敏感（锁屏可见）", severity: "medium", pattern: /(?:FCM|FirebaseMessaging)[\s\S]{0,120}?(?:password|token|secret|code)/i, recommendation: "推送内容不应含敏感（锁屏可见）——用摘要。", note: "推送敏感——锁屏可见。" },
   { code: "SOURCE_OTP_LOG", title: "OTP/验证码日志或通知", severity: "high", pattern: /(?:Log\.(?:d|e|i|w)\s*\([^)]*(?:otp|verification|verify_code)[^)]*\)|(?:otp|verification|verify_code)[\s\S]{0,60}?Log\.(?:d|e|i|w)\s*\()/i, recommendation: "OTP 不应日志/明文（验证码泄露——账户接管）。", note: "OTP 泄露——账户接管。" },
   { code: "SOURCE_DEVICE_ADMIN_ABUSE", title: "设备管理滥用（锁屏/擦除）", severity: "high", pattern: /DevicePolicyManager[\s\S]{0,80}?(?:lockNow|wipeData|setPasswordQuality)/i, recommendation: "设备管理 API（锁屏/擦除）需最小化——滥用风险。", note: "设备管理——滥用风险。" },
+  // 扩充②h（推进 200——加密/网络/存储/组件/权限/配置/并发——保障精度）
+  { code: "SOURCE_AES_CTR_NONCE_REUSE", title: "CTR 模式 nonce 重用", severity: "high", pattern: /Cipher\.getInstance\s*\(\s*["'][^"']*\/CTR\/[^"']*["'][\s\S]{0,80}?["'][0-9A-Fa-f]{16,}["']/i, recommendation: "CTR 模式 nonce 重用导致明文 XOR 泄露——每次加密随机 nonce。", note: "CTR nonce 重用——明文泄露。" },
+  { code: "SOURCE_SHA1_FOR_SIGNATURE", title: "SHA1 用于签名", severity: "high", pattern: /Signature\.getInstance\s*\(\s*["'][^"']*SHA1with[^"']*["']/i, recommendation: "签名应使用 SHA256withRSA（SHA1 碰撞已可伪造）。", note: "SHA1 签名——碰撞伪造。" },
+  { code: "SOURCE_WEAK_PADDING_NONE", title: "无填充加密（ECB/CBC——可能泄露长度）", severity: "low", pattern: /Cipher\.getInstance\s*\(\s*["'][^"']*\/(?:ECB|CBC)\/NoPadding["']/i, recommendation: "ECB/CBC 无填充需确认用途（长度泄露风险）——GCM/CTR 的 NoPadding 为正常。", note: "ECB/CBC 无填充——长度泄露。" },
+  { code: "SOURCE_HTTP_BASIC_AUTH", title: "HTTP Basic 认证（明文凭据）", severity: "high", pattern: /(?:Authenticator|setDefaultAuthenticator)[\s\S]{0,80}?PasswordAuthentication\s*\(/i, recommendation: "Basic 认证是 base64 明文——应使用 TLS + 令牌认证。", note: "Basic 认证——凭据泄露。" },
+  { code: "SOURCE_DNS_OVER_PLAINTEXT", title: "明文 DNS（系统默认——自定义解析）", severity: "low", pattern: /(?:InetAddress\.getByName|getAllByName)\s*\(/i, recommendation: "自定义 DNS 解析需 DoH/DoT（明文 DNS 可被劫持）。", note: "明文 DNS——劫持风险。" },
+  { code: "SOURCE_SSL_CONTEXT_WEAK", title: "SSLContext 弱协议", severity: "high", pattern: /SSLContext\.getInstance\s*\(\s*["'](?:SSL|TLSv1|TLSv1\.1)["']/i, recommendation: "SSLContext 应使用 TLSv1.2+（SSL/TLSv1 已不安全）。", note: "弱 SSL 协议——中间人。" },
+  { code: "SOURCE_FILE_MODE_WORLD_WRITABLE", title: "文件世界可写（MODE_WORLD_WRITABLE）", severity: "high", pattern: /MODE_WORLD_WRITABLE|MODE_WORLD_READABLE/i, recommendation: "MODE_WORLD_* 已废弃且不安全——其他应用可读写。", note: "世界可写——篡改风险。" },
+  { code: "SOURCE_ENCRYPTED_SHARED_PREFS_ABSENT", title: "SharedPreferences 未用加密（敏感）", severity: "medium", pattern: /getSharedPreferences\s*\([^)]*\)[\s\S]{0,80}?(?:putString|putInt|putBoolean)/i, recommendation: "敏感偏好应使用 EncryptedSharedPreferences。", note: "偏好未加密——明文。" },
+  { code: "SOURCE_PROVIDER_TEMP_GRANT", title: "Provider 临时授权（clipData 授 URI）", severity: "medium", pattern: /(?:clipData|FLAG_GRANT_READ_URI_PERMISSION)[\s\S]{0,60}?setClipData/i, recommendation: "URI 临时授权需校验接收方（防数据泄露）。", note: "URI 授权——泄露风险。" },
+  { code: "SOURCE_RECEIVER_PERMISSION_ABSENT", title: "广播权限缺失", severity: "medium", pattern: /sendBroadcast\s*\([^)]*\)\s*;?[\s\S]{0,40}?(?:!|not)[\s\S]{0,40}?permission/i, recommendation: "敏感广播应带权限发送（防任意接收）。", note: "广播无权限——任意接收。" },
+  { code: "SOURCE_LOCATION_BACKGROUND", title: "后台位置获取（隐私）", severity: "medium", pattern: /requestLocationUpdates[\s\S]{0,80}?(?:BACKGROUND|AccessLocation)/i, recommendation: "后台位置需权限与合规（Android 10+ 后台位置受限）。", note: "后台位置——隐私风险。" },
+  { code: "SOURCE_SMS_SEND_AUTO", title: "自动发送短信（扣费/欺诈）", severity: "high", pattern: /SmsManager[\s\S]{0,80}?send(?:Text|Data)Message\s*\(/i, recommendation: "自动短信发送需用户确认（防扣费/欺诈）。", note: "自动短信——扣费风险。" },
+  { code: "SOURCE_TELEPHONY_SENSITIVE", title: "通话状态读取敏感", severity: "medium", pattern: /TelephonyManager[\s\S]{0,60}?getCallState|listen\s*\(/i, recommendation: "通话状态监听需权限合规（隐私）。", note: "通话监听——隐私。" },
+  { code: "SOURCE_THREAD_POOL_UNBOUNDED", title: "无界线程池（资源耗尽）", severity: "low", pattern: /newCachedThreadPool|Executors\.newFixedThreadPool\s*\([^)]*[0-9]{3,}[^)]*\)/i, recommendation: "线程池应有界（防资源耗尽/DoS）。", note: "无界线程——资源耗尽。" },
+  { code: "SOURCE_TIMER_SENSITIVE", title: "定时器执行敏感逻辑", severity: "low", pattern: /(?:Timer|ScheduledExecutorService)[\s\S]{0,60}?(?:schedule|scheduleAtFixedRate)[\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "定时器敏感逻辑需安全（防越权执行）。", note: "定时器敏感——越权风险。" },
 ]
 
 // 扫描项目源码文件（Java/Kotlin——递归——有界）——返回检测到的 finding（失败关闭）。

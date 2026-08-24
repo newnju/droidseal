@@ -292,6 +292,30 @@ const cases: Case[] = [
       return { hit: findings.some((f) => f.code === "SUPPLYCHAIN_KNOWN_VULNERABILITY" && (f.evidence ?? "").includes("CVE-2015-7501")), detail: `命中 ${findings.length} 条（应含 commons-collections CVE-2015-7501）` }
     },
   },
+  {
+    name: "②h 检测器命中(正——SHA1 签名/SSLContext 弱/自动短信)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val s = Signature.getInstance(\"SHA1withRSA\"); val sc = SSLContext.getInstance(\"TLSv1\"); SmsManager.getDefault().sendTextMessage(\"10086\", null, \"msg\", null, null) } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_SHA1_FOR_SIGNATURE") && codes.includes("SOURCE_SSL_CONTEXT_WEAK") && codes.includes("SOURCE_SMS_SEND_AUTO"), detail: `命中 ${findings.length} 类（应含 SHA1 签名/SSLContext 弱/自动短信）` }
+    },
+  },
+  {
+    name: "②h 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val s = Signature.getInstance(\"SHA256withRSA\"); val sc = SSLContext.getInstance(\"TLSv1.2\"); val r = SecureRandom() } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——SHA256withRSA + TLSv1.2——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——供应链 okhttp)",
+    run: () => {
+      const findings = compareKnownVulnerabilities(["com.squareup.okhttp3:okhttp"])
+      return { hit: findings.some((f) => f.code === "SUPPLYCHAIN_KNOWN_VULNERABILITY" && (f.evidence ?? "").includes("CVE-2021-0341")), detail: `命中 ${findings.length} 条（应含 okhttp CVE-2021-0341）` }
+    },
+  },
 ]
 
 let failed = 0
