@@ -13,6 +13,7 @@ import { matchBehaviorRules } from "../src/core/behavior-rules.ts"
 import { compareKnownVulnerabilities } from "../src/core/known-vulnerabilities.ts"
 import { scanCollectionTaint } from "../src/core/collection-taint.ts"
 import { scanSourceDetectors } from "../src/core/source-detectors.ts"
+import { extractEndpoints } from "../src/core/endpoint-extract.ts"
 import { mkdtemp, writeFile, mkdir } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -186,6 +187,37 @@ const cases: Case[] = [
       const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"AES/GCM/NoPadding\"); val j = JSONObject() } }")
       const findings = await scanSourceDetectors(dir)
       return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——GCM + JSON——安全）` }
+    },
+  },
+  {
+    name: "②d 检测器命中(正——反射/有序广播/账户认证)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { Class.forName(\"com.x.Y\").getMethod(\"run\"); sendOrderedBroadcast(intent, null, null, null, 0, \"token-abc\", null); AccountManager.am.addAccountExplicitly(acct, \"password-1\", null) } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_REFLECTION_UNRESTRICTED") && codes.includes("SOURCE_BROADCAST_ORDERED_SENSITIVE") && codes.includes("SOURCE_ACCOUNT_AUTH_SENSITIVE"), detail: `命中 ${findings.length} 类（应含 反射/有序广播/账户认证）` }
+    },
+  },
+  {
+    name: "②d 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val r = SecureRandom(); val j = JSONObject(); val c = Cipher.getInstance(\"AES/GCM/NoPadding\") } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——普通前台服务+版本检查——安全）` }
+    },
+  },
+  {
+    name: "端点提取命中(正——URL 提取)",
+    run: () => {
+      const endpoints = extractEndpoints(["https://api.example.com/v1/users?id=1", "https://cdn.example.net/static/app.js"])
+      return { hit: endpoints.length >= 2, detail: `提取 ${endpoints.length} 个端点（应 ≥2——api.example.com + cdn.example.net）` }
+    },
+  },
+  {
+    name: "端点提取不命中(负——无 URL)",
+    run: () => {
+      const endpoints = extractEndpoints(["plain text without urls", "another line"])
+      return { hit: endpoints.length === 0, detail: `误报 ${endpoints.length} 个（应 0——无 URL）` }
     },
   },
 ]
