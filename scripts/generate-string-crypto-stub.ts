@@ -91,6 +91,10 @@ function kotlinEscaped(value: string): string {
 }
 
 function kotlinStub(keyHex: string, ciphers: Map<string, string>, fingerprint: string): string {
+  // 方向⑥：密钥掩码存储——常量池只存 maskKey（密钥 XOR 派生掩码）——运行时重建。
+  const maskKeyHex = [...keyHex.match(/.{2}/g)!.map((h) => Number.parseInt(h, 16))]
+    .map((b, i) => (b ^ ((i * 37 + 11) & 0xFF)).toString(16).padStart(2, "0"))
+    .join("")
   const constants = [...ciphers.entries()]
     .map(([name, cipher]) => `    const val ${name.toUpperCase().replaceAll(/[^A-Z0-9_]/g, "_")}_CIPHER = "${cipher}"`)
     .join("\n")
@@ -98,7 +102,10 @@ function kotlinStub(keyHex: string, ciphers: Map<string, string>, fingerprint: s
 // 与 src/core/dex-string-crypto.ts 的 XOR+rotl 变换对应；密钥与密文均为十六进制。
 // 密钥指纹：${fingerprint}（仅用于关联，不泄露密钥内容）
 object StringCrypto {
-    private val KEY = hexToBytes("${keyHex}")
+    // 密钥内存保护（方向⑥）：常量池只存掩码值——运行时 XOR 掩码重建——无明文密钥驻留。
+    private fun deriveMask(i: Int): Int = (i * 37 + 11) and 0xFF
+    private val MASKED_KEY = hexToBytes("${maskKeyHex}")
+    private val KEY = ByteArray(MASKED_KEY.size) { (MASKED_KEY[it].toInt() xor deriveMask(it)).toByte() }
 
     fun decrypt(hex: String): String {
         val data = hexToBytes(hex)

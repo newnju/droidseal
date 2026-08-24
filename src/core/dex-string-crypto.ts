@@ -35,19 +35,38 @@ function rotr8(v: number, r: number): number {
 
 // UTF-8 字节流上的可逆变换：encrypt = XOR(key) 后 rotl；decrypt = rotr 后 XOR(key)。
 // 旋转量随位置变化 (i%7)+1，避免整段同一旋转；密钥按位置循环。
+// 带 nonce 的多轮变换（方向③——密文随机化——同值不同密——抗已知明文/频率分析）。
+// 密文 = 4 字节 nonce + 8 轮变换（每轮用 nonce 派生的轮密钥 XOR + rotl）——解密用 nonce 逆推。
+const CRYPTO_ROUNDS = 8
+
 export function encryptBytes(data: Uint8Array, key: Uint8Array): Uint8Array {
-  const out = new Uint8Array(data.length)
+  const nonce = new Uint8Array(4)
+  for (let i = 0; i < 4; i += 1) nonce[i] = Math.floor(Math.random() * 256)
+  const out = new Uint8Array(4 + data.length)
+  out.set(nonce, 0)
   for (let i = 0; i < data.length; i += 1) {
-    const r = (i % 7) + 1
-    out[i] = rotl8(data[i]! ^ key[i % key.length]!, r)
+    let v = data[i]!
+    for (let round = 0; round < CRYPTO_ROUNDS; round += 1) {
+      const roundKey = key[(i + round + nonce[i % 4]!) % key.length]!
+      const r = ((i + round) % 7) + 1
+      v = rotl8((v ^ roundKey) ^ nonce[(i + round) % 4]!, r)
+    }
+    out[4 + i] = v
   }
   return out
 }
 export function decryptBytes(data: Uint8Array, key: Uint8Array): Uint8Array {
-  const out = new Uint8Array(data.length)
-  for (let i = 0; i < data.length; i += 1) {
-    const r = (i % 7) + 1
-    out[i] = rotr8(data[i]!, r) ^ key[i % key.length]!
+  const nonce = data.slice(0, 4)
+  const body = data.slice(4)
+  const out = new Uint8Array(body.length)
+  for (let i = 0; i < body.length; i += 1) {
+    let v = body[i]!
+    for (let round = CRYPTO_ROUNDS - 1; round >= 0; round -= 1) {
+      const roundKey = key[(i + round + nonce[i % 4]!) % key.length]!
+      const r = ((i + round) % 7) + 1
+      v = (rotr8(v, r) ^ nonce[(i + round) % 4]!) ^ roundKey
+    }
+    out[i] = v
   }
   return out
 }

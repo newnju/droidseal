@@ -361,6 +361,38 @@ object DroidSealAntiDebug {
         }
     }
 
+    // 方向④（多文件完整性检测）：比对 APK 内关键文件（classes*.dex / lib/*.so / res 代表文件）的
+    // SHA-256 与期望清单——不一致返回被篡改文件列表（篡改定位到文件级——周期调用 onResume 节流）。
+    fun checkMultiFileIntegrity(apkPath: String?, expectedHashes: Map<String, String>): String {
+        if (apkPath == null || expectedHashes.isEmpty()) return ""
+        return try {
+            val jar = java.util.jar.JarFile(apkPath)
+            val tampered = mutableListOf<String>()
+            val hasher = java.security.MessageDigest.getInstance("SHA-256")
+            val entries = jar.entries()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                val name = entry.name
+                val expected = expectedHashes[name]
+                if (expected == null) continue
+                if (entry.isDirectory) continue
+                val input = jar.getInputStream(entry)
+                val buffer = ByteArray(8192)
+                var read: Int
+                while (input.read(buffer).also { read = it } != -1) {
+                    hasher.update(buffer, 0, read)
+                }
+                input.close()
+                val digest = hasher.digest().joinToString("") { "%02x".format(it) }
+                if (digest != expected) tampered.add(name)
+            }
+            jar.close()
+            tampered.joinToString(",")
+        } catch (t: Throwable) {
+            ""
+        }
+    }
+
     /**
      * 服务端协作上报：把当前检测信号汇总为 JSON 字符串（只报告，不阻断）。
      * 字段含 inspect() 快照、完整性、签名、模拟器、VPN/代理、时钟异常；宿主上报后由服务端决策。
@@ -372,10 +404,12 @@ object DroidSealAntiDebug {
         expectedFingerprints: Set<String>?,
         packageManager: PackageManager?,
         packageName: String?,
+        expectedMultiFileHashes: Map<String, String>? = emptyMap(),
     ): String {
         val report = inspect()
         val integrity = apkPath?.let { checkApkIntegrity(it, expectedSha256) } ?: true
         val signature = packageManager?.let { checkApkSignature(it, packageName ?: "", expectedFingerprints) } ?: true
+        val multiFileIntegrity = apkPath?.let { checkMultiFileIntegrity(it, expectedMultiFileHashes ?: emptyMap()) } ?: ""
         return buildString {
             append("{")
             append("\"nativeAvailable\":").append(report.nativeAvailable).append(",")
@@ -391,7 +425,9 @@ object DroidSealAntiDebug {
             append("\"fridaInjection\":").append(checkFridaInjection()).append(",")
             append("\"xposedPresence\":").append(checkXposedPresence()).append(",")
             append("\"reverseToolTraces\":").append(checkReverseToolTraces()).append(",")
-            append("\"systemPropertiesDebug\":").append(checkSystemProperties())
+            append("\"systemPropertiesDebug\":").append(checkSystemProperties()).append(",")
+            append("\"multiFileIntegrity\":\"").append(multiFileIntegrity).append("\"").append(",")
+            append("\"ptraceTraced\":").append(checkPtraceTraced())
             append("}")
         }
     }
@@ -399,4 +435,15 @@ object DroidSealAntiDebug {
     private external fun nativeTracerPid(): Int
 
     private external fun nativeHasInjectionArtifacts(): Boolean
+
+    // 方向⑤（原生层反调试）：ptrace 自跟踪检测（native 侧——与 Java 层互补）。
+    fun checkPtraceTraced(): Boolean {
+        return try {
+            nativePtraceTraced()
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    private external fun nativePtraceTraced(): Boolean
 }

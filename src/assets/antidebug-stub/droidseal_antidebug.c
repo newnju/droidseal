@@ -83,3 +83,22 @@ Java_com_droidseal_antidebug_DroidSealAntiDebug_nativeHasInjectionArtifacts(JNIE
     (void) thiz;
     return droidseal_scan_maps() ? JNI_TRUE : JNI_FALSE;
 }
+
+// 方向⑤（原生层反调试——ptrace 自跟踪检测）：尝试 PTRACE_TRACEME——
+// 失败（EPERM/EACCES）说明本进程已被 ptrace（调试器/注入框架跟踪）——native 侧主动防御，与 Java 层互补。
+static int droidseal_ptrace_traced(void) {
+#if defined(__ANDROID__)
+    if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) == -1) {
+        return 1; // 已被跟踪
+    }
+    ptrace(PTRACE_DETACH, 0, NULL, NULL);
+#endif
+    return 0;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_droidseal_antidebug_DroidSealAntiDebug_nativePtraceTraced(JNIEnv *env, jobject thiz) {
+    (void) env;
+    (void) thiz;
+    return droidseal_ptrace_traced() ? JNI_TRUE : JNI_FALSE;
+}

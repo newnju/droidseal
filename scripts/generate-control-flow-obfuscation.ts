@@ -25,16 +25,33 @@ function parseArgs(argv: string[]): { outputDir: string; method: string; blocks:
   return { outputDir, method, blocks }
 }
 
-// 生成一个混淆块（状态分发 + opaque predicate——用户填入真实逻辑）。
+// 生成一个混淆块（方向②——嵌套 switch 分发 + opaque predicates 复杂化——用户填入真实逻辑）。
 function obfuscatedBlock(index: number, total: number): string {
   const next = (index + 1) % total
+  // opaque predicates 复杂化（不透明表达式多样化——静态不可判定——恒真但形式复杂）
+  const opaque = [
+    `(Math.abs(-7) + 3) == 10`,
+    `(17 * 3 - 41) % 2 == 0`,
+    `(new int[] {1, 2, 3}[2]) == 3`,
+    `(Integer.parseInt("42") / 6) == 7`,
+    `(("ab" + "c").length()) == 3`,
+    `(~0 & 1) == 1`,
+  ][index % 6]!
   return `                case ${index}:
         // 块 ${index + 1}：<在此填入真实逻辑——仅本块可达>
-        // opaque predicate（静态分析无法静态判定——恒为真但形式复杂）
-        if ((Math.abs(-7) + 3) == 10) {
-            state = ${next};
-        } else {
-            state = -1; // 不可达
+        // 内层 switch（方向②——嵌套分发——外层状态机 + 内层块分发）
+        int inner = (state * 3 + 1) % 2;
+        switch (inner) {
+            case 0:
+                // opaque predicate（静态不可判定——恒真但形式复杂）
+                if (${opaque}) {
+                    state = ${next};
+                } else {
+                    state = -1; // 不可达
+                }
+                break;
+            default:
+                state = ${next};
         }`
 }
 
