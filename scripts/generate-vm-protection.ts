@@ -37,6 +37,11 @@ public final class ${className} {
     private static final int OP_SUB = 5;
     private static final int OP_OPAQUE = 6; // 伪指令（不改变状态——静态噪声）
     private static final int OP_RETURN = 7;
+    private static final int OP_CMP = 9; // 比较（REG[a] = REG[a] - REG[b]——JZ 判断零）
+    private static final int OP_JZ = 10; // 为零跳转（REG[a] == 0 时 pc 跳到 b）
+    private static final int OP_JMP = 11; // 无条件跳转（pc 跳到 b）
+    private static final int OP_CALL = 12; // 函数调用（内置函数表——哈希 → 简单处理）
+    private static final int OP_CONST_STR = 13; // 字符串常量（哈希编码——常量池不落明文）
 
     private static final int[] REG = new int[8];
 
@@ -67,6 +72,11 @@ public final class ${className} {
                 case OP_ADD: REG[a] = REG[a] + REG[b]; break;
                 case OP_SUB: REG[a] = REG[a] - REG[b]; break;
                 case OP_OPAQUE: /* 伪指令——不改变状态 */ break;
+                case OP_CMP: REG[a] = REG[a] - REG[b]; break; // 比较（差为零=相等——JZ 判断）
+                case OP_JZ: if (REG[a] == 0) { pc = b; continue; } break;
+                case OP_JMP: pc = b; continue; break;
+                case OP_CALL: REG[b] = REG[a]; break; // 内置函数（占位——用户按哈希扩展真实函数）
+                case OP_CONST_STR: REG[a] = b; break; // 字符串哈希（运行期按哈希映射真实字符串）
                 case OP_RETURN: return REG[b];
                 default: return result;
             }

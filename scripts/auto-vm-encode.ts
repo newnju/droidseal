@@ -114,21 +114,48 @@ function compile(logic: string): Compiled {
     if (!assign) throw new Error(`无法解析语句：${statement}`)
     const target = assign[1]!
     const rhs = assign[2]!.trim()
-    // 深化：函数调用赋值（如 x = log(token)——CALL 指令——函数名编码为指令）
-    const call = /^([A-Za-z_]\w*)\s*\(([^)]*)\)$/.exec(rhs)
+    // 深化：字符串字面量赋值（如 x = "secret"——CONST_STR 指令——字符串常量编码）
+    const strLit = /^"((?:[^"\\]|\\.)*)"$/.exec(rhs)
+    if (strLit) {
+      const outReg = regs[target] ?? (regs[target] = nextReg++)
+      instructions.push([OP.CONST_STR, outReg, hashString(strLit[1]!)])
+      return
+    }
+    // 深化：函数调用赋值（如 x = log(token)——CALL 指令——函数名编码为指令——参数支持嵌套调用）
+    const call = /^([A-Za-z_]\w*)\s*\((.+)\)$/.exec(rhs)
     if (call) {
       const outReg = regs[target] ?? (regs[target] = nextReg++)
-      const args = call[2]!.trim() === "" ? [] : call[2]!.split(",").map((a) => a.trim())
-      const argRegs = args.map((a) => resolveExpr(a, instructions, regs, () => nextReg++))
+      const argRegs = splitTopLevelArgs(call[2]!.trim()).map((a) => resolveExpr(a, instructions, regs, () => nextReg++))
       // CALL 指令：{ op, 函数名哈希, 结果寄存器 }——参数寄存器按顺序在前（VM 解释器扩展）
-      const funcHash = [...call[1]!].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
-      for (const argReg of argRegs) instructions.push([OP.CONST, argReg, argReg])
+      const funcHash = hashString(call[1]!)
       instructions.push([OP.CALL, funcHash, outReg])
       return
     }
     const reg = regs[target] ?? (regs[target] = nextReg++)
     const srcReg = resolveExpr(rhs, instructions, regs, () => nextReg++)
     instructions.push([OP.STORE, srcReg, reg])
+  }
+
+  // 字符串哈希（CONST_STR/CALL 的函数名与字符串编码——确定性）。
+  const hashString = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
+
+  // 按顶层逗号拆分参数（支持嵌套括号——如 hash(enc(a), b) → ["enc(a)", "b"]）。
+  const splitTopLevelArgs = (args: string): string[] => {
+    const parts: string[] = []
+    let depth = 0
+    let current = ""
+    for (const ch of args) {
+      if (ch === "(") depth += 1
+      if (ch === ")") depth -= 1
+      if (ch === "," && depth === 0) {
+        parts.push(current.trim())
+        current = ""
+        continue
+      }
+      current += ch
+    }
+    if (current.trim() !== "") parts.push(current.trim())
+    return parts
   }
 
   // if 的 then 块（编译直到「else」或语句结束）
