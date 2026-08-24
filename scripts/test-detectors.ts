@@ -220,6 +220,30 @@ const cases: Case[] = [
       return { hit: endpoints.length === 0, detail: `误报 ${endpoints.length} 个（应 0——无 URL）` }
     },
   },
+  {
+    name: "②e 检测器命中(正——DB 密码/XXE/IV 复用)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { SQLiteDatabase.openDatabase(\"db\", \"pass123\", null, 0); val f = DocumentBuilderFactory.newInstance(); f.setFeature(\"http://xml.org/sax/features/external-general-entities\", true); val iv = \"0123456789ABCDEF\" } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_DB_PASSWORD_PLAINTEXT") && codes.includes("SOURCE_XML_XXE_RISK") && codes.includes("SOURCE_IV_REUSE"), detail: `命中 ${findings.length} 类（应含 DB 密码/XXE/IV 复用）` }
+    },
+  },
+  {
+    name: "②e 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val c = Cipher.getInstance(\"AES/GCM/NoPadding\"); val r = SecureRandom(); val bytes = r.nextBytes(16) } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——GCM + SecureRandom——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为勒索规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["javax.crypto.Cipher.doFinal", "android.app.admin.DevicePolicyManager.wipeData"]))
+      return { hit: hits.some((h) => h.rule.crimer === "ransom-encrypt") && hits.some((h) => h.rule.crimer === "ransom-wipe"), detail: `命中 ${hits.length} 条（应含 勒索加密+擦除）` }
+    },
+  },
 ]
 
 let failed = 0

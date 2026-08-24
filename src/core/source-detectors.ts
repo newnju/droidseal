@@ -81,6 +81,22 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_FRAGMENT_COMMUNICATION_SENSITIVE", title: "Fragment 通信传递敏感", severity: "low", pattern: /setArguments\s*\([\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "Fragment 参数含敏感数据——核对（Bundle 可被记录）。", note: "Fragment 参数——敏感数据。" },
   { code: "SOURCE_WORKER_SENSITIVE", title: "后台任务传递敏感（WorkManager）", severity: "low", pattern: /Data\.Builder\s*\([\s\S]{0,80}?putString\s*\([^)]*(?:password|token|secret)[^)]*\)/i, recommendation: "后台任务数据含敏感——核对（持久化可见）。", note: "WorkManager 数据——持久化敏感。" },
   { code: "SOURCE_BIOMETRIC_FALLBACK_INSECURE", title: "生物识别回退不安全（PIN 明文）", severity: "medium", pattern: /BiometricPrompt[\s\S]{0,80}?(?:fallback|setAllowedAuthenticators)[\s\S]{0,60}?DEVICE_CREDENTIAL/i, recommendation: "生物识别回退到设备凭据需安全存储——核对认证流。", note: "生物识别回退——凭据安全。" },
+  // 扩充②e（推进 100——加密/网络/存储/组件/输入输出/配置——保障精度）
+  { code: "SOURCE_SALT_REUSE", title: "盐复用（相同盐多次派生）", severity: "medium", pattern: /(?:salt|SALT)\s*=\s*["'][^"']{1,20}["']/i, recommendation: "每次密钥派生应使用随机盐（防彩虹表/重用攻击）。", note: "固定盐——派生可预测。" },
+  { code: "SOURCE_IV_REUSE", title: "IV 复用（固定 IV 多轮加密）", severity: "high", pattern: /(?:iv|IV)\s*=\s*["'][0-9A-Fa-f]{16,}["']/i, recommendation: "每次加密应使用随机 IV（防 CBC 模式泄露）。", note: "固定 IV——加密可预测。" },
+  { code: "SOURCE_WEAK_CBC_PADDING", title: "弱 CBC 填充（PKCS5 无 MAC）", severity: "medium", pattern: /Cipher\.getInstance\s*\(\s*["'][^"']*\/CBC\/PKCS5Padding["']/i, recommendation: "CBC+PKCS5 无认证（填充预言攻击）——应使用 GCM 或 HMAC。", note: "CBC 无认证——填充预言风险。" },
+  { code: "SOURCE_PLAINTEXT_FTP", title: "明文 FTP 通信", severity: "high", pattern: /FTPClient\s*\(/i, recommendation: "FTP 明文可被窃听——应使用 FTPS/SFTP。", note: "FTP 明文——凭据/数据泄露。" },
+  { code: "SOURCE_WEBVIEW_MIXED_CONTENT", title: "WebView 混合内容（HTTPS 页加载 HTTP 资源）", severity: "medium", pattern: /setMixedContentMode[\s\S]{0,60}?MIXED_CONTENT_ALWAYS_ALLOW/i, recommendation: "WebView 不应允许混合内容（HTTPS 页加载 HTTP 资源——中间人）。", note: "混合内容——HTTPS 完整性破坏。" },
+  { code: "SOURCE_SMTP_PLAINTEXT", title: "明文邮件发送（SMTP 无 TLS）", severity: "medium", pattern: /Transport\.send\s*\(/i, recommendation: "邮件发送应使用 TLS（SMTP STARTTLS）——明文可被窃听。", note: "SMTP 明文——内容泄露。" },
+  { code: "SOURCE_ENCRYPTED_FILE_SUFFIX_ABSENT", title: "加密文件无标识后缀", severity: "low", pattern: /(?:encrypt|AES).{0,40}File[\s\S]{0,60}?\.apply|\.commit/i, recommendation: "加密文件名应带 .enc 标识（防误用明文路径）。", note: "加密文件标识缺失——路径混淆。" },
+  { code: "SOURCE_DB_PASSWORD_PLAINTEXT", title: "数据库密码明文化", severity: "high", pattern: /SQLiteDatabase\.openDatabase\s*\([^)]*,(?:\s*)["'][^"']{1,20}["']/i, recommendation: "数据库密码不应硬编码/明文——用 SQLCipher 或 Keystore。", note: "DB 密码明文——数据可解密。" },
+  { code: "SOURCE_PROVIDER_EXPORTED_SENSITIVE", title: "Provider 导出敏感数据", severity: "high", pattern: /(?:ContentProvider|content:\/\/)[\s\S]{0,120}?(?:password|token|secret)[\s\S]{0,60}?query/i, recommendation: "导出 Provider 的敏感数据需权限保护（readPermission）。", note: "导出 Provider——数据泄露。" },
+  { code: "SOURCE_RECEIVER_DYNAMIC_UNSAFE", title: "动态接收器未限制来源", severity: "medium", pattern: /registerReceiver\s*\([^)]*,\s*new\s+IntentFilter[\s\S]{0,80}?(?:exported|RECEIVER)/i, recommendation: "动态接收器需 setPackage 限制发送方（防任意触发）。", note: "动态接收器——任意触发。" },
+  { code: "SOURCE_JSON_PARSE_UNSAFE", title: "JSON 解析未校验（巨型/恶意输入）", severity: "low", pattern: /JSONObject\s*\(\s*[^)]*(?:response|body|input)[^)]*\)/i, recommendation: "外部 JSON 需校验大小与结构（防资源耗尽/解析异常）。", note: "外部 JSON——资源耗尽风险。" },
+  { code: "SOURCE_XML_XXE_RISK", title: "XML 解析 XXE 风险", severity: "high", pattern: /DocumentBuilderFactory[\s\S]{0,80}?setFeature[\s\S]{0,120}?(?:EXTERNAL|DOCTYPE)/i, recommendation: "XML 解析需禁用外部实体（XXE——文件读取/SSRF）。", note: "XXE——外部实体注入。" },
+  { code: "SOURCE_NSSCONFIG_ABSENT", title: "网络安全配置缺失（明文流量允许）", severity: "medium", pattern: /usesCleartextTraffic\s*=\s*["']true["']/i, recommendation: "不应允许明文流量（cleartextTraffic=false + networkSecurityConfig 白名单）。", note: "明文流量允许——中间人风险。" },
+  { code: "SOURCE_HTTPS_FORCE_MISSING", title: "HTTPS 强制缺失（HTTP 回退）", severity: "medium", pattern: /HttpURLConnection[\s\S]{0,80}?(?:http:\/\/|setInstanceFollowRedirects)/i, recommendation: "网络请求应强制 HTTPS（HTTP 回退可被中间人）。", note: "HTTP 回退——中间人风险。" },
+  { code: "SOURCE_LIFECYCLE_SENSITIVE_FLUSH", title: "生命周期未清理敏感（onPause 未清状态）", severity: "low", pattern: /onPause\s*\([\s\S]{0,120}?password[\s\S]{0,120}?clear|setText\s*\(\s*""\s*\)/i, recommendation: "敏感输入在 onPause 应清空（防最近任务/截屏残留）。", note: "生命周期残留——敏感可见。" },
 ]
 
 // 扫描项目源码文件（Java/Kotlin——递归——有界）——返回检测到的 finding（失败关闭）。
