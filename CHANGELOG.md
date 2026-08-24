@@ -10,84 +10,34 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ### Added
 
-#### 静态审计扩展
+- **静态审计（373 个源码检测器 + APK 全维度）**：十类检测器（加密/网络/存储/组件/权限/输入输出/配置/生命周期/隐私合规/并发——每个经正/负精度用例门禁「确认后才报」）+ APK 审计（签名/合规/深链/资源密钥/DEX/ELF/NSC/WebView/SSL/凭据 31 种/端点提取）+ 置信度分级与交叉证据 + 失败关闭。
+- **污点分析（19 项）**：源 14 / 汇 15 / sanitizer 建模 / 生命周期·回调入口 / 跨函数·跨组件·库间·隐式流·集合·对象字段传播 / 反射解析 / SDK 版本化模型 / 声明式规则文件。
+- **行为分析（30 条规则）**：键盘变体/勒索/挖矿/广告欺诈/流氓推广/窃取/通话欺诈/USSD/悬浮窗/DEX 加载/命令执行 + 加权恶意评分 + DEX 调用图 + 规则文件可配置。
+- **加固（18+ 生成器——全部源码接入、构建期生效）**：加壳（DEX 加密加载）/ 轻量 VMP 指令化（自动编码——表达式·控制流·函数·字符串）/ 控制流平坦化（嵌套 switch）/ 反调试对抗 + ptrace / 环境深度检测 + 多文件完整性 / 运行时不留痕迹 + 密钥掩码 / 死代码注入 / 原生(so)混淆 / Dex2C / 指令级等价变换 / 主动对抗响应 / 多算法加密。
+- **动态验证（adb 桥接——8 个运行期信号）**：设备矩阵 / 定向 logcat / UI 冒烟 / 崩溃·ANR / 多设备遍历——静态-动态交叉证据升级。
+- **发布工程化**：门禁（pass/review/block 置信度感知）/ 证据包 / CycloneDX SBOM / 复测闭环（`re-test`——`--fail-on-remaining`）/ 双模式 / 签名精审 / 加固成效量化（7 维覆盖度）。
+- **供应链**：30 条离线已知漏洞快照（`SUPPLYCHAIN_KNOWN_VULNERABILITY`——`fixedIn`/`affected` 区间——不联网清单级提示）+ 数据表一致性校验。
+- **报告（7 格式）**：HTML/SARIF 2.1.0/极简 PDF/MASTG 逐项清单 + MASVS L1/L2/语义深度/加固建议/POC/历史对比/PR 评论/MobSF JSON 导出。
+- **运行时服务**：REST（并发 + Bearer token + 进度/取消）/ 批量（`--parallel`/`--retry`/门禁阻断）/ TUI（一键·i18n·占用）/ 工具安装引导（`setup-tools`）。
+- **基准评测**：30 用例评测器（TP/FP/FN——精度/召回）+ 外部 DroidBench/OWASP 目录支持。
 
-- Native(.so) 审计：未剥离符号（`SO_UNSTRIPPED_SYMBOLS`）/ 调试信息（`SO_DEBUG_INFO_PRESENT`）/ 凭据格式（`SO_CREDENTIAL_FORMAT`）/ 已剥离确认（`SO_STRIPPED_OK`）/ SO 加壳（`SO_PACKED`——UPX/jiagu 字节级扫描）。
-- DEX 审计：字符串安全子集（`DEX_STRING_SECURITY`——衔接 `--from-audit` 加密桩）/ 头结构校验（`DEX_HEADER_MALFORMED`——失败关闭）。
-- 源码审计：弱加密（`SOURCE_WEAK_CRYPTO`——AES 默认 ECB/DES/3DES/硬编码 IV）/ SSL 证书校验绕过（`SOURCE_SSL_BYPASS`——自定义 TrustManager/空 checkServerTrusted/ALLOW_ALL）/ 语义漏洞（`SOURCE_SEMANTIC_VULN`——SQL 注入/命令执行汇）/ 凭据格式启发式（AWS/Google/GitHub 令牌/PEM 私钥）/ URL/域名/端点提取（`ENDPOINT_INVENTORY`——DEX 字符串池 URL/域名/路径——含路径深度与子域名级数）。
-- JS/Web 审计：JS 硬编码密钥/危险 API（innerHTML/eval/动态脚本）/弱加密（MD5/SHA1）——`SOURCE_JS_*`；Web 明文表单/内联 XSS 事件处理器/Web 存储敏感数据——`SOURCE_WEB_*`；自动反混淆（eval/atob 编码层自动解码——JS 审计前预处理）。
-- 恶意指标：`MALICIOUS_INDICATOR`（危险权限组合——短信劫持/屏幕覆盖+无障碍/设备管理+短信——info 级清单提示只报告）。
+### Changed
 
-#### 污点分析（19 项全量）
-
-- 源/汇库：源 6→14（设备标识/位置/剪贴板/账户/接收侧（getIntent/getData/query））、汇 13→15（文件写入）。
-- 入口点：生命周期回调（`SOURCE_LIFECYCLE_ENTRY`）/ 动态回调注册（`SOURCE_CALLBACK_ENTRY`——ClickListener/Handler/AsyncTask 等 9 类）。
-- 传播：跨函数（`SOURCE_CROSS_FUNCTION_TAINT`）/ 跨组件·IPC（`SOURCE_CROSS_COMPONENT_TAINT`）/ 库间（`SOURCE_LIBRARY_TAINT`）/ 隐式流（`SOURCE_IMPLICIT_FLOW`）/ 静态字段（`SOURCE_STATIC_TAINT`）/ 集合元素（`SOURCE_COLLECTION_TAINT`）/ 对象字段（`SOURCE_OBJECT_FIELD_TAINT`）/ 常量值（`SOURCE_CONSTANT_VALUE`）。
-- 语义：sanitizer 清理建模（加密/编码后污点清除——降误报）/ 反射调用静态解析（`SOURCE_REFLECTION_TARGET`）/ SDK 版本化模型（`SDK_LEVEL_API_MISMATCH`）/ 调用图接口分派近似（`expandInterfaceDispatch`）/ 污点路径报告（`taintPaths`）。
-- 规则化：声明式污点规则（`taintRulesFile`——自定义 source/sink/sanitizer 合并到扫描）。
-
-#### 行为分析与调用图
-
-- 行为规则引擎（内置 10 条恶意行为规则）+ 加权恶意评分（`MALICIOUS_SCORE` 0-100 归一化）+ 行为规则文件加载（`behaviorRulesFile`）+ 评分阈值可配置（`maliciousScoreThresholds`）。
-- DEX 调用图提取（invoke-kind 指令解析）/ 调用链关联（行为证据带调用方）/ 调用图导出；反混淆辅助（hex/base64/URL 三编码解码匹配）。
-
-#### 加固与防护
-
-- 打包器/混淆器指纹（`packers.ts` 12→27→33 条——商业加固壳/混淆器——regex 型 + version/author 元数据 + 指纹规则文件加载（`packerFingerprintsFile`））。
-- 资源名混淆：Mode C 值级保守混淆（颜色 #RRGGBB→#AARRGGBB、维度 Ndp→Ndip，视觉不变）+ Mode D 目录保留式路径混淆（`pathMode`）。
-- ARSC 值级审计（`ARSC_VALUE_TECHNICAL`）+ 资源条目对象模型（resources.arsc 的 type chunk 解析 → 类型/条目树——146 类型）。
-- DEX 方法重命名工具（新建短名串 + 改该 method_id 的 name_idx（调用点自动跟随）——重算 adler32/SHA-1——引用完整性验证——失败关闭）+ 白名单映射生成器（`--from-audit` 自动提取疑似反射/注解类）。
-- 字符串加密桩（编译期加密/运行期解密——DEX 池不含明文敏感串——`--from-audit`/`--verify`/`--rotate` 密钥轮换）+ assets 资源轻量加密（`--gen-reader` 解密器/`--verify` 回程验证）。
-- 反调试 stub：magisk/zygisk/lspd/riru/Sui 检测 + 五类只报告信号（完整性自检/签名指纹自检/模拟器特征/VPN·代理/时钟异常）+ `signalsToJson` 服务端协作上报 + `checkFridaInjection`（/proc/self/maps 分层检测）。
-
-#### 发布工程化
-
-- 发布预检（`preflight.ts`——type-check/test/release-check 4 门禁 + `--json` 机器可读 + `--skip-test`）/ 修复包复测闭环（`re-test.ts`——`--before`/`--auto`/`--json`/`--fail-on-remaining`/`gateStatus` 门禁非零退出）。
-- 经典 / 测试与学习双模式（经典模式清理中间 APK 只留最终 release；`--test-learning` 保留全部中间产物）。
-- 加固成效量化（产物前后大小对比/DEX·SO 敏感项计数/覆盖度评分——7 维含 nativeAudit）+ 报告历史对比（`previousRun`/`previousGate`——schemaVersion 8）+ 门禁置信度感知（pass/review/block）+ 加固覆盖度阈值（`minimumHardeningCoverage`）。
-
-#### 供应链
-
-- 离线已知漏洞比对（`SUPPLYCHAIN_KNOWN_VULNERABILITY`——内置快照 8 条——`fixedIn`/`affected` 版本区间——不联网清单级提示）+ 数据表一致性校验（`known-vuln-check`——CVE/包名/marker 唯一性 + `--suggest`）。
-
-#### 报告与标准对齐
-
-- HTML 自包含报告（TUI 视觉）/ SARIF 2.1.0 导出（GitHub Code Scanning 可导入）/ 极简 PDF 报告（纯 TS 零依赖）/ MASTG 逐项检查清单 + MASVS L1/L2 合规级别（16 项 + finding 驱动的状态推导 + 合规摘要）/ MASTG 规则映射 / CWE·OWASP 元数据 / POC 验证命令建议（EXPORTED 组件/深链/备份的 adb/drozer 验证命令）/ 反编译核验建议 / 历史趋势 / PR 评论生成 / MobSF 兼容 JSON 导出。
-
-#### 可编程性与工具链
-
-- 深度可编程解析：指令迭代器 API（逐指令 opcode/mnemonic/operands）/ 内置反汇编器（smali-like 方法级——行为 finding 附反汇编片段）/ XREF 交叉引用（方法/字段被引用映射）/ 类级对象模型（类→方法→指令对象树——export-ir `classes` 深化）/ 任意 DEX 修改 API（invoke 方法索引/const-string 字符串索引补丁）/ 交互式分析 REPL / 可编程 IR 导出（JSON IR 供第三方分析）。
-- 规则体系：JSON 正则自定义规则（`customRulesFile`）/ Semgrep YAML·JSON 规则导入（`loadSemgrepRules`——pattern-regex 提取 + cwe/owasp 列表解析）/ 精确模式（`exact`——词边界整词匹配降误报）/ 规则测试框架（正/负用例 + CI 退出码）/ autofix 自动修复（安全替换 + 备份 .autofix.bak——失败关闭）/ suppression 注释忽略（`droidseal-ignore` 行级忽略——集成核心扫描）。
-- 密钥格式库：31 种多平台密钥格式（Twilio/SendGrid/Discord/OpenAI/Gemini/Anthropic/GitLab 等）+ 厂商元数据（`vendor`）+ apkleaks 式密钥规则导入（`keyFormatsFile`）。
-- 权限：权限风险评分（`PERMISSION_RISK_HIGH`——12 个敏感权限风险分）+ 权限-数据流关联（`PERMISSION_DATAFLOW_LINK`——声明敏感权限 + 数据流中使用——交叉证据升级）+ 调用图可视化（Mermaid flowchart）。
-
-#### 运行时服务与批量
-
-- REST API 服务（`serve.ts`——并发运行 + 可选 Bearer token——POST /run / GET /runs / GET /reports / GET /health——本地优先）。
-- 批量运行（`batch-run`——manifest.json + `--dir` 目录模式 + `--parallel N` 并发池）。
-- adb 真机/模拟器动态验证（设备检测统一/安装启动/logcat 敏感明文日志（`DYNAMIC_LOG_LEAK`）/dumpsys 运行时状态（`DYNAMIC_DEBUGGABLE`）——静态+动态交叉证据升级——无设备跳过失败关闭）。
-- 工具安装引导（`setup-tools`——用户级隔离安装 + 固定版本组合 + sdkmanager 许可预接受 + 失败关闭）+ 非交互流水线测试 runner。
-
-#### TUI 与 i18n
-
-- 入口按钮（一键/分步/诊断——一键置首）/ 门禁横幅（发现数 + 严重度统计 + 原因 code）/ 阶段分组侧栏（可选步骤「可选未开启」标注）/ 快捷键提示 / i18n 完整中英文键（`t()` 参数化——语言切换即时生效）。
-
-#### 加固深化（加壳 + 五层 + 死代码注入——全部源码接入形态）
-
-- 加壳（轻量 DEX 加密/动态加载）：`generate-dex-loader.ts`——Loader 类 + 加密 assets 资源（敏感类 DEX 字节码加密——运行期 `DexClassLoader` 解密加载——反射调用——静态分析只见 Loader——不事后改写未知 APK）。
-- 层面 1 轻量 VMP/Dex2C：`generate-vm-protection.ts`——VM 解释器 + 指令化样例（自定义指令集 CONST/LOAD/STORE/ADD/SUB/OPAQUE/RETURN——敏感逻辑编码为指令数组——运行期解释执行——静态只见解释器与指令）。
-- 层面 2 控制流混淆升级：`generate-control-flow-obfuscation.ts`——伪 switch 分发（状态变量 + 每块更新跳回分发器——CFG 变平）+ opaque predicates（静态分析难解析可达性）。
-- 层面 3 反调试对抗升级（主动防御）：stub 加 `checkXposedPresence`（Xposed 框架痕迹）/ `checkReverseToolTraces`（frida-server/Substrate/objection 进程痕迹）。
-- 层面 4 运行时环境深度检测：stub 加 `checkSystemProperties`（ro.debuggable/ro.secure——不只是调试器）+ `signalsToJson` 接线（xposedPresence/reverseToolTraces/systemPropertiesDebug）。
-- 层面 5 资源与内存运行时保护：字符串加密桩加 `--clear-after-use`（`decryptChars`——解密到 CharArray——用后立即清零——内存不留明文痕迹）。
-- 死代码注入：`generate-dead-code.ts`——生成无害死代码桩（恒假分支/冗余方法/伪逻辑——不改变行为——提高逆向噪声——`--count`/`--class`——失败关闭）。
-- 加固深化六方向（追求更强更硬）：字符串加密算法增强（`dex-string-crypto.ts`——单轮 XOR → **带 nonce 的 8 轮变换**——密文随机化（同值不同密——抗已知明文/频率分析））；密钥内存保护（字符串加密桩 `--key` 的模板改**掩码存储**——`MASKED_KEY` + `deriveMask` 运行时重建——常量池无明文密钥）；多文件完整性检测（stub `checkMultiFileIntegrity`——APK 内 DEX/so/资源多文件 SHA-256 与期望清单比对——篡改定位文件级——`signalsToJson` 接线）；原生层反调试（`droidseal_antidebug.c` 加 **ptrace 自跟踪检测**（PTRACE_TRACEME——已被跟踪时失败）——`nativePtraceTraced` + Kotlin `checkPtraceTraced`——native 侧主动防御）；控制流多层平坦化（`generate-control-flow-obfuscation.ts` 深化——**嵌套 switch 分发**（外层状态机 + 内层块分发）+ **opaque predicates 复杂化**（6 种不透明表达式——静态不可判定））；VMP 自动指令化（`auto-vm-encode.ts`——把简单逻辑**自动转 VM 指令数组**（赋值/二元运算/常量/变量——如 `x=a+b;y=x*2;return y` → 8 条指令——粘贴进 VM 框架运行期解释执行——分阶段：简单表达式 → 复杂表达式 → 控制流）。
-- 加固深化下一层（更强更硬）：VMP 自动指令化深化（`auto-vm-encode.ts` 升级**递归下降解析**——括号 + 优先级（`* /` 高于 `+ -`）——复杂表达式自动编码）；主动对抗响应（stub `respondToThreat`——检测到调试器/篡改/逆向工具时**返回假数据**（行为拖延——**默认关闭**用户显式启用））；Dex2C 生成器（`generate-dex2c.ts`——简单逻辑转 **C 函数 + CMake**（NDK 编译——so 层执行——静态只见 C 语义））；指令级混淆（`apply-dex-equivalent-transform.ts`——DEX 条件分支 **if-* 取反 + 跳转交换**（保持语义——静态反汇编更噪））；加固生成器流水线集成（`apply-hardening-suggestions --apply`——**自动执行建议对应的加固生成器**（从「建议」到「自动生成」——失败关闭））；多算法加密（`dex-string-crypto.ts` 加**置换式变换**（第二种算法——位置置换 + XOR——与 nonce 多轮轮换——破解需逐个分析））。
-- 加固自动化深度 + 规则数量扩充：VMP 控制流指令化（`auto-vm-encode.ts` 加 **if/for/while 自动编码**——指令集加 CMP/JZ/JMP——控制流逻辑自动转 VM 指令）；Dex2C 控制流深化（`generate-dex2c.ts` 加 `logicBlockToC`——**if/else 复杂逻辑转 C 块**）；源码加固检测器扩充（`source-detectors.ts` 新增——**13 个检测器**（加密 3（弱密钥派生/静态 IV/不安全随机）、网络 2（明文 WebSocket/不安全 TLS）、存储 3（内部存储明文/SD 卡写入/SharedPreferences 敏感）、组件 3（动态接收器/隐式 Intent/URI 授权）、权限 2（危险组合/设备标识跟踪）——pipeline 集成）。
+- **扫描性能**：源码检测器加特征词预过滤（先查特征词表再跑正则——速度提升数倍——大小写/驼峰/短标识提取防漏报）。
+- **检测器质量**：去重合并（ECB 3→1 / FLAG_SECURE 4→1 / 明文 HTTP 3→1 / 剪贴板 3→2——380 → 373）+ 10 个工程/UX 核对类降级为 info。
+- **字符串加密增强**：单轮 XOR → 带 nonce 的 8 轮变换（密文随机化——同值不同密）+ 置换式第二算法（多算法轮换）；密钥模板改掩码存储（常量池无明文密钥）。
+- **内存占用显示**：进度条基准从固定 4GB 假设改为系统总内存占比（`os.totalmem()`）。
 
 ### Fixed
 
-- 修复传递依赖已知漏洞：`brace-expansion` 升级至 `^2.1.4`（GHSA-rgw5-rvv9-x895，无界中间数组 DoS）、`@babel/core` 升级至 `^7.29.1`（GHSA-4x5r-pxfx-6jf8，sourceMappingURL 注释任意文件读）；`bun audit` 现报告无已知漏洞，release-check 的依赖覆盖断言同步更新。
+- 修复传递依赖已知漏洞：`brace-expansion` 升级至 `^2.1.4`（GHSA-rgw5-rvv9-x895）、`@babel/core` 升级至 `^7.29.1`（GHSA-4x5r-pxfx-6jf8）；`bun audit` 现报告无已知漏洞。
+- 修复多处检测器正则/模式的精度问题（负向断言、双向匹配、引号可选等——精度用例 72 个全通过）。
+- 修复 DroidSeal 官网 gh-pages 工作副本与主仓库的版本同步（四文件版本一致）。
+
+### Removed
+
+- 删除构建产物（旧版 `droidseal-*.tgz`/`dist`/`dist-wheel`/缓存）与冗余文件（`.github/dependabot.yml`——limit 0 规避 bot 痕迹）。
+- 删除重复检测器（去重合并后 380 → 373——消除同主题重复报告）。
 
 ## [1.0.0] - 2026-08-20
 
