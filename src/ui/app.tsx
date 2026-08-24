@@ -1375,8 +1375,8 @@ export function App() {
             </Show>
 
             <Show when={screen() === "welcome" && !toolRecovery()}>
-              <Button shortcut="1" label="一键处理" detail="失败自动回退并继续" onPress={() => startWizard("one-click")} />
-              <Button shortcut="2" label="分步处理" detail="每一步执行前确认" tone="accent" onPress={() => startWizard("guided")} />
+              <Button shortcut="1" label="一键处理" detail="失败自动回退并继续" tone="accent" onPress={() => startWizard("one-click")} />
+              <Button shortcut="2" label="分步处理" detail="每一步执行前确认" onPress={() => startWizard("guided")} />
               <Button shortcut="3" label="环境诊断" detail="检查 JDK 与 Android SDK" onPress={() => void runDoctor()} />
             </Show>
 
@@ -1529,7 +1529,8 @@ export function App() {
                 {(step, index) => (
                   <>
                     <Show when={index() === 0 || steps()[index() - 1]?.phase !== step.phase}>
-                      <text fg={theme.borderActive} selectable={false}>
+                      <box height={1} />
+                      <text fg={theme.deepIce} selectable={false}>
                         <b>▸ {({ prepare: t("phasePrepare"), audit: t("phaseAudit"), harden: t("phaseHarden"), release: t("phaseRelease") })[step.phase]}</b>
                       </text>
                       <box height={1} />
