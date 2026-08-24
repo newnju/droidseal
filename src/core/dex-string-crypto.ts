@@ -71,6 +71,50 @@ export function decryptBytes(data: Uint8Array, key: Uint8Array): Uint8Array {
   return out
 }
 
+// 方向⑥（多算法加密——置换式变换）：第二种算法——位置置换 + XOR（与 nonce 多轮不同——
+// 不同字符串轮换使用——破解需逐个分析——降低单算法被破解后的整体影响）。
+// 密文 = 4 字节 nonce + 置换索引表（前 length 字节——0..length-1 的伪随机置换）+ 变换后的正文。
+export function encryptBytesPermute(data: Uint8Array, key: Uint8Array): Uint8Array {
+  const length = data.length
+  const nonce = new Uint8Array(4)
+  for (let i = 0; i < 4; i += 1) nonce[i] = Math.floor(Math.random() * 256)
+  // 伪随机置换索引表（按 key 派生——确定性但依赖密钥）
+  const perm = Array.from({ length }, (_, i) => i)
+  for (let i = length - 1; i > 0; i -= 1) {
+    const j = (key[i % key.length]! ^ nonce[i % 4]!) % (i + 1)
+    const t = perm[i]!
+    perm[i] = perm[j]!
+    perm[j] = t
+  }
+  const out = new Uint8Array(4 + length + length)
+  out.set(nonce, 0)
+  for (let i = 0; i < length; i += 1) out[4 + i] = perm[i]!
+  for (let i = 0; i < length; i += 1) {
+    const src = perm[i]!
+    out[4 + length + i] = data[src]! ^ key[i % key.length]!
+  }
+  return out
+}
+export function decryptBytesPermute(data: Uint8Array, key: Uint8Array): Uint8Array {
+  const nonce = data.slice(0, 4)
+  const length = (data.length - 4) / 2
+  const perm = Array.from({ length }, (_, i) => data[4 + i]!)
+  const body = data.slice(4 + length)
+  const out = new Uint8Array(length)
+  // body[i] = data[perm[i]] ^ key[i]（加密）——还原：out[perm[i]] = body[i] ^ key[i]
+  for (let i = 0; i < length; i += 1) {
+    out[perm[i]!] = body[i]! ^ key[i % key.length]!
+  }
+  return out
+}
+
+export function encryptStringPermute(text: string, key: Uint8Array): Uint8Array {
+  return encryptBytesPermute(new TextEncoder().encode(text), key)
+}
+export function decryptToStringPermute(data: Uint8Array, key: Uint8Array): string {
+  return new TextDecoder("utf-8", { fatal: false }).decode(decryptBytesPermute(data, key))
+}
+
 export function encryptString(text: string, key: Uint8Array): Uint8Array {
   return encryptBytes(new TextEncoder().encode(text), key)
 }

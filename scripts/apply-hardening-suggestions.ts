@@ -6,6 +6,7 @@
 // 用法：
 //   bun scripts/apply-hardening-suggestions.ts <droidseal-report.json> [output.md]
 import { readFile, writeFile } from "node:fs/promises"
+import { spawnSync } from "node:child_process"
 
 interface Suggestion {
   type: string
@@ -21,8 +22,9 @@ interface ReportJson {
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   const reportPath = argv[0]
-  if (!reportPath) throw new Error("用法: apply-hardening-suggestions <droidseal-report.json> [output.md]")
+  if (!reportPath) throw new Error("用法: apply-hardening-suggestions <droidseal-report.json> [output.md] [--apply]")
   const output = argv[1] ?? "hardening-plan.md"
+  const apply = argv.includes("--apply")
   const report = JSON.parse(await readFile(reportPath, "utf8")) as ReportJson
   const suggestions = report.hardeningSuggestions ?? []
   if (suggestions.length === 0) {
@@ -44,6 +46,22 @@ async function main(): Promise<void> {
   ]
   await writeFile(output, lines.join("\n"), "utf8")
   console.log(`已生成加固执行计划：${output}（${suggestions.length} 项建议——含命令与验证指引）`)
+
+  // 下一层⑤（生成器流水线集成）：--apply——自动执行建议对应的加固生成器（从「建议」到「自动生成」）。
+  if (apply) {
+    for (const [index, s] of suggestions.entries()) {
+      const parts = s.command.split(/\s+/).filter(Boolean)
+      if (parts.length === 0) continue
+      const bin = parts.shift()!
+      const result = spawnSync(bin, parts, { timeout: 120_000 })
+      console.log(
+        result.status === 0
+          ? `[${index + 1}/${suggestions.length}] ✓ 已执行：${s.command}`
+          : `[${index + 1}/${suggestions.length}] ✗ 执行失败（${result.status}）：${s.command}`,
+      )
+      if (result.status !== 0) process.exitCode = 1
+    }
+  }
 }
 
 main().catch((error) => {

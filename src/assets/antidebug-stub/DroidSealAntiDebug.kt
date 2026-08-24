@@ -445,5 +445,18 @@ object DroidSealAntiDebug {
         }
     }
 
+    // 下一层②（主动对抗响应——默认关闭——用户显式启用）：检测到调试器/篡改/逆向工具时——
+    // 返回假数据（让逆向工具拿到错误信息——行为拖延的轻量形态）——否则返回真实数据。
+    // 用法：在敏感逻辑处用 `respondToThreat(真实值, "decoy-xxx", enabled)` 包裹。
+    fun respondToThreat(real: String, decoy: String, enabled: Boolean): String {
+        if (!enabled) return real
+        val threatened =
+            checkFridaInjection() ||
+            checkXposedPresence() ||
+            checkPtraceTraced() ||
+            checkReverseToolTraces()
+        return if (threatened) decoy else real
+    }
+
     private external fun nativePtraceTraced(): Boolean
 }
