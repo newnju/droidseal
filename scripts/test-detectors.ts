@@ -549,6 +549,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "ransom-lock"), detail: `命中 ${hits.length} 条（应含 勒索锁屏特征）` }
     },
   },
+  {
+    name: "②s 检测器命中(正——JWT 硬编码/SQL 拼接/TextWatcher 监听)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val jwt = \"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U\"; db.rawQuery(\"SELECT * FROM t WHERE id = \" + id); tv.addTextChangedListener(object : TextWatcher() { }); val pin = \"123456\" } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_JWT_HARDCODED") && codes.includes("SOURCE_SQL_RAW_STRING") && codes.includes("SOURCE_TEXTWATCHER_SENSITIVE"), detail: `命中 ${findings.length} 类（应含 JWT/SQL 拼接/TextWatcher）` }
+    },
+  },
+  {
+    name: "②s 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { db.rawQuery(\"SELECT * FROM t WHERE id = ?\", arrayOf(id)); val r = SecureRandom(); val c = Cipher.getInstance(\"AES/GCM/NoPadding\") } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——参数化 SQL + GCM——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为短信劫持规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.telephony.SmsManager.sendTextMessage"]))
+      return { hit: hits.some((h) => h.rule.crimer === "sms-hijack"), detail: `命中 ${hits.length} 条（应含 短信劫持特征）` }
+    },
+  },
 ]
 
 let failed = 0
