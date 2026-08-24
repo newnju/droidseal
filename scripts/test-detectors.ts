@@ -573,6 +573,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "sms-hijack"), detail: `命中 ${hits.length} 条（应含 短信劫持特征）` }
     },
   },
+  {
+    name: "②t 检测器命中(正——ChaCha 复用/导出认证/分析 SDK)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val ch = ChaCha20(); ch.init(\"0123456789ABCDEF0123456789ABCDEF\"); val m = \"exported=true\"; val login = auth(); FirebaseAnalytics.getInstance(ctx).logEvent(\"token_clicked\", bundle) } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_CHACHA_KEY_REUSE") && codes.includes("SOURCE_EXPORTED_ACTIVITY_NO_AUTH") && codes.includes("SOURCE_ANALYTICS_SENSITIVE"), detail: `命中 ${findings.length} 类（应含 ChaCha 复用/导出认证/分析 SDK）` }
+    },
+  },
+  {
+    name: "②t 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val r = SecureRandom(); val c = Cipher.getInstance(\"AES/GCM/NoPadding\"); val m = \"exported=false\" } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——GCM + 非导出——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——供应链 fastjson)",
+    run: () => {
+      const findings = compareKnownVulnerabilities(["com.alibaba:fastjson"])
+      return { hit: findings.some((f) => f.code === "SUPPLYCHAIN_KNOWN_VULNERABILITY" && (f.evidence ?? "").includes("CVE-2022-25845")), detail: `命中 ${findings.length} 条（应含 fastjson CVE-2022-25845）` }
+    },
+  },
 ]
 
 let failed = 0
