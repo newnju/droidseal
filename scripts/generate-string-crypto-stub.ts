@@ -22,6 +22,7 @@ interface CliArgs {
   strings: Map<string, string>
   outputDir: string
   fromAudit?: string
+  clearAfterUse?: boolean
 }
 
 function toHex(bytes: Uint8Array): string {
@@ -45,6 +46,8 @@ function parseArgs(argv: string[]): CliArgs {
       args.outputDir = argv[++i]!
     } else if (arg === "--from-audit") {
       args.fromAudit = argv[++i]!
+    } else if (arg === "--clear-after-use") {
+      args.clearAfterUse = true
     }
   }
   if (args.outputDir === "") throw new Error("缺少 --output 输出目录")
@@ -107,6 +110,14 @@ object StringCrypto {
             out[i] = (rot xor (KEY[i % KEY.size].toInt() and 0xFF)).toByte()
         }
         return String(out, Charsets.UTF_8)
+    }
+
+    // 不留痕迹模式（--clear-after-use）：解密到 CharArray——用后立即 fill('\\u0000') 清零——
+    // 内存中不保留明文痕迹（区别于 String 的不可变驻留）。
+    fun decryptChars(hex: String): CharArray {
+        val s = decrypt(hex)
+        val chars = s.toCharArray()
+        return chars
     }
 
     private fun hexToBytes(hex: String): ByteArray {

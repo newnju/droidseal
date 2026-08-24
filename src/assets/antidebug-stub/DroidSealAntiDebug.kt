@@ -324,6 +324,43 @@ object DroidSealAntiDebug {
         }
     }
 
+    // 层面3（对抗性升级）：检测 Xposed 框架痕迹（框架目录/桥接 jar——主动防御）。
+    fun checkXposedPresence(): Boolean {
+        return try {
+            val paths = listOf("/data/data/de.robv.android.xposed", "/system/framework/XposedBridge.jar")
+            paths.any { File(it).exists() }
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    // 层面3（对抗性升级）：检测逆向工具进程痕迹（frida-server/Substrate 等——反制逆向工具）。
+    fun checkReverseToolTraces(): Boolean {
+        return try {
+            val proc = File("/proc").listFiles() ?: emptyArray()
+            proc.any { dir ->
+                if (!dir.isDirectory) return@any false
+                val status = File(dir, "cmdline").takeIf { it.canRead() }?.readText() ?: ""
+                status.contains("frida") || status.contains("substrate") || status.contains("objection")
+            }
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    // 层面4（运行时环境深度检测）：系统调试属性（ro.debuggable/ro.secure——不只是调试器）。
+    fun checkSystemProperties(): Boolean {
+        return try {
+            val cls = Class.forName("android.os.SystemProperties")
+            val get = cls.getMethod("get", String::class.java)
+            val debuggable = get.invoke(null, "ro.debuggable") as? String
+            val secure = get.invoke(null, "ro.secure") as? String
+            debuggable == "1" || secure == "0"
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
     /**
      * 服务端协作上报：把当前检测信号汇总为 JSON 字符串（只报告，不阻断）。
      * 字段含 inspect() 快照、完整性、签名、模拟器、VPN/代理、时钟异常；宿主上报后由服务端决策。
@@ -351,7 +388,10 @@ object DroidSealAntiDebug {
             append("\"emulator\":").append(checkEmulator()).append(",")
             append("\"vpnOrProxy\":").append(checkVpnProxy(contentResolver)).append(",")
             append("\"clockAnomaly\":").append(checkClockAnomaly()).append(",")
-            append("\"fridaInjection\":").append(checkFridaInjection())
+            append("\"fridaInjection\":").append(checkFridaInjection()).append(",")
+            append("\"xposedPresence\":").append(checkXposedPresence()).append(",")
+            append("\"reverseToolTraces\":").append(checkReverseToolTraces()).append(",")
+            append("\"systemPropertiesDebug\":").append(checkSystemProperties())
             append("}")
         }
     }
