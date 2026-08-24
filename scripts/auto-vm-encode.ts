@@ -46,30 +46,60 @@ function compile(logic: string): Compiled {
   return { instructions, usedRegs: nextReg }
 }
 
-// 解析表达式（二元运算链：常数/变量 → 逐运算生成指令——当前为左结合 + - * /）。
+// 解析表达式（方向①深化——递归下降：括号 + 优先级——* / 高于 + -——编译到指令序列）。
 function resolveExpr(
   expr: string,
   instructions: Array<[number, number, number]>,
   regs: Record<string, number>,
   alloc: () => number,
 ): number {
-  // 拆成 token（数字/变量/运算符——简单词法）
-  const tokens = expr.match(/\d+|(?:[A-Za-z_]\w*)|[+\-*/]/g)
-  if (!tokens) throw new Error(`无法解析表达式：${expr}`)
-  let current = tokens[0]!
-  const curReg = loadOperand(current, instructions, regs, alloc)
-  let reg = curReg
-  for (let i = 1; i < tokens.length; i += 2) {
-    const op = tokens[i]!
-    const rhs = loadOperand(tokens[i + 1]!, instructions, regs, alloc)
-    const outReg = alloc()
-    const opCode = { "+": OP.ADD, "-": OP.SUB, "*": OP.MUL, "/": OP.DIV }[op] ?? OP.ADD
-    instructions.push([opCode, reg, rhs])
-    instructions.push([OP.STORE, opCode === OP.ADD ? reg : reg, outReg]) // 结果存 outReg
-    reg = outReg
+  let pos = 0
+  const tokens = expr.match(/\d+|(?:[A-Za-z_]\w*)|[+\-*/()]/g) ?? []
+  const peek = (): string | undefined => tokens[pos]
+  const next = (): string | undefined => tokens[pos++]
+
+  // 表达式：项 (('+'|'-') 项)*
+  const parseExpr = (): number => {
+    let left = parseTerm()
+    while (peek() === "+" || peek() === "-") {
+      const op = next()!
+      const right = parseTerm()
+      const outReg = alloc()
+      const opCode = op === "+" ? OP.ADD : OP.SUB
+      instructions.push([opCode, left, right])
+      instructions.push([OP.STORE, left, outReg])
+      left = outReg
+    }
+    return left
   }
-  void current
-  return reg
+  // 项：因子 (('*'|'/') 因子)*
+  const parseTerm = (): number => {
+    let left = parseFactor()
+    while (peek() === "*" || peek() === "/") {
+      const op = next()!
+      const right = parseFactor()
+      const outReg = alloc()
+      const opCode = op === "*" ? OP.MUL : OP.DIV
+      instructions.push([opCode, left, right])
+      instructions.push([OP.STORE, left, outReg])
+      left = outReg
+    }
+    return left
+  }
+  // 因子：数字 | 变量 | '(' 表达式 ')'
+  const parseFactor = (): number => {
+    const token = next()
+    if (token === "(") {
+      const inner = parseExpr()
+      const closing = next()
+      if (closing !== ")") throw new Error(`缺少右括号：${expr}`)
+      return inner
+    }
+    if (token === undefined) throw new Error(`表达式意外结束：${expr}`)
+    return loadOperand(token, instructions, regs, alloc)
+  }
+
+  return parseExpr()
 }
 
 // 加载操作数（常量 → CONST；变量 → LOAD/已有寄存器）。
