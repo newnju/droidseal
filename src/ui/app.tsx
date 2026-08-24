@@ -16,6 +16,7 @@ import { Pipeline, STEP_DEFINITIONS, statusGlyph } from "../core/pipeline.ts"
 import { evaluateReleaseDecision } from "../core/release-policy.ts"
 import { sha256File } from "../core/apk-audit.ts"
 import { language, setLanguage, t, tGuidance, translateDetail, translateProgress, translateSummary, tStep, tStepDesc } from "./i18n.ts"
+import { totalmem } from "node:os"
 import { dlopen, FFIType } from "bun:ffi"
 
 // Windows:让系统忽略 Ctrl+C 控制台事件(CTRL_C_EVENT)。
@@ -1286,7 +1287,7 @@ export function App() {
             </box>
             {/* 占用显示（按钮附近——btop++ 式紧凑条形） */}
             <text fg={theme.accentStrong} selectable={false}>
-              内存 {memory().rss.toFixed(0)} MB {"█".repeat(Math.min(10, Math.round((memory().rss / 4096) * 10))).padEnd(10, "░")} · CPU {memory().cpu.toFixed(0)}% {"█".repeat(Math.min(10, Math.round((memory().cpu / 100) * 10))).padEnd(10, "░")}
+              内存 {memory().rss.toFixed(0)} MB {"█".repeat(Math.min(10, Math.round(((memory().rss * 1024 * 1024) / totalmem()) * 10))).padEnd(10, "░")} · CPU {memory().cpu.toFixed(0)}% {"█".repeat(Math.min(10, Math.round((memory().cpu / 100) * 10))).padEnd(10, "░")}
             </text>
           </box>
         </Show>
