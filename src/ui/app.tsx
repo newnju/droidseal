@@ -19,14 +19,21 @@ import { language, setLanguage, t, tGuidance, translateDetail, translateProgress
 import { totalmem } from "node:os"
 import { dlopen, FFIType } from "bun:ffi"
 
-// Ctrl+C 实际退出:不再忽略系统 Ctrl+C——按下即中断退出(标准终端行为)。
+// Ctrl+C 两次退出:第一次显示底部提示(logo 蓝「再按一次退出」),第二次真正退出。
 // 移除原先"只复制不退出"的拦截——剪贴板复制不再绑定 Ctrl+C。
 export function setClipboardInterruptHook(hook: (() => void) | undefined): void {
-  void hook
+  exitHintHook = hook
 }
 
+let exitHintHook: (() => void) | undefined
+let interruptPressedOnce = false
 const interruptHandler = (): void => {
-  process.exit(130)
+  if (!interruptPressedOnce) {
+    interruptPressedOnce = true
+    exitHintHook?.() // 第一次:显示底部提示
+    return
+  }
+  process.exit(130) // 第二次:真正退出
 }
 process.on("SIGINT", interruptHandler)
 process.on("SIGTERM", interruptHandler)
@@ -248,6 +255,7 @@ export function App() {
   const [thinking, setThinking] = createSignal("")
   const [needsFailureAdvance, setNeedsFailureAdvance] = createSignal(false)
   const [pipelineDone, setPipelineDone] = createSignal(false)
+  const [exitHint, setExitHint] = createSignal(false)
   const [spinnerIndex, setSpinnerIndex] = createSignal(0)
   // 占用显示（③）：RSS/堆/CPU——每 2 秒采样一次实时显示（btop++ 式左侧面板）
   const [memory, setMemory] = createSignal<{ rss: number; heap: number; cpu: number }>({ rss: 0, heap: 0, cpu: 0 })
@@ -428,8 +436,8 @@ export function App() {
     renderer.setTerminalTitle("DroidSeal · Android Release Seal")
     const timer = setInterval(() => setSpinnerIndex((value) => (value + 1) % SPINNER.length), 120)
     onCleanup(() => clearInterval(timer))
-    // Ctrl+C 永不退出:挂接模块级信号拦截(复制当前选中/输入)
-    setClipboardInterruptHook(copyForClipboard)
+    // Ctrl+C 两次退出:第一次显示底部提示(logo 蓝「再按一次退出」),第二次退出
+    setClipboardInterruptHook(() => setExitHint(true))
     onCleanup(() => setClipboardInterruptHook(undefined))
     // 兜底:注册永不清理的定时器,即使 OpenTUI 内部因 Ctrl+C 触发销毁(清空输入与定时器),
     // 事件循环也永远不会排空,beforeExit 不触发,进程绝不自我退出。
@@ -1510,7 +1518,7 @@ export function App() {
                   <>
                     <Show when={index() === 0 || steps()[index() - 1]?.phase !== step.phase}>
                       <box height={1} />
-                      <text fg={theme.deepIce} selectable={false}>
+                      <text fg={theme.accentStrong} selectable={false}>
                         <b>▸ {({ prepare: t("phasePrepare"), audit: t("phaseAudit"), harden: t("phaseHarden"), release: t("phaseRelease") })[step.phase]}</b>
                       </text>
                       <box height={1} />
@@ -1579,6 +1587,9 @@ export function App() {
         borderColor={theme.border}
       >
         <text fg={theme.textMuted}>DroidSeal</text>
+        <Show when={exitHint()}>
+          <text fg={theme.accentStrong}>再按一次 Ctrl+C 退出</text>
+        </Show>
         <box flexGrow={1} />
         <text fg={theme.textMuted}>{t("bottomBar").replace("{zoom}", String(interactionZoom()))}</text>
       </box>
