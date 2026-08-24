@@ -381,6 +381,30 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "ad-fraud-hide"), detail: `命中 ${hits.length} 条（应含 广告欺诈——隐藏视图）` }
     },
   },
+  {
+    name: "②l 检测器命中(正——PendingIntent/盐硬编码/剪贴板读取)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { PendingIntent.getActivity(ctx, 0, i, FLAG_MUTABLE); val salt = \"AbCdEfGhIjKlMnOp\"; val secret = ClipboardManager.getPrimaryClip().getText() } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_PENDING_INTENT_INSECURE") && codes.includes("SOURCE_CRYPTO_SALT_HARDCODED") && codes.includes("SOURCE_CLIPBOARD_READ_SENSITIVE"), detail: `命中 ${findings.length} 类（应含 PendingIntent/盐硬编码/剪贴板读取）` }
+    },
+  },
+  {
+    name: "②l 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { PendingIntent.getActivity(ctx, 0, i, FLAG_IMMUTABLE); val r = SecureRandom(); val b = ByteArray(16); r.nextBytes(b) } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——IMMUTABLE + SecureRandom——安全）` }
+    },
+  },
+  {
+    name: "已有检测器抽查(正——行为呼叫欺诈规则)",
+    run: () => {
+      const hits = matchBehaviorRules(new Set(["android.telecom.TelecomManager.acceptRingingCall"]))
+      return { hit: hits.some((h) => h.rule.crimer === "call-answer"), detail: `命中 ${hits.length} 条（应含 呼叫欺诈——自动接听）` }
+    },
+  },
 ]
 
 let failed = 0
