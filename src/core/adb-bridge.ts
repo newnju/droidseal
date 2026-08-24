@@ -45,23 +45,76 @@ export function runDynamicVerification(
   apkPath: string,
   packageName: string | undefined,
   findings: readonly Finding[],
+  uiSmoke = false,
 ): DynamicVerificationResult {
   const devices = detectAdbDevices()
   if (devices.length === 0) return { skipped: true, reason: "无 adb 设备（真机/模拟器）——跳过动态验证", findings: [] }
-  const device = devices[0]!
   const out: Finding[] = []
 
+  // 1a. 设备矩阵采集（getprop——型号/版本/SDK/ABI——动态验证环境证据——失败关闭）
+  for (const device of devices) {
+    const getprop = spawnSync("adb", ["-s", device.serial, "shell", "getprop"], { timeout: 30000, maxBuffer: 4 * 1024 * 1024 })
+  if (getprop.status === 0) {
+    const propText = getprop.stdout.toString()
+    const model = /\[ro\.product\.model\]: \[([^\]]*)\]/.exec(propText)?.[1] ?? "unknown"
+    const release = /\[ro\.build\.version\.release\]: \[([^\]]*)\]/.exec(propText)?.[1] ?? "unknown"
+    const sdk = /\[ro\.build\.version\.sdk\]: \[([^\]]*)\]/.exec(propText)?.[1] ?? "unknown"
+    const abi = /\[ro\.product\.cpu\.abi\]: \[([^\]]*)\]/.exec(propText)?.[1] ?? "unknown"
+    const hasRoot = /\[ro\.secure\]: \[0\]/.test(propText)
+    out.push({
+      severity: "info",
+      confidence: "high",
+      code: "DYNAMIC_DEVICE_MATRIX",
+      title: "动态验证：设备矩阵（运行环境证据）",
+      detail: `设备 ${device.serial}：${model}（Android ${release} SDK ${sdk} ABI ${abi}）${hasRoot ? "——系统属性显示 ro.secure=0（root 环境）" : ""}——动态验证的运行环境记录（供报告复现）。`,
+      recommendation: "记录设备矩阵以复现动态验证结果；root 环境需额外关注（越权风险）。",
+      evidence: `设备 ${device.serial} ${model} / Android ${release} / SDK ${sdk} / ABI ${abi}${hasRoot ? " / root" : ""}`,
+    })
+  }
+  }
+
   // 1. 安装（可选——失败不阻断后续 logcat 检查）
-  const install = spawnSync("adb", ["-s", device.serial, "install", "-r", apkPath], { timeout: 120000 })
+  for (const device of devices) {
+    const install = spawnSync("adb", ["-s", device.serial, "install", "-r", apkPath], { timeout: 120000 })
   if (install.status === 0) {
     // 2. 启动（packageName 可用时——轻量启动验证）
     if (packageName) {
       spawnSync("adb", ["-s", device.serial, "shell", "am", "start", "-n", `${packageName}/.MainActivity`], { timeout: 30000 })
+      // 2a. UI 冒烟（可选——uiSmoke 时 monkey 随机事件触发界面——配合 logcat 崩溃捕获——失败关闭）
+      if (uiSmoke) {
+        const monkey = spawnSync("adb", ["-s", device.serial, "shell", "monkey", "-p", packageName, "100"], { timeout: 60000 })
+        if (monkey.status !== 0) {
+          out.push({
+            severity: "info",
+            confidence: "low",
+            code: "DYNAMIC_UI_SMOKE_FAILED",
+            title: "动态验证：UI 冒烟执行失败",
+            detail: `设备 ${device.serial} 的 monkey UI 冒烟未完成（rc=${monkey.status}）——界面触发受限（可能为权限/设备限制）。`,
+            recommendation: "核对 monkey 权限与设备状态；UI 冒烟失败不影响其他动态证据。",
+            evidence: `设备 ${device.serial} monkey UI 冒烟 rc=${monkey.status}`,
+          })
+        }
+      }
     }
-    // 3. logcat 敏感明文日志（验证静态发现的日志泄露）
+    // 3. logcat 敏感明文日志（验证静态发现的日志泄露——深化：按包名定向过滤——应用专属证据）
     const logcat = spawnSync("adb", ["-s", device.serial, "logcat", "-d"], { timeout: 30000, maxBuffer: 8 * 1024 * 1024 })
     if (logcat.status === 0) {
-      const logText = logcat.stdout.toString()
+      const logFull = logcat.stdout.toString()
+      // 定向过滤：有包名时只保留应用专属日志行（减少系统噪声——应用专属证据）
+      const logText = packageName ? logFull.split(/\r?\n/).filter((l) => l.includes(packageName)).join("\n") : logFull
+      if (packageName && logText.length === 0) {
+        // 包名定向后无日志——用全量（避免漏掉敏感泄露证据）
+        // （保持原逻辑：泄露模式对全量日志检查）
+        out.push({
+          severity: "info",
+          confidence: "low",
+          code: "DYNAMIC_LOG_FILTERED",
+          title: "动态验证：logcat 定向过滤（应用日志为空）",
+          detail: `设备 ${device.serial} 的 logcat 按 ${packageName} 过滤后无应用日志——使用全量日志继续检查（可能未触发应用日志）。`,
+          recommendation: "确认应用已启动并产生日志；定向过滤为空时核对启动状态。",
+          evidence: `设备 ${device.serial} logcat 按 ${packageName} 过滤为空`,
+        })
+      }
       const leaks = LOG_LEAK_PATTERNS.filter((p) => p.test(logText))
       if (leaks.length > 0) {
         out.push({
@@ -153,9 +206,10 @@ export function runDynamicVerification(
   // 反馈：动态证据附加到对应静态 finding（交叉验证升级）
   for (const finding of findings) {
     if (finding.code === "SOURCE_DATAFLOW" && out.some((f) => f.code === "DYNAMIC_LOG_LEAK")) {
-      finding.detail = `${finding.detail ?? ""} 动态验证：设备 ${device.serial} logcat 证实日志泄露。`
+      finding.detail = `${finding.detail ?? ""} 动态验证：设备 ${devices.map((d) => d.serial).join(", ")} logcat 证实日志泄露。`
     }
   }
+  }
 
-  return { skipped: false, device: device.serial, findings: out }
+  return { skipped: false, device: devices.map((d) => d.serial).join(", "), findings: out }
 }
