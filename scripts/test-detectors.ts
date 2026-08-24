@@ -340,6 +340,23 @@ const cases: Case[] = [
       return { hit: hits.some((h) => h.rule.crimer === "rogue-download"), detail: `命中 ${hits.length} 条（应含 静默下载——流氓推广）` }
     },
   },
+  {
+    name: "②j 检测器命中(正——DB 外部/SD 卡执行/Intent Parcel)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { getExternalFilesDir(null).let { SQLiteDatabase.openOrCreateDatabase(it, null, null) }; DexClassLoader(\"/mnt/sdcard/x.dex\", null, null, cl); intent.putExtra(\"token\", \"secret-tok\") } }")
+      const findings = await scanSourceDetectors(dir)
+      const codes = findings.map((f) => f.code)
+      return { hit: codes.includes("SOURCE_DB_WRITE_EXTERNAL") && codes.includes("SOURCE_SDCARD_EXEC") && codes.includes("SOURCE_INTENT_PARCEL_SENSITIVE"), detail: `命中 ${findings.length} 类（应含 DB 外部/SD 卡执行/Intent Parcel）` }
+    },
+  },
+  {
+    name: "②j 检测器不命中(负——安全代码)",
+    run: async () => {
+      const dir = await makeSourceDir("class A { fun x() { val db = SQLiteDatabase.openDatabase(\"internal.db\", null, 0); val r = SecureRandom(); intent.putExtra(\"id\", 42) } }")
+      const findings = await scanSourceDetectors(dir)
+      return { hit: findings.length === 0, detail: `误报 ${findings.length} 类（应 0——内部 DB + 非敏感 extra——安全）` }
+    },
+  },
 ]
 
 let failed = 0
