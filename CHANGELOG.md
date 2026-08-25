@@ -30,6 +30,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **字节码级保守自动化入口**：`extract-method-logic.ts`——从 DEX 方法字节码提取「可安全变换的简单逻辑」（保守子集：无异常/同步/反射——常量/算术/return——供 `auto-vm-encode` 自动编码）——复杂方法跳过并说明（全自动 VMP/Dex2C 阶段①②）。
 - **服务端决策阈值深化**：`signals-server.ts` 加 `--min-high`——高风险信号数达到阈值才报 high——降低偶发误报（频率/阈值控制）。
 - **供应链快照扩充**：OSV 内置快照 4 → 8 条（新增 volley/picasso/eventbus/zxing——常见 Android 库覆盖）。
+- **覆盖率提升（配置/加固类缺失检测）**：检测器框架加 `protectionPattern`（风险场景匹配且防护缺失才报告——「缺失检测」）；新增 6 条配置/加固类检测器（证书固定缺失 MSTG-NETWORK-4/证书透明日志/tapjacking 防护/防截屏 FLAG_SECURE/root 检测 MSTG-RESILIENCE-1/完整性校验 MSTG-RESILIENCE-2——对齐 mobsfscan 配置类规则）——检测器 373 → 379；新增 12 个精度用例（6 正 6 负——`tests/detectors-config.test.ts` 全通过）；内置基准扩充 30 → 38 用例（配置/加固维度正负——TP 15 → 20——精度 76.9%·召回 90.9%）。
 
 ### Changed
 
