@@ -15,6 +15,8 @@ interface SourceDetector {
   pattern: RegExp
   recommendation: string
   note: string
+  /** 防护存在模式（配置/加固类「缺失检测」）：pattern 匹配（风险场景）且此模式不匹配（防护缺失）才报告。 */
+  protectionPattern?: RegExp
 }
 
 const SOURCE_DETECTORS: readonly SourceDetector[] = [
@@ -126,6 +128,13 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_FIREBASE_SENSITIVE", title: "Firebase 配置含敏感（明文规则）", severity: "medium", pattern: /google-services\.json[\s\S]{0,120}?(?:api_key|project_id)/i, recommendation: "Firebase 配置的 api_key 是公开的——安全规则需服务端配置。", note: "Firebase 配置——公开密钥。" },
   { code: "SOURCE_ADB_BACKUP_ALLOWED", title: "ADB 备份允许（敏感数据可提取）", severity: "high", pattern: /android:allowBackup\s*=\s*["']?true["']?/i, recommendation: "含敏感数据的应用应 allowBackup=false（防 ADB 备份提取）。", note: "allowBackup=true——备份提取。" },
   { code: "SOURCE_DEBUGGABLE_RELEASE", title: "可调试发布（debuggable=true）", severity: "high", pattern: /android:debuggable\s*=\s*["']true["']/i, recommendation: "发布构建不可调试（debuggable=false）——调试可被利用。", note: "可调试——调试器附加。" },
+  // 配置/加固类「缺失检测」（对齐 mobsfscan 的配置/加固规则——MASVS 映射——防护存在则跳过）
+  { code: "SOURCE_CERTIFICATE_PINNING_ABSENT", title: "证书固定缺失（网络请求无固定）", severity: "medium", pattern: /OkHttpClient|HttpURLConnection|https?:\/\//i, protectionPattern: /CertificatePinner|setPinning|network_security_config|NetworkSecurityConfig/i, recommendation: "关键网络请求应证书固定（MSTG-NETWORK-4）——防中间人。", note: "网络请求无证书固定——中间人风险。" },
+  { code: "SOURCE_CERTIFICATE_TRANSPARENCY_ABSENT", title: "证书透明日志缺失", severity: "low", pattern: /https?:\/\/|URL\(/i, protectionPattern: /transparency|network_security_config/i, recommendation: "生产域名建议证书透明日志（MSTG-NETWORK-4）。", note: "无透明日志——证书签发审计缺失。" },
+  { code: "SOURCE_TAPJACKING_UNPROTECTED", title: "点击劫持防护缺失（tapjacking）", severity: "medium", pattern: /setContentView|setOnTouchListener|onCreate/i, protectionPattern: /setFilterTouchesWhenObscured|filterTouchesWhenObscured/i, recommendation: "敏感界面应 setFilterTouchesWhenObscured——防点击劫持。", note: "无 tapjacking 防护——点击劫持风险。" },
+  { code: "SOURCE_SCREENSHOT_NOT_BLOCKED", title: "界面未防截屏（FLAG_SECURE 缺失）", severity: "medium", pattern: /setContentView|onCreate/i, protectionPattern: /FLAG_SECURE|setFlags/i, recommendation: "敏感界面应 FLAG_SECURE——防截屏/录屏泄露。", note: "未防截屏——敏感信息可被截屏。" },
+  { code: "SOURCE_ROOT_DETECTION_ABSENT", title: "root 检测缺失", severity: "medium", pattern: /getSystemService|Runtime\.getRuntime|ProcessBuilder/i, protectionPattern: /RootBeer|isDeviceRooted|checkRoot|\bsu\b|which\s+su/i, recommendation: "敏感应用应做 root 检测（MSTG-RESILIENCE-1）——防越权环境。", note: "无 root 检测——越权环境风险。" },
+  { code: "SOURCE_INTEGRITY_API_ABSENT", title: "完整性校验缺失（SafetyNet/Play Integrity）", severity: "low", pattern: /pay|purchase|subscription|license/i, protectionPattern: /SafetyNet|PlayIntegrity|IntegrityManager|attest/i, recommendation: "支付/授权关键操作应完整性校验（MSTG-RESILIENCE-2）。", note: "关键操作无完整性校验——被篡改风险。" },
   { code: "SOURCE_CRASH_REPORT_SENSITIVE", title: "崩溃报告含敏感数据", severity: "low", pattern: /(?:Crashlytics|FirebaseCrash)[\s\S]{0,80}?(?:password|token|secret)/i, recommendation: "崩溃报告不应含敏感数据（第三方可见）——脱敏。", note: "崩溃报告——敏感泄露。" },
   { code: "SOURCE_WAKE_LOCK_ABUSE", title: "WakeLock 滥用（耗电/保活）", severity: "low", pattern: /acquire\s*\(\s*\)[\s\S]{0,80}?FLAG_KEEP_SCREEN_ON/i, recommendation: "WakeLock 需释放（finally）——防耗电与保活滥用。", note: "WakeLock——耗电/保活。" },
   { code: "SOURCE_NETWORK_ON_MAIN", title: "主线程网络请求（ANR）", severity: "medium", pattern: /onCreate[\s\S]{0,160}?(?:HttpURLConnection|OkHttp|URL\s*\(|execute\s*\(\s*\))/i, recommendation: "网络请求应异步（主线程网络导致 ANR——StrictMode 拦截）。", note: "主线程网络——ANR。" },
@@ -468,6 +477,8 @@ export async function scanSourceDetectors(projectDir: string): Promise<Finding[]
         const keywords = detectorKeywords[di]!
         if (keywords.length > 0 && !keywords.some((k) => contentLower.includes(k.toLowerCase()))) continue
         if (!detector.pattern.test(content)) continue
+        // 缺失检测：风险场景匹配但防护存在——跳过（防护缺失才报告）
+        if (detector.protectionPattern && detector.protectionPattern.test(content)) continue
         const line = content.split(/\r?\n/).findIndex((l) => detector.pattern.test(l)) + 1
         findings.push({
           severity: detector.severity,
