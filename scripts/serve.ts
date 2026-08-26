@@ -4,7 +4,8 @@
 // Authorization: Bearer <token>。零运行时依赖（Bun.serve）。
 //
 // 用法：
-//   bun scripts/serve.ts [--port 8787] [--output <目录>]
+//   bun scripts/serve.ts [--port 8787] [--host 127.0.0.1] [--output <目录>]
+//   --host 0.0.0.0 时绑定所有接口（外部可访问；默认仅本地 127.0.0.1）
 //   POST /run           提交运行配置（JSON），跑完整流水线，返回步骤状态
 //   GET  /runs          运行历史（门禁状态 + 发现数）
 //   GET  /runs/:id      运行详情
@@ -140,16 +141,18 @@ function errorResponse(code: string, message: string, status: number): Response 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   let port = 8787
+  let host = "127.0.0.1"
   let outputDir = path.resolve("droidseal-output")
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--port") port = Number(argv[++i])
+    else if (argv[i] === "--host") host = argv[++i] ?? "127.0.0.1"
     else if (argv[i] === "--output") outputDir = path.resolve(argv[++i]!)
   }
   const token = process.env.DROIDSEAL_SERVER_TOKEN
 
   const server = Bun.serve({
     port,
-    hostname: "127.0.0.1",
+    hostname: host,
     async fetch(request) {
       const url = new URL(request.url)
       if (token) {
@@ -250,7 +253,7 @@ async function main(): Promise<void> {
       return errorResponse("NOT_FOUND", "not found", 404)
     },
   })
-  console.log(`DroidSeal REST 服务：http://127.0.0.1:${server.port}（输出目录 ${outputDir}${token ? "，已启用 token 认证" : ""}）`)
+  console.log(`DroidSeal REST 服务：http://${host}:${server.port}（输出目录 ${outputDir}${token ? "，已启用 token 认证" : ""}）`)
 }
 
 main().catch((error) => {
