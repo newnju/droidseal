@@ -79,8 +79,11 @@ const WEB_UI_HTML = `<!DOCTYPE html>
 <body>
 <div class="wrap">
   <header>
-    <img src="/logo.png" alt="DroidSeal" style="width:34px;height:34px;border-radius:9px;object-fit:cover;box-shadow:0 0 18px #22d3ee55">
-    <div><h1>DroidSeal</h1><div class="sub">Release Security Console — audit · harden · gate</div></div>
+    <img src="/logo.png" alt="DroidSeal" style="height:36px;width:auto;object-fit:contain;border-radius:8px;box-shadow:0 0 18px #22d3ee33">
+    <div>
+      <h1 style="font-size:20px;letter-spacing:.5px;line-height:1.1">DroidSeal</h1>
+      <div class="sub">Release Security Console — audit · harden · gate</div>
+    </div>
     <span class="pulse" title="服务运行中"></span>
   </header>
 
