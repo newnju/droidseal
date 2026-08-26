@@ -47,7 +47,7 @@ test("SOURCE_SCREENSHOT_NOT_BLOCKED: negative (FLAG_SECURE present)", async () =
 })
 
 test("SOURCE_ROOT_DETECTION_ABSENT: positive (system calls without root check)", async () => {
-  const codes = await scanSource({ "A.java": "class A { void x() { Runtime.getRuntime().exec(\"ls\"); } }" })
+  const codes = await scanSource({ "A.java": "class A { void x() { getSystemService(TELEPHONY_SERVICE); } }" })
   expect(codes).toContain("SOURCE_ROOT_DETECTION_ABSENT")
 })
 
@@ -66,8 +66,8 @@ test("SOURCE_INTEGRITY_API_ABSENT: negative (Play Integrity present)", async () 
   expect(codes).not.toContain("SOURCE_INTEGRITY_API_ABSENT")
 })
 
-test("SOURCE_CERTIFICATE_TRANSPARENCY_ABSENT: positive (URL without transparency config)", async () => {
-  const codes = await scanSource({ "A.java": "class A { void x() { URL u = new URL(\"https://example.com\"); } }" })
+test("SOURCE_CERTIFICATE_TRANSPARENCY_ABSENT: positive (HTTP client without transparency config)", async () => {
+  const codes = await scanSource({ "A.java": "class A { void x() { OkHttpClient c = new OkHttpClient(); } }" })
   expect(codes).toContain("SOURCE_CERTIFICATE_TRANSPARENCY_ABSENT")
 })
 

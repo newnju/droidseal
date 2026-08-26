@@ -57,7 +57,7 @@ const BENCHMARK_CASES: readonly BenchmarkCase[] = [
   // 配置/加固维度（缺失检测——正/负——对齐 mobsfscan 的配置类规则）
   { name: "config-pinning-absent", source: 'class A { fun x() { val c = OkHttpClient(); } }', expected: ["SOURCE_CERTIFICATE_PINNING_ABSENT"] },
   { name: "config-pinning-ok", source: 'class A { fun x() { val p = CertificatePinner.Builder().build(); } }', expected: [] },
-  { name: "config-rootdetect-absent", source: 'class A { fun x() { Runtime.getRuntime().exec("ls"); } }', expected: ["SOURCE_ROOT_DETECTION_ABSENT"] },
+  { name: "config-rootdetect-absent", source: 'class A { fun x() { val tm = getSystemService(TELEPHONY_SERVICE); } }', expected: ["SOURCE_ROOT_DETECTION_ABSENT"] },
   { name: "config-rootdetect-ok", source: 'class A { fun x() { val r = RootBeer.isRooted(); } }', expected: [] },
   { name: "config-screenshot-absent", source: 'class A { fun x() { setContentView(layout); } }', expected: ["SOURCE_SCREENSHOT_NOT_BLOCKED", "SOURCE_TAPJACKING_UNPROTECTED"] },
   { name: "config-screenshot-ok", source: 'class A { fun x() { getWindow().setFlags(FLAG_SECURE, FLAG_SECURE); } }', expected: [] },
