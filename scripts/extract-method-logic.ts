@@ -21,6 +21,13 @@ const OP_RETURN = 0x0f // return vAA
 const OP_ADD_INT_2ADDR = 0xb0 // add-int/2addr vAA, vBB
 const OP_SUB_INT_2ADDR = 0xb1
 const OP_MUL_INT_2ADDR = 0xb2
+// 比较/跳转（与 auto-vm-encode 的 CMP/JZ 对齐——if-* 指令）
+const OP_IF_EQ = 0x32 // if-eq vA, vB, +CCCC
+const OP_IF_NE = 0x33 // if-ne
+const OP_IF_LT = 0x34
+const OP_IF_GE = 0x35
+const OP_IF_GT = 0x36
+const OP_IF_LE = 0x37
 
 interface ExtractedMethod {
   name: string
@@ -67,6 +74,27 @@ function extractLogic(regs: number, insns: Uint8Array, insnSize: number): Extrac
         const value = (insns[pc + 2]! << 8) | insns[pc + 3]!
         if (!vars.has(a)) vars.set(a, varName())
         statements.push(`${vars.get(a)} = ${value}`)
+        pc += wordSize
+        break
+      }
+      case OP_IF_EQ:
+      case OP_IF_NE:
+      case OP_IF_LT:
+      case OP_IF_GE:
+      case OP_IF_GT:
+      case OP_IF_LE: {
+        // if-* vA, vB, +CCCC（与 auto-vm-encode 的 CMP/JZ 对齐）
+        const wide = insns[pc + 1]!
+        const a = wide & 0x0f
+        const b = (wide >> 4) & 0x0f
+        const offset = ((insns[pc + 2]! << 8) | insns[pc + 3]!) << 1
+        const target = pc + offset
+        const ops: Record<number, string> = {
+          [OP_IF_EQ]: "==", [OP_IF_NE]: "!=", [OP_IF_LT]: "<", [OP_IF_GE]: ">=", [OP_IF_GT]: ">", [OP_IF_LE]: "<=",
+        }
+        const va = vars.get(a) ?? `v${a}`
+        const vb = vars.get(b) ?? `v${b}`
+        statements.push(`if (${va} ${ops[op]} ${vb}) goto L${target}`)
         pc += wordSize
         break
       }
