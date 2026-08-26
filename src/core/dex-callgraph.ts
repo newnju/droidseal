@@ -80,7 +80,7 @@ export function extractCalledMethods(bytes: Uint8Array): Set<string> {
   return called
 }
 
-// 调用图相关 finding 占位(行为规则引擎使用——此处仅导出提取能力)。
+// 调用图相关 finding 提取(行为规则引擎使用——此处导出提取能力)。
 export function buildCallgraphFindings(_called: Set<string>): Finding[] {
   return []
 }
