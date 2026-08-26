@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// 服务端协作上报协议（开发路线「运行时防护扩展」——signals-server.ts）。
+// 服务端协作上报协议（工具）。
 // 解析 stub 的 signalsToJson 上报信号（设备侧只报告不阻断——服务端决策）：
 // 输入一个 signals JSON（debuggable/tampered/frida/xposed/emulator/vpn/proxy/clock 等），
 // 输出服务端风险决策（高/中/低 + 建议动作——仍只报告、不远程阻断）——失败关闭。

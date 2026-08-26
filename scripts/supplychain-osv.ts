@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// 供应链深化（开发路线「供应链深化」——supplychain-osv.ts）。
+// 供应链深化（工具）。
 // SBOM 与 OSV 离线快照比对：输入 SBOM/包清单 JSON（包名 + 版本），与 OSV 格式的
 // 离线漏洞快照（ecosystem/package/affected 区间）比对——输出命中漏洞 + Gradle 修复版本建议——
 // 不联网清单级提示——失败关闭。

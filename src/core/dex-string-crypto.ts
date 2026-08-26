@@ -1,9 +1,9 @@
-// #3 DEX 字符串加密 — 安全子集选取 + 轻量对称密码 + 加密计划（M3，见
+// #3 DEX 字符串加密 — 安全子集选取 + 轻量对称密码 + （工具），见
 // docs/dex-write-engine.md §8）。
 //
 // 交付「自动化核心」：§8.2 的安全子集构建（可加密集 = 字面量串 − 标识符串）
 // 与 §8.4 的密钥/密码原语（XOR + 位旋转、crypto.getRandomValues 随机密钥、
-// 非密钥指纹），并产出一份**不改写字节码**的加密计划（哪些 string_ids 可加密、
+// 非密钥指纹），并产出一份**不改写字节码**的（工具）（哪些 string_ids 可加密、
 // 各自密文、密钥指纹、统计）。
 //
 // fail-closed：§8.3 的 code_item 深度重写（把每处 const-string 改写为
@@ -168,7 +168,7 @@ export function computeEncryptableStrings(tables: DexTables): number[] {
   return out.sort((a, b) => a - b)
 }
 
-// -- 加密计划（不改写字节码）------------------------------------------------
+// -- （工具）（不改写字节码）------------------------------------------------
 
 export interface StringEncryptionOptions {
   // 显式复用同一密钥（默认每次随机生成）。
@@ -193,7 +193,7 @@ export interface StringEncryptionPlan {
   findings: Finding[]
 }
 
-// 产出加密计划：选出安全子集、生成/复用密钥、逐串加密（保留可往返的密文）。
+// 产出（工具）：选出安全子集、生成/复用密钥、逐串加密（保留可往返的密文）。
 // 不修改传入的 DexTables，也不产出加密后的 DEX 字节（§8.3 的深度重写留待接线）。
 export function planStringEncryption(
   tables: DexTables,
@@ -216,7 +216,7 @@ export function planStringEncryption(
     {
       severity: "info",
       code: "LOSSY_DEX_STRINGS_PLANNED",
-      title: "已生成 DEX 字符串加密计划（安全子集，未改写字节码）",
+      title: "已生成 DEX 字符串（工具）（安全子集，未改写字节码）",
       detail:
         `DroidSeal 从 ${literals.size} 个字面量串中排除了同时作标识符的部分，选出 ${entries.length} 个可加密串` +
         `（密钥指纹 ${fingerprint}）。标识符串（类/方法/字段名、proto shorty、源文件名）一律保留，不加密。` +

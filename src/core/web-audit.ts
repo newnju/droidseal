@@ -1,4 +1,4 @@
-// Web/混合应用完整审计（SUPER 差距②——web-audit.ts）。
+// Web/混合应用完整审计（（工具）——web-audit.ts）。
 // 混合应用的 HTML/JS 资源审计：HTML 的不安全表单（明文 action）/内联事件处理器/
 // JS 存储交互（localStorage/sessionStorage 存敏感数据）。与 js-audit 衔接（同一 assets 扫描）。
 // 失败关闭。

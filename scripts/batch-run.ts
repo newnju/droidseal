@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
   if (token) headers["Authorization"] = `Bearer ${token}`
 
-  // 并发池（SUPER 差距①）：--parallel N——最多 N 个请求同时进行（默认 1 串行）
+  // 并发池（工具）：--parallel N——最多 N 个请求同时进行（默认 1 串行）
   let parallel = 1
   // 失败重试（②）：--retry N——失败条目自动重试 N 次（默认 0）
   let retry = 0

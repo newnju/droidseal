@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// 源码侧字符串加密桩生成器（长期路线 ① / 中期路线：审计→自动加固衔接）。
+// 源码侧字符串加密桩生成器（工具）。
 // 为每个敏感字符串生成密文常量，并生成 Kotlin 解密桩与接入指南。
 // 开发者把敏感字符串替换为解密调用后重新构建，DEX 字符串池只含密文。
 // 工具不事后改写 APK；密钥与密文都嵌入客户端，本能力只提高阅读门槛。
@@ -98,7 +98,7 @@ function kotlinStub(keyHex: string, ciphers: Map<string, string>, fingerprint: s
   const constants = [...ciphers.entries()]
     .map(([name, cipher]) => `    const val ${name.toUpperCase().replaceAll(/[^A-Z0-9_]/g, "_")}_CIPHER = "${cipher}"`)
     .join("\n")
-  return `// 由 DroidSeal 生成——运行时字符串解密桩（长期路线 ①）。
+  return `// 由 DroidSeal 生成——运行时字符串解密桩（工具）。
 // 与 src/core/dex-string-crypto.ts 的 XOR+rotl 变换对应；密钥与密文均为十六进制。
 // 密钥指纹：${fingerprint}（仅用于关联，不泄露密钥内容）
 object StringCrypto {
@@ -148,7 +148,7 @@ function integrationGuide(keys: string[]): string {
     .join("\n")
   return `# 字符串解密桩接入指南
 
-本目录由 DroidSeal 生成（长期路线 ①：DEX 字符串加密源码接入）。
+本目录由 DroidSeal 生成（工具）。
 
 ## 替换步骤
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// assets 资源轻量加密工具（开发路线 ②——资源/资产层的工具落地）。
+// assets 资源轻量加密工具（工具）。
 // 构建期调用：对 assets/raw 下文件做轻量变换（XOR+rotl，与 dex-string-crypto 一致，零依赖），
 // 输出 .enc 文件与 manifest.json；应用侧按清单解密（源码接入，不事后改写 APK）。
 //
