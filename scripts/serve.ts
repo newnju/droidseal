@@ -79,7 +79,7 @@ const WEB_UI_HTML = `<!DOCTYPE html>
 <body>
 <div class="wrap">
   <header>
-    <div class="logo">DS</div>
+    <img src="/logo.png" alt="DroidSeal" style="width:34px;height:34px;border-radius:9px;object-fit:cover;box-shadow:0 0 18px #22d3ee55">
     <div><h1>DroidSeal</h1><div class="sub">Release Security Console — audit · harden · gate</div></div>
     <span class="pulse" title="服务运行中"></span>
   </header>
@@ -284,6 +284,11 @@ async function main(): Promise<void> {
       }
       if (request.method === "GET" && url.pathname === "/") {
         return new Response(WEB_UI_HTML, { headers: { "Content-Type": "text/html; charset=utf-8" } })
+      }
+      if (request.method === "GET" && url.pathname === "/logo.png") {
+        const logo = await readFile(path.join(import.meta.dir, "..", "logo.png")).catch(() => null)
+        if (logo === null) return errorResponse("NOT_FOUND", "logo not found", 404)
+        return new Response(logo, { headers: { "Content-Type": "image/png" } })
       }
       if (request.method === "POST" && url.pathname === "/run") {
         try {
