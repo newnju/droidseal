@@ -1,4 +1,4 @@
-// 自动反混淆（SUPER 差距③——obfuscation-decode.ts）。
+// 自动反混淆（（工具）——obfuscation-decode.ts）。
 // 混淆代码的自动解码：检测 eval(atob(...))/atob(...) 编码层——解码后供审计匹配
 // （js-audit 扫描前预处理）。失败关闭：无可解码的混淆形态即原样返回。
 export interface DeobfuscationResult {

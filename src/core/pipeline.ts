@@ -618,7 +618,7 @@ export class Pipeline {
     // 源码侧 JS 资源审计(Semgrep 差距③):混合应用 JS 的密钥/危险 API/弱加密——失败关闭
     const jsFindings = await scanProjectJsAudit(this.config.inputPath)
     this.context.audit.findings.push(...jsFindings)
-    // 源码侧 Web/混合应用审计(SUPER 差距②):HTML 表单/内联事件/存储交互——失败关闭
+    // 源码侧 Web/混合应用审计(（工具）):HTML 表单/内联事件/存储交互——失败关闭
     const webFindings = await scanProjectWebAudit(this.config.inputPath)
     this.context.audit.findings.push(...webFindings)
     // 源码侧 SDK 版本化 API 模型(⑯):API 引入版本 vs minSdk 对比——失败关闭

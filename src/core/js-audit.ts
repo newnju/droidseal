@@ -69,7 +69,7 @@ export async function scanProjectJsAudit(projectRoot: string): Promise<Finding[]
   const findings: Finding[] = []
   for (const file of jsFiles.slice(0, 300)) {
     const source = await readFile(file, "utf8").catch(() => "")
-    // 自动反混淆(SUPER 差距③):先解码混淆层(atob/eval——解码后扫描)
+    // 自动反混淆(（工具）):先解码混淆层(atob/eval——解码后扫描)
     const { decoded, layers } = decodeObfuscated(source)
     const matches = scanJsFile(decoded)
     const relative = path.relative(projectRoot, file).replaceAll("\\", "/")

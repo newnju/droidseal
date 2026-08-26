@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// DEX 方法重命名工具（开发路线 ① 的改写落地）。
+// DEX 方法重命名工具（工具）。
 // 输入：DEX 文件 + method-obfuscation.map（“类名#方法名 -> 短名#方法名”行）
 // 输出：重写后的 DEX——按映射重命名白名单方法（新建字符串 + 改该 method_id 的 name_idx，
 //       调用点经 method_id 引用自动跟随），重算 adler32 校验和与 SHA-1 签名。

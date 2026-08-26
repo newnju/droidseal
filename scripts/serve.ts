@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// 本地 REST API 服务（差距分析高补强①：平台化；Web UI 已移除，批量/CI 使用 REST）。
+// 本地 REST API 服务（工具）。
 // 只绑定 127.0.0.1（本地优先、不对外联网）；设置 DROIDSEAL_SERVER_TOKEN 时要求
 // Authorization: Bearer <token>。零运行时依赖（Bun.serve）。
 //
@@ -34,7 +34,7 @@ const STEP_IDS: StepId[] = [
   "report",
 ]
 
-// Web UI（科技感 + 靠谱感——深色主题、数据看板、门禁结果、审计发现、报告）
+// Web UI（深色主题、数据看板、门禁结果、审计发现、报告）
 const WEB_UI_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -257,7 +257,7 @@ function errorResponse(code: string, message: string, status: number): Response 
   return Response.json({ ok: false, error: { code, message } }, { status })
 }
 
-// 运行并发（SUPER 差距①）：允许并发运行——每个 run 使用独立目录（.droidseal/runs/<id>）
+// 运行并发（工具）：允许并发运行——每个 run 使用独立目录（.droidseal/runs/<id>）
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)

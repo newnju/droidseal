@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// 供应链快照 / 打包器指纹一致性校验（开发路线——数据质量门禁）。
+// 供应链快照 / 打包器指纹一致性校验（工具）。
 // 校验 known-vulnerabilities 与 packers 表的字段完整性、唯一性（CVE/包名/marker），
 // 重复或字段缺失即报错并返回非零。可挂入 preflight 或 CI。
 import { KNOWN_VULNERABILITIES } from "../src/core/known-vulnerabilities.ts"

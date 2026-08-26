@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// ARSC 值混淆扩展（开发路线「审计 → 自动加固衔接」——generate-arsc-value-obfuscation.ts）。
+// ARSC 值混淆扩展（工具）。
 // 资源字符串值/维度保守子集混淆：替换 strings.xml 的字符串值（长度/字符集保守——不改变长度
 // 与可见性——可逆）与 dimens.xml 的维度值——静态分析难直接识别原始字符串——失败关闭。
 //

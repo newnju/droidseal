@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// R8 规则模板库（开发路线「构建期/发布工程化」——generate-r8-templates.ts）。
+// R8 规则模板库（工具）。
 // 生成常见库的 R8 keep 规则模板（Retrofit/Room/协程/序列化）——发布构建开启
 // minifyEnabled 时避免误删反射/序列化依赖——失败关闭。
 //
