@@ -51,6 +51,12 @@ function buildConfig(body: RunRequest, defaultOutput: string): PipelineConfig {
   if (!body.inputKind || !body.inputPath || !body.signingMode) {
     throw new Error("缺少 inputKind / inputPath / signingMode")
   }
+  if (body.inputKind !== "apk" && body.inputKind !== "project") {
+    throw new Error("inputKind 必须为 apk 或 project")
+  }
+  if (body.signingMode !== "skip" && body.signingMode !== "existing") {
+    throw new Error("signingMode 必须为 skip 或 existing")
+  }
   return {
     runMode: "one-click",
     inputKind: body.inputKind,
@@ -213,6 +219,15 @@ async function main(): Promise<void> {
           const severity = url.searchParams.get("severity")
           const findings = (report.audit?.findings ?? []).filter((f) => !severity || f.severity === severity)
           return Response.json({ ok: true, runId: id, findings })
+        }
+        if (url.pathname.includes("/gate")) {
+          const decision = report.releaseDecision ?? null
+          return Response.json({
+            ok: true,
+            runId: id,
+            gate: decision,
+            blocking: (report.audit?.findings ?? []).filter((f) => f.severity === "high" || f.severity === "critical").length,
+          })
         }
         return Response.json({
           ok: true,
