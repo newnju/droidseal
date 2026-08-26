@@ -34,6 +34,127 @@ const STEP_IDS: StepId[] = [
   "report",
 ]
 
+// Web UI（科技感 + 靠谱感——深色主题、数据看板、门禁结果、审计发现、报告）
+const WEB_UI_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DroidSeal — Release Security Console</title>
+<style>
+  :root { --bg:#0a0e17; --panel:#111827; --line:#1f2937; --txt:#e5e7eb; --dim:#9ca3af;
+          --acc:#22d3ee; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:radial-gradient(1200px 600px at 20% -10%, #0e2233 0%, var(--bg) 55%);
+         color:var(--txt); font:14px/1.6 "Segoe UI",system-ui,sans-serif; padding:28px; }
+  .wrap { max-width:1080px; margin:0 auto; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:22px; }
+  .logo { width:34px; height:34px; border-radius:9px;
+          background:linear-gradient(135deg,var(--acc),#6366f1);
+          display:grid; place-items:center; font-weight:700; color:#06222a; box-shadow:0 0 18px #22d3ee55; }
+  h1 { font-size:20px; letter-spacing:.5px; }
+  .sub { color:var(--dim); font-size:12px; }
+  .pulse { width:10px; height:10px; border-radius:50%; background:var(--ok);
+           box-shadow:0 0 10px var(--ok); animation:pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity:.35; } }
+  .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card .k { color:var(--dim); font-size:12px; }
+  .card .v { font-size:26px; font-weight:700; margin-top:4px; }
+  .card .v.ok { color:var(--ok); } .card .v.bad { color:var(--bad); } .card .v.acc { color:var(--acc); }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; }
+  h2 { font-size:15px; margin-bottom:12px; color:var(--acc); }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:13px; }
+  th { color:var(--dim); font-weight:600; }
+  .badge { padding:2px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+  .b-pass{background:#065f4633;color:var(--ok)} .b-review{background:#78350f33;color:var(--warn)} .b-block{background:#7f1d1d33;color:var(--bad)}
+  .scan { height:6px; border-radius:99px; background:var(--line); overflow:hidden; margin-top:6px; }
+  .scan i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--acc),#6366f1);
+            box-shadow:0 0 12px var(--acc); transition:width .4s; }
+  a { color:var(--acc); text-decoration:none; }
+  .empty { color:var(--dim); text-align:center; padding:22px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">DS</div>
+    <div><h1>DroidSeal</h1><div class="sub">Release Security Console — audit · harden · gate</div></div>
+    <span class="pulse" title="服务运行中"></span>
+  </header>
+
+  <div class="cards">
+    <div class="card"><div class="k">运行总数</div><div class="v acc" id="c-total">—</div></div>
+    <div class="card"><div class="k">通过 (pass)</div><div class="v ok" id="c-pass">—</div></div>
+    <div class="card"><div class="k">复核 (review)</div><div class="v" id="c-review">—</div></div>
+    <div class="card"><div class="k">阻断 (block)</div><div class="v bad" id="c-block">—</div></div>
+  </div>
+
+  <section>
+    <h2>运行历史</h2>
+    <div id="runs"><div class="empty">加载中…</div></div>
+  </section>
+
+  <section>
+    <h2>审计发现</h2>
+    <div id="findings"><div class="empty">选择一次运行以查看发现</div></div>
+  </section>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s)
+let current = null
+
+async function load() {
+  const r = await fetch("/runs").then(x => x.json())
+  const runs = r.runs ?? []
+  let pass=0, review=0, block=0
+  for (const run of runs) {
+    if (run.releaseDecision?.status === "pass") pass++
+    else if (run.releaseDecision?.status === "review") review++
+    else if (run.releaseDecision?.status === "block") block++
+  }
+  $("#c-total").textContent = runs.length
+  $("#c-pass").textContent = pass
+  $("#c-review").textContent = review
+  $("#c-block").textContent = block
+
+  const rows = runs.map(run => {
+    const s = run.releaseDecision?.status ?? "unknown"
+    const cls = s === "pass" ? "b-pass" : s === "review" ? "b-review" : s === "block" ? "b-block" : ""
+    return \`<tr data-id="\${run.id}" style="cursor:pointer">
+      <td>\${run.id}</td><td>\${run.inputKind ?? "—"}</td>
+      <td>\${run.inputPath ?? "—"}</td>
+      <td><span class="badge \${cls}">\${s}</span></td>
+      <td>\${run.findingsCount ?? 0}</td>
+      <td>\${run.timestamp ?? "—"}</td></tr>\`
+  }).join("")
+  $("#runs").innerHTML = rows
+    ? \`<table><tr><th>ID</th><th>类型</th><th>输入</th><th>门禁</th><th>发现</th><th>时间</th></tr>\${rows}</table>\`
+    : '<div class="empty">暂无运行——POST /run 提交一次审计</div>'
+  document.querySelectorAll("#runs tr[data-id]").forEach(tr => {
+    tr.onclick = () => selectRun(tr.dataset.id)
+  })
+}
+
+async function selectRun(id) {
+  current = id
+  const f = await fetch("/runs/" + id + "/findings").then(x => x.json())
+  const items = f.findings ?? []
+  $("#findings").innerHTML = items.length
+    ? \`<table><tr><th>严重度</th><th>检测器</th><th>文件</th></tr>\${
+        items.map(x => \`<tr><td>\${x.severity}</td><td>\${x.code}</td><td>\${x.file ?? "—"}</td></tr>\`).join("")
+      }</table>\`
+    : '<div class="empty">该运行无发现</div>'
+}
+
+load()
+setInterval(load, 5000)
+</script>
+</body>
+</html>`
+
 interface RunRequest {
   inputKind?: "apk" | "project"
   inputPath?: string
@@ -160,6 +281,9 @@ async function main(): Promise<void> {
         if (auth !== `Bearer ${token}`) {
           return errorResponse("UNAUTHORIZED", "未授权", 401)
         }
+      }
+      if (request.method === "GET" && url.pathname === "/") {
+        return new Response(WEB_UI_HTML, { headers: { "Content-Type": "text/html; charset=utf-8" } })
       }
       if (request.method === "POST" && url.pathname === "/run") {
         try {
