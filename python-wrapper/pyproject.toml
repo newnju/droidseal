@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "droidseal"
+version = "1.0.1"
+description = "DroidSeal — Android Release Seal: local-first audit, harden, align, sign, verify (npm-backed Python wrapper)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+dependencies = []
+
+[project.scripts]
+droidseal = "droidseal_py.cli:main"
+
+[tool.setuptools]
+packages = ["droidseal_py"]
