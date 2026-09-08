@@ -106,7 +106,32 @@ export function generateResourceDecryptorSmali(packageName: string): string {
     move-result-object v3
 
     # 5. AES-256-GCM 解密
-    # ... 运行时 javax.crypto.Cipher 解密逻辑
+    const-string v4, "AES/GCM/NoPadding"
+    invoke-static {v4}, Ljavax/crypto/Cipher;->getInstance(Ljava/lang/String;)Ljavax/crypto/Cipher;
+    move-result-object v4
+    new-instance v5, Ljavax/crypto/spec/SecretKeySpec;
+    sget-object v6, L${pkg}/DroidSealResDecryptor;->KEY:[B
+    const-string v7, "AES"
+    invoke-direct {v5, v6, v7}, Ljavax/crypto/spec/SecretKeySpec;-><init>([BLjava/lang/String;)V
+    # nonce 从 header[4..16] 提取(12 bytes)
+    const/16 v6, 0xc
+    new-array v7, v6, [B
+    const/4 v0, 0x4
+    const/4 v1, 0x0
+    invoke-static {v2, v0, v7, v1, v6}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+    new-instance v0, Ljavax/crypto/spec/GCMParameterSpec;
+    const/16 v6, 0x80
+    invoke-direct {v0, v6, v7}, Ljavax/crypto/spec/GCMParameterSpec;-><init>(I[B)V
+    const/4 v6, 0x2
+    invoke-virtual {v4, v6, v5, v0}, Ljavax/crypto/Cipher;->init(ILjava/security/Key;Ljava/security/spec/AlgorithmParameterSpec;)V
+    # tag 从 header[16..32] 提取(16 bytes)
+    const/16 v0, 0x10
+    new-array v5, v0, [B
+    const/16 v6, 0x10
+    invoke-static {v2, v6, v5, v1, v0}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+    invoke-virtual {v4, v5}, Ljavax/crypto/Cipher;->updateAAD([B)V
+    invoke-virtual {v4, v3}, Ljavax/crypto/Cipher;->doFinal([B)[B
+    move-result-object v0
 
     # 6. 写入缓存文件
     new-instance v4, Ljava/io/FileOutputStream;
@@ -204,13 +229,37 @@ export function generateStringDecryptorSmali(packageName: string, algorithm: str
 .field private static final ENC_KEYS:[[B
 
 .method static constructor <clinit>()V
-    .locals 1
-    # TODO:由加固工具注入加密后的字符串和密钥数组
-    const/4 v0, 0x0
+    .locals 2
+
+    # 加密字符串表(由加固工具在构建时注入真实数据)
+    # 每个元素:[B = encrypted_bytes; 对应 key 在 ENC_KEYS 同索引
+    # 这里提供框架结构,实际数据由 build tool 替换
+
+    # 示例:1 个加密字符串(XOR 加密,"Hello" → [0x23,0x2f,0x27,0x27,0x2a])
+    const/4 v0, 0x1
     new-array v0, v0, [[B
-    sput-object v0, L${pkg}/DroidSealStringDecryptor;->ENC_STRINGS:[[B
-    sput-object v0, L${pkg}/DroidSealStringDecryptor;->ENC_KEYS:[[B
+    const/4 v1, 0x0
+    # encrypted_data[0] = XOR("Hello", key=0x46)
+    const/4 v1, 0x5
+    new-array v1, v1, [B
+    fill-array-data v1, :enc_data_0
+    const/4 v0, 0x0
+    aput-object v1, v0, v0
+
+    # 实际构建时:数组大小 = 项目中加密字符串总数
+    # 每个 fill-array-data 块存放一条加密后的字符串
+    # 对应 ENC_KEYS 数组存放每条字符串的 XOR/AES 密钥
+
     return-void
+
+    :enc_data_0
+    .array-data 1
+    0x23
+    0x2f
+    0x27
+    0x27
+    0x2a
+    .end array-data
 .end method
 
 # 解密指定索引的字符串

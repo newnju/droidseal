@@ -185,7 +185,54 @@ export function generateSoDecryptorSmali(packageName: string): string {
     move-result-object v0
 
     # 3. 解密(AES-256-GCM)
-    # ... 解密逻辑(运行时调用 javax.crypto.Cipher)
+    # 跳过 magic(16) + nonce(12) + tag(16) = 44 字节头
+    const/16 v2, 0x2c
+    new-array v3, v2, [B  # header buffer
+    invoke-virtual {v0, v3}, Ljava/io/InputStream;->read([B)I
+
+    # 提取 nonce (offset 16, 12 bytes)
+    const/16 v4, 0xc
+    new-array v5, v4, [B
+    const/16 v6, 0x10
+    const/4 v7, 0x0
+    invoke-static {v3, v6, v5, v7, v4}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+
+    # 提取 tag (offset 28, 16 bytes)
+    const/16 v4, 0x10
+    new-array v6, v4, [B
+    invoke-static {v3, v2, v6, v7, v4}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+
+    # 读取 ciphertext
+    new-instance v3, Ljava/io/ByteArrayOutputStream;
+    invoke-direct {v3}, Ljava/io/ByteArrayOutputStream;-><init>()V
+    const/16 v4, 0x1000
+    new-array v4, v4, [B
+    :read_ct_loop
+    invoke-virtual {v0, v4}, Ljava/io/InputStream;->read([B)I
+    move-result v7
+    if-gez v7, :read_ct_done
+    const/4 v2, 0x0
+    invoke-virtual {v3, v4, v2, v7}, Ljava/io/ByteArrayOutputStream;->write([BII)V
+    goto :read_ct_loop
+    :read_ct_done
+    invoke-virtual {v3}, Ljava/io/ByteArrayOutputStream;->toByteArray()[B
+    move-result-object v3
+
+    # AES-256-GCM 解密
+    const-string v0, "AES/GCM/NoPadding"
+    invoke-static {v0}, Ljavax/crypto/Cipher;->getInstance(Ljava/lang/String;)Ljavax/crypto/Cipher;
+    move-result-object v0
+    new-instance v4, Ljavax/crypto/spec/SecretKeySpec;
+    sget-object v7, L${pkg}/DroidSealSoDecryptor;->KEY:[B
+    const-string v2, "AES"
+    invoke-direct {v4, v7, v2}, Ljavax/crypto/spec/SecretKeySpec;-><init>([BLjava/lang/String;)V
+    new-instance v2, Ljavax/crypto/spec/GCMParameterSpec;
+    const/16 v7, 0x80
+    invoke-direct {v2, v7, v5}, Ljavax/crypto/spec/GCMParameterSpec;-><init>(I[B)V
+    const/4 v5, 0x2
+    invoke-virtual {v0, v5, v4, v2}, Ljavax/crypto/Cipher;->init(ILjava/security/Key;Ljava/security/spec/AlgorithmParameterSpec;)V
+    invoke-virtual {v0, v3}, Ljavax/crypto/Cipher;->doFinal([B)[B
+    move-result-object v0
 
     # 4. 写入临时文件并加载
     const-string v1, "libdex"
