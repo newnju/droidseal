@@ -28,6 +28,56 @@ const PATTERNS: readonly StorageSecurityPattern[] = [
     missing: [/net\.zetetic|sqlcipher/i],
     recommendation: "敏感数据建议 SQLCipher 加密或服务端存储；至少核对库文件是否含敏感明文。",
   },
+  // Phase 2 扩充:数据存储深度分析
+  {
+    code: "SOURCE_SHARED_PREFS_PLAINTEXT",
+    title: "SharedPreferences 明文存储（未检测到 EncryptedSharedPreferences）",
+    trigger: /getsharedpreferences|getdefaultsharedpreferences/i,
+    missing: [/encryptedsharedpreferences|androidx\.security\.crypto/i],
+    recommendation: "敏感数据应使用 EncryptedSharedPreferences（AndroidX Security Crypto）替代明文 SharedPreferences。",
+  },
+  {
+    code: "SOURCE_ROOM_NO_ENCRYPTION",
+    title: "Room 数据库未检测到加密配置",
+    trigger: /@database|roomdatabase|room\.database/i,
+    missing: [/supportfactory|sqlcipher|safehelperfactory/i],
+    recommendation: "Room 数据库含敏感数据时应使用 SQLCipher SupportFactory 或 EncryptedRoom 加密。",
+  },
+  {
+    code: "SOURCE_REALM_NO_ENCRYPTION",
+    title: "Realm 数据库未检测到加密密钥",
+    trigger: /realm\.getInstance|realmconfiguration\.builder/i,
+    missing: [/encryptionkey|\.encryptionKey\(/i],
+    recommendation: "Realm 数据库应设置 encryptionKey（64 字节随机密钥），否则数据明文存储。",
+  },
+  {
+    code: "SOURCE_WORLD_READABLE_DB",
+    title: "数据库以 MODE_WORLD_READABLE 打开（跨应用可读）",
+    trigger: /openorcreatedatabase\s*\([^)]*mode_world_readable|getSharedPreferences\s*\([^)]*mode_world_readable/i,
+    missing: [],
+    recommendation: "MODE_WORLD_READABLE 在 API 17+ 已废弃且 Android 7+ 禁止——改用 ContentProvider 或加密存储。",
+  },
+  {
+    code: "SOURCE_BACKUP_INCLUDES_SENSITIVE",
+    title: "自动备份可能包含敏感数据",
+    trigger: /allowbackup\s*=\s*["']true["']|fullbackupcontent/i,
+    missing: [/exclude.*(?:password|token|secret|key|credential)/i, /android:fullBackupContent.*exclude/i],
+    recommendation: "android:fullBackupContent 应排除敏感文件/目录（数据库、SharedPreferences 含凭据时）。",
+  },
+  {
+    code: "SOURCE_LOG_FILE_STORAGE",
+    title: "日志写入文件（敏感持久化风险）",
+    trigger: /(?:FileWriter|FileOutputStream|BufferedWriter)[\s\S]{0,60}(?:\.log|logcat|crash|error)/i,
+    missing: [/encrypt|cipher|sqlcipher/i],
+    recommendation: "日志文件不应持久化敏感数据；release 构建应禁用文件日志或加密日志。",
+  },
+  {
+    code: "SOURCE_CACHE_SENSITIVE",
+    title: "缓存目录存储敏感数据",
+    trigger: /getcacheDir|getexternalcacheDir/i,
+    missing: [/encrypt|deleteonexit|clean/i],
+    recommendation: "缓存目录可被清理或提取——敏感数据应存储在内部存储并加密。",
+  },
 ]
 
 export interface StorageSecurityMatch {

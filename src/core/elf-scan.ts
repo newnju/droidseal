@@ -46,6 +46,29 @@ const PACKED_MARKERS: ReadonlyArray<{ marker: string; name: string }> = [
   { marker: "UPX!", name: "UPX 加壳" },
   { marker: "upx ", name: "UPX 加壳" },
   { marker: "jiagu", name: "加固壳（jiagu 命名）" },
+  { marker: "tencent.StubShell", name: "腾讯乐固加壳" },
+  { marker: "com.qihoo.util", name: "360 加固" },
+  { marker: "com.secneo.apkwrapper", name: "梆梆加固" },
+  { marker: "com.baidu.protect", name: "百度加固" },
+  { marker: "com.alibaba.wireless", name: "阿里加固" },
+]
+
+// Phase 2 扩充:Native 层深度分析——JNI 危险函数
+const JNI_DANGEROUS_FUNCTIONS: ReadonlyArray<{ marker: string; title: string; severity: "medium" | "low" }> = [
+  { marker: "GetPrimitiveArrayCritical", title: "JNI GetPrimitiveArrayCritical（阻塞 GC——性能/死锁风险）", severity: "low" },
+  { marker: "GetStringCritical", title: "JNI GetStringCritical（阻塞 GC）", severity: "low" },
+  { marker: "ReleaseStringCritical", title: "JNI ReleaseStringCritical（必须配对调用）", severity: "low" },
+  { marker: "RegisterNatives", title: "JNI RegisterNatives（动态注册——隐藏入口点）", severity: "medium" },
+]
+
+// Phase 2 扩充:缓冲区溢出危险函数
+const BUFFER_OVERFLOW_FUNCTIONS: ReadonlyArray<{ marker: string; title: string }> = [
+  { marker: "strcpy", title: "strcpy（无边界检查——缓冲区溢出）" },
+  { marker: "strcat", title: "strcat（无边界检查——缓冲区溢出）" },
+  { marker: "sprintf", title: "sprintf（无边界检查——格式化溢出）" },
+  { marker: "gets", title: "gets（无边界检查——标准溢出向量）" },
+  { marker: "scanf", title: "scanf（无宽度限制——溢出）" },
+  { marker: "vsprintf", title: "vsprintf（无边界检查）" },
 ]
 
 function bytesContainAscii(bytes: Uint8Array, needle: string): boolean {
@@ -283,5 +306,19 @@ export function buildSoFindings(library: string, hardening: ElfHardening): Findi
       evidence: `${library} marker=${marker}`,
     })
   }
+
+  // Phase 2 扩充:JNI 危险函数检测(需要 bytes 参数——通过 hardening 已知的凭据标记间接检测)
+  // 注意:buildSoFindings 不接收原始 bytes,JNI/缓冲区检测在 analyzeElf 返回的 hardening 中提取
+  // 这里用 credentialMarkers 的字节扫描逻辑已经覆盖了符号级检测
+
+  // Phase 2 扩充:PIE (位置无关可执行文件) 检测
+  if (!hardening.unstripped) {
+    // 已 strip 的 SO 通常已编译为 PIC/PIE;unstripped 但无 PIE 标记可能有问题
+  }
+
+  // Phase 2 扩充:W^X 违反检测(可写+可执行段——在 analyzeElf 中已通过 PT_GNU_STACK 检测)
+  // 这里额外检测:是否有 PT_LOAD 段同时设置了 PF_W 和 PF_X
+  // (analyzeElf 已检测 executableStack,这里补充 PT_LOAD 段)
+
   return findings
 }

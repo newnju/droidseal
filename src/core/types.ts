@@ -155,6 +155,8 @@ export interface ApkMetadata {
   targetSdk?: string
   applicationLabel?: string
   sha256?: string
+  exportedComponentCount?: number
+  deepLinkCount?: number
 }
 
 export type SoftwareComponentKind = "maven" | "sdk-family" | "native-library"

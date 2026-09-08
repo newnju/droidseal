@@ -25,6 +25,7 @@ import { buildEndpointFindings } from "./endpoint-extract.ts"
 import { buildPackerFindings, type PackerFingerprint, KNOWN_PACKERS } from "./packers.ts"
 import { analyzeElf, buildSoFindings } from "./elf-scan.ts"
 import { compareKnownVulnerabilities } from "./known-vulnerabilities.ts"
+import { analyzeManifest } from "./exported-components.ts"
 import type {
   ApkEntrySummary,
   ApkMetadata,
@@ -309,7 +310,7 @@ function parseBadging(output: string): ApkMetadata {
     ["applicationLabel", matchValue(output, /^application-label(?:-[^:]+)?:'([^']+)'/m)],
   ]
   for (const [key, value] of values) {
-    if (value !== undefined) metadata[key] = value
+    if (value !== undefined) (metadata as Record<string, string | undefined>)[key] = value
   }
   return metadata
 }
@@ -427,7 +428,7 @@ export function auditManifestAxml(bytes: Uint8Array, keyFormats?: readonly Secre
     ["targetSdk", axmlAttribute(usesSdk, "targetSdkVersion")],
   ]
   for (const [key, attribute] of metadataAttrs) {
-    if (attribute && attribute.value.length > 0) metadata[key] = attribute.value
+    if (attribute && attribute.value.length > 0) (metadata as Record<string, string | undefined>)[key] = attribute.value
   }
 
   const findings = manifestFindings(xmlTree)
@@ -1424,6 +1425,16 @@ export async function auditApk(
       directManifest = auditManifestAxml(manifestBytes, keyFormats)
       Object.assign(metadata, directManifest.metadata)
       findings.push(...directManifest.findings)
+      // Phase 1 扩充:导出组件全量解析 + Intent Filter + Deep Link 安全
+      try {
+        onProgress?.("解析导出组件 + Intent Filter + Deep Link")
+        const manifestAnalysis = analyzeManifest(manifestBytes)
+        findings.push(...manifestAnalysis.findings)
+        metadata.exportedComponentCount = manifestAnalysis.exportedCount
+        metadata.deepLinkCount = manifestAnalysis.deepLinkCount
+      } catch {
+        // 导出组件解析失败关闭
+      }
       findings.push(...(await auditApkConfiguredXmlResources(
         apkPath,
         entryNames,

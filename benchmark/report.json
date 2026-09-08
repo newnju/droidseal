@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-24T09:40:50.942Z",
+  "source": "builtin",
+  "caseCount": 30,
+  "totals": {
+    "tp": 15,
+    "fp": 10,
+    "fn": 2
+  },
+  "precision": 60,
+  "recall": 88.2,
+  "cases": [
+    {
+      "name": "taint-credential-log",
+      "tp": [
+        "SOURCE_LOG_SENSITIVE"
+      ],
+      "fp": [
+        "SOURCE_RECEIVER_ORDER_SENSITIVE"
+      ],
+      "fn": []
+    },
+    {
+      "name": "crypto-weak-des",
+      "tp": [
+        "SOURCE_DES_USE"
+      ],
+      "fp": [
+        "SOURCE_ECB_CIPHER_USAGE"
+      ],
+      "fn": []
+    },
+    {
+      "name": "injection-sql",
+      "tp": [
+        "SOURCE_SQL_RAW_STRING"
+      ],
+      "fp": [
+        "SOURCE_SQL_INJECTION_SRC"
+      ],
+      "fn": []
+    },
+    {
+      "name": "ssl-bypass-hostname",
+      "tp": [
+        "SOURCE_CERTIFICATE_HOSTNAME_OFF"
+      ],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "storage-sdcard",
+      "tp": [],
+      "fp": [
+        "SOURCE_SDCARD_WRITE"
+      ],
+      "fn": []
+    },
+    {
+      "name": "network-https-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "crypto-gcm-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "random-secure-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "taint-query-uri-log",
+      "tp": [
+        "SOURCE_URI_LOGGED"
+      ],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "crypto-md5",
+      "tp": [
+        "SOURCE_MD5_USE"
+      ],
+      "fp": [
+        "SOURCE_WEAK_HASH_FOR_SECURITY"
+      ],
+      "fn": []
+    },
+    {
+      "name": "crypto-sha256-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "injection-ldap",
+      "tp": [],
+      "fp": [],
+      "fn": [
+        "SOURCE_LDAP_INJECTION"
+      ]
+    },
+    {
+      "name": "injection-command",
+      "tp": [
+        "SOURCE_RUNTIME_EXEC_DANGEROUS"
+      ],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "storage-prefs-secret",
+      "tp": [],
+      "fp": [
+        "SOURCE_RECEIVER_ORDER_SENSITIVE"
+      ],
+      "fn": [
+        "SOURCE_PREFS_KEY_SENSITIVE"
+      ]
+    },
+    {
+      "name": "storage-internal-ok",
+      "tp": [],
+      "fp": [
+        "SOURCE_INTERNAL_STORAGE_PLAINTEXT"
+      ],
+      "fn": []
+    },
+    {
+      "name": "network-ws-plain",
+      "tp": [
+        "SOURCE_PLAINTEXT_WEBSOCKET"
+      ],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "network-wss-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "permission-unknown-source",
+      "tp": [
+        "SOURCE_PERMISSION_INSTALL_UNKNOWN"
+      ],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "permission-basic-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "component-exported-auth",
+      "tp": [
+        "SOURCE_EXPORTED_ACTIVITY_NO_AUTH"
+      ],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "component-exported-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "ui-toast-secret",
+      "tp": [
+        "SOURCE_TOAST_SENSITIVE"
+      ],
+      "fp": [
+        "SOURCE_RECEIVER_ORDER_SENSITIVE",
+        "SOURCE_LIFECYCLE_DIALOG_SENSITIVE"
+      ],
+      "fn": []
+    },
+    {
+      "name": "ui-title-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "supplychain-jwt",
+      "tp": [
+        "SOURCE_JWT_HARDCODED"
+      ],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "serialization-java",
+      "tp": [
+        "SOURCE_SERIALIZATION_JAVA"
+      ],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "serialization-json-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "webview-js-bridge",
+      "tp": [
+        "SOURCE_WEBVIEW_JS_BRIDGE_UNSAFE"
+      ],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "webview-file-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    },
+    {
+      "name": "backup-allowed",
+      "tp": [
+        "SOURCE_ADB_BACKUP_ALLOWED"
+      ],
+      "fp": [
+        "SOURCE_BACKUP_RULE_ABSENT"
+      ],
+      "fn": []
+    },
+    {
+      "name": "backup-ok",
+      "tp": [],
+      "fp": [],
+      "fn": []
+    }
+  ]
+}

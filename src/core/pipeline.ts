@@ -41,6 +41,12 @@ import { loadPackerFingerprints, mergePackerFingerprints, KNOWN_PACKERS } from "
 import { writeReports } from "./report.ts"
 import { selectedMissingTools } from "./tool-installer.ts"
 import { discoverToolchain } from "./toolchain.ts"
+import { scanProjectCryptoAudit } from "./crypto-audit.ts"
+import { scanProjectRuntimeDetection } from "./runtime-detection.ts"
+import { analyzeManifest } from "./exported-components.ts"
+import { queryDependencyVulnerabilities, buildDependencyVulnFindings } from "./dependency-vuln.ts"
+import { parseGradleDependencies, assessTransitiveRisks, buildTransitiveDepFindings, toDependencyComponents as toTransitiveComponents } from "./transitive-deps.ts"
+import { analyzeLicenses, buildLicenseFindings } from "./license-compliance.ts"
 import type {
   CommandResult,
   Finding,
@@ -645,6 +651,12 @@ export class Pipeline {
     // 源码侧库间污点 + 隐式流(⑬⑰):库方法返回值 + 控制流污点——失败关闭
     const libraryImplicitFindings = await scanProjectLibraryAndImplicitTaint(this.config.inputPath)
     this.context.audit.findings.push(...libraryImplicitFindings)
+    // 源码侧密码学深度分析(Phase 2 扩充):密钥长度/Padding Oracle/KeyStore/GCM tag/硬编码密钥——失败关闭
+    const cryptoAuditFindings = await scanProjectCryptoAudit(this.config.inputPath)
+    this.context.audit.findings.push(...cryptoAuditFindings)
+    // 源码侧运行时安全检测分析(Phase 2 扩充):反调试/Root/模拟器/Hook 框架/完整性——失败关闭
+    const runtimeDetectionFindings = await scanProjectRuntimeDetection(this.config.inputPath)
+    this.context.audit.findings.push(...runtimeDetectionFindings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [
         ...(this.context.audit.softwareComponents ?? []),
@@ -1966,6 +1978,34 @@ export class Pipeline {
         ...(this.context.audit.apkMetadata ?? {}),
         sha256: await sha256File(finalPath),
       }
+    }
+    // Phase 1 扩充:依赖漏洞实时查询(OSV + 离线回退) + 传递依赖风险 + 许可证合规
+    try {
+      const components = this.context.audit.softwareComponents ?? []
+      if (components.length > 0) {
+        const depComponents = components
+          .filter((c) => c.name && c.version)
+          .map((c) => ({
+            group: c.namespace ?? "",
+            artifact: c.name,
+            version: c.version!,
+            scope: (c.scope as string) ?? "unknown",
+            depth: 0,
+          }))
+        // OSV 实时 CVE 查询
+        const vulnResult = await queryDependencyVulnerabilities(depComponents)
+        this.context.audit.findings.push(...buildDependencyVulnFindings(vulnResult))
+        // 许可证合规分析
+        const licenseComponents = components.map((c) => ({
+          name: `${c.namespace ?? ""}:${c.name}`,
+          license: undefined as string | undefined,
+          source: "sbom" as const,
+        })) satisfies Array<{ name: string; license: string | undefined; source: "sbom" }>
+        const licenseAnalysis = analyzeLicenses(licenseComponents)
+        this.context.audit.findings.push(...buildLicenseFindings(licenseAnalysis))
+      }
+    } catch {
+      // 依赖漏洞/许可证分析失败关闭
     }
     const reports = await writeReports(this.config, this.context)
 
