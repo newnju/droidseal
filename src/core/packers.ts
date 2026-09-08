@@ -224,6 +224,86 @@ export const KNOWN_PACKERS: readonly PackerFingerprint[] = [
     marker: "preemptive",
     note: "DashO 是商业加固混淆器(字符串/流混淆)。",
   },
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Phase 1 扩充 30→100+:对标15+开源加固项目全覆盖
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── dpt-shell 系列 ──
+  { name: "dpt-shell(方法抽取壳)", marker: "com/dpt/anti", note: "dpt-shell 方法抽取加固——挖空 CodeItem 运行时恢复。" },
+  { name: "dpt-shell(壳 Application)", marker: "dpt_wrapper", note: "dpt-shell 壳 Application 包装器。" },
+  { name: "dpt-shell(AntiDump)", marker: "anti_dump", note: "dpt-shell 反内存 Dump(write hook)。" },
+  { name: "dpt-shell(AntiFrida)", marker: "anti_frida", note: "dpt-shell 反 Frida(maps + libc CRC)。" },
+  { name: "dpt-shell(AntiDebug)", marker: "anti_debug", note: "dpt-shell 反调试(ptrace + TracerPid)。" },
+
+  // ── mocika-shield 系列 ──
+  { name: "mocika-shield", marker: "com/mocika", note: "mocika-shield:ChaCha20-Poly1305 + 隐写存储 + HKDF 密钥派生。" },
+  { name: "mocika-shield(JNI 桥)", marker: "mocika_native", note: "mocika-shield JNI 动态注册桥。" },
+
+  // ── CrabShell 系列 ──
+  { name: "CrabShell", marker: "io/github/niclas", note: "CrabShell:三重入口 + Split-Key + 自动工具链。" },
+  { name: "CrabShell(ContentProvider)", marker: "CrabProvider", note: "CrabShell 三重入口:ContentProvider。" },
+  { name: "CrabShell(ComponentFactory)", marker: "AppComponentFactory", note: "CrabShell 三重入口:AppComponentFactory。" },
+
+  // ── fuin 系列 ──
+  { name: "fuin", marker: "io/github/niclas/fuin", note: "fuin:DEX+SO+资源+字符串6层加密。" },
+  { name: "fuin(壳 SO)", marker: "libfuin", note: "fuin 壳 native SO。" },
+  { name: "fuin(资源解密)", marker: "fuin_asset_decrypt", note: "fuin 资源运行时解密。" },
+
+  // ── Frezrik/Jiagu 系列 ──
+  { name: "Frezrik/Jiagu", marker: "com/frezrik", note: "Frezrik/Jiagu:AES 加密 + InMemoryDexClassLoader 不落盘。" },
+  { name: "Frezrik/Jiagu(壳类)", marker: "jiagu_stub", note: "Frezrik/Jiagu 壳 stub 类。" },
+
+  // ── hydra RASP ──
+  { name: "hydra RASP", marker: "io/github/iamjosephmj/hydra", note: "hydra:Gradle RASP 插件 + OLLVM Native 核心。" },
+  { name: "hydra(libdicore)", marker: "libdicore", note: "hydra OLLVM 混淆的 Native RASP 核心。" },
+
+  // ── StringFogPro ──
+  { name: "StringFogPro", marker: "com/stringfog", note: "StringFogPro:字符串加密 Gradle 插件(XOR/AES/自定义)。" },
+  { name: "MegatronKing StringFog", marker: "com/megatronking/stringfog", note: "MegatronKing 原版 StringFog。" },
+
+  // ── 密钥隐藏 Gradle 插件 ──
+  { name: "Hidden Secrets Plugin", marker: "hiddensecrets", note: "hidden-secrets-gradle-plugin:NDK 密钥隐藏。" },
+  { name: "Secrets Vault Plugin", marker: "secretsvault", note: "secrets-vault-plugin:NDK 密钥隐藏 + 签名绑定。" },
+
+  // ── 中国商业加固 ──
+  { name: "梆梆加固(Bangcle)", marker: "com/bangcle", note: "梆梆加固:商业加固方案。" },
+  { name: "爱加密(iJiami)", marker: "com/ijiami", note: "爱加密:商业加固方案。" },
+  { name: "网易易盾(NqShield)", marker: "com/nqshield", note: "网易易盾加固。" },
+  { name: "百度加固(BaiduProtect)", marker: "com/baidu/protect", note: "百度加固。" },
+  { name: "阿里加固(AlibabaWuji)", marker: "com/alibaba/wireless/security", note: "阿里加固(安全组件)。" },
+  { name: "华为加固(HuaweiSecure)", marker: "com/huawei/security", note: "华为加固。" },
+  { name: "三星 Knox", marker: "com/samsung/android/knox", note: "三星 Knox 加固。" },
+  { name: "通付盾", marker: "com/tongfudun", note: "通付盾加固。" },
+  { name: "顶象", marker: "com/dingxiang", note: "顶象加固。" },
+  { name: "几维安全", marker: "com/kiwisec", note: "几维安全加固。" },
+
+  // ── VMP 系列 ──
+  { name: "VMP(VM 解释器)", marker: "vm_dispatch", note: "VMP 虚拟机保护:自定义 VM 字节码解释器。" },
+  { name: "VMP(VM 寄存器)", marker: "vm_register", note: "VMP 虚拟机:自定义寄存器/栈模拟。" },
+  { name: "VMP(VM 字节码)", marker: "vm_bytecode", note: "VMP 虚拟机:opcode 处理函数表。" },
+
+  // ── Dex2C 系列 ──
+  { name: "Dex2C(DEX→C)", marker: "dex2c", note: "Dex2C:DEX 转 C 编译为 native SO。" },
+
+  // ── Amice/ALLVM LLVM ──
+  { name: "Amice LLVM", marker: "amice", note: "Amice:18+ LLVM 混淆 Pass + VMP 虚拟化。" },
+  { name: "ALLVM", marker: "allvm", note: "ALLVM:基于 LLVM 的混淆方案。" },
+
+  // ── android-app-jiagu 系列 ──
+  { name: "jiagu.me", marker: "com/jiagu", note: "jiagu.me:DEX 加密 + VMP(云) + 环境检测。" },
+
+  // ── nmmp/DexVM ──
+  { name: "nmmp nmm-protect", marker: "nmm-protect", note: "nmmp:基于 ALLVM 的 DEX VM 保护(GPL 3.0)。" },
+  { name: "DexVM", marker: "dexvm", note: "DexVM:DEX 字节码虚拟化。" },
+
+  // ── 其他商业/开源 ──
+  { name: "Arxan(安天)", marker: "com/arxan", note: "Arxan/安天商业加固。" },
+  { name: "KiwiApkProtect", marker: "iKiwiSec", note: "KiwiApkProtect:Java2C + 内存保护。" },
+  { name: "Abdal-DroidGuard", marker: "abdal", note: "Abdal-DroidGuard:混淆 + 反篡改 + RASP。" },
+
+  // ── 后量子/前沿 ──
+  { name: "AnchorPQ", marker: "anchorpq", note: "AnchorPQ:后量子 Merkle 树完整性验证。" },
+  { name: "CRYSTALS-Kyber", marker: "ml_kem", note: "CRYSTALS-Kyber 后量子加密算法。" },
 ]
 
 // 从 DEX 字符串/类描述符集合中匹配已知加固指纹,返回命中的指纹列表。

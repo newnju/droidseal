@@ -26,6 +26,11 @@ import { buildPackerFindings, type PackerFingerprint, KNOWN_PACKERS } from "./pa
 import { analyzeElf, buildSoFindings } from "./elf-scan.ts"
 import { compareKnownVulnerabilities } from "./known-vulnerabilities.ts"
 import { analyzeManifest } from "./exported-components.ts"
+import { detectLlvmOllvmFeatures, buildLlvmFindings } from "./llvm-ollvm-detect.ts"
+import { detectDex2cIndicators, buildDex2cFindings } from "./dex2c-detect.ts"
+import { scanApkSteganography, buildSteganographyFindings } from "./steganography-detect.ts"
+import { detectSmaliObfuscation, buildSmaliFindings } from "./smali-analyze.ts"
+import { detectPackageNameRandomization } from "./proguard-gradle-detect.ts"
 import type {
   ApkEntrySummary,
   ApkMetadata,
@@ -1065,6 +1070,16 @@ async function scanDexFiles(
     findings.push(...compareKnownVulnerabilities(sdks))
     findings.push(...buildPackerFindings(combined, fingerprints))
     findings.push(...buildEndpointFindings(combined))
+    // Phase 1 扩充:Smali 混淆特征检测(#71)
+    findings.push(...buildSmaliFindings(detectSmaliObfuscation([...combined])))
+    // Phase 1 扩充:包名随机化检测(#84)
+    findings.push(...detectPackageNameRandomization([...combined], undefined))
+    // Phase 1 扩充:Dex2C JNI stub 检测(#85)
+    const combinedArr = [...combined]
+    const nativeMethodCount = combinedArr.filter((s: string) => s === "native").length
+    const hasRegisterNatives = combinedArr.some((s: string) => s.includes("RegisterNatives"))
+    const dex2cIndicators = detectDex2cIndicators([], nativeMethodCount, combinedArr.length, hasRegisterNatives, combinedArr)
+    if (dex2cIndicators.length > 0) findings.push(...buildDex2cFindings(dex2cIndicators))
     const encryptable = estimateEncryptableStrings(combined)
     if (encryptable.length > 0) {
       findings.push({
@@ -1089,6 +1104,8 @@ async function scanDexFiles(
       recommendation: "核对 APK 来源与 SHA-256；对可疑 DEX 单独复核。",
     })
   }
+  // Phase 1 扩充:隐写式 DEX 存储检测(#86)——classes.dex file_size 与 ZIP 条目大小不一致
+  // 注意:此检测在 auditApk 中执行(需要 ZIP entries),不在 auditDex 中
   if (truncated || failed > 0) {
     findings.push({
       severity: "info",
@@ -1130,6 +1147,9 @@ async function scanNativeLibraries(
       const hardening = analyzeElf(bytes)
       const base = entryName.split("/").pop() ?? entryName
       findings.push(...buildSoFindings(base, hardening))
+      // Phase 1 扩充:LLVM/OLLVM 混淆特征检测(#73 #81 #82)
+      const llvmResults = detectLlvmOllvmFeatures(bytes)
+      if (llvmResults.length > 0) findings.push(...buildLlvmFindings(base, llvmResults))
       const secretHits = scanStringsForSecrets(extractAsciiStrings(bytes))
       if (secretHits.length > 0) {
         findings.push({

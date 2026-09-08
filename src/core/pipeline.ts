@@ -47,6 +47,12 @@ import { analyzeManifest } from "./exported-components.ts"
 import { queryDependencyVulnerabilities, buildDependencyVulnFindings } from "./dependency-vuln.ts"
 import { parseGradleDependencies, assessTransitiveRisks, buildTransitiveDepFindings, toDependencyComponents as toTransitiveComponents } from "./transitive-deps.ts"
 import { analyzeLicenses, buildLicenseFindings } from "./license-compliance.ts"
+import { detectLlvmOllvmFeatures, buildLlvmFindings, enumerateProtectionLayers, buildProtectionLayerFindings } from "./llvm-ollvm-detect.ts"
+import { detectDex2cIndicators, buildDex2cFindings } from "./dex2c-detect.ts"
+import { scanProjectNetworkEnv } from "./network-env-detect.ts"
+import { detectSmaliObfuscation, buildSmaliFindings } from "./smali-analyze.ts"
+import { analyzeProguardRules, detectGradlePlugins, detectPackageNameRandomization } from "./proguard-gradle-detect.ts"
+import { scanProjectCodePatterns } from "./code-pattern-detect.ts"
 import type {
   CommandResult,
   Finding,
@@ -657,6 +663,21 @@ export class Pipeline {
     // 源码侧运行时安全检测分析(Phase 2 扩充):反调试/Root/模拟器/Hook 框架/完整性——失败关闭
     const runtimeDetectionFindings = await scanProjectRuntimeDetection(this.config.inputPath)
     this.context.audit.findings.push(...runtimeDetectionFindings)
+    // 源码侧网络环境检测模式(Phase 1 #83):代理/VPN/TUN/SSL Pinning/DNS/证书——失败关闭
+    const networkEnvFindings = await scanProjectNetworkEnv(this.config.inputPath)
+    this.context.audit.findings.push(...networkEnvFindings)
+    // 源码侧代码模式检测(Phase 1 #87-#90):Split-Key/Timing-safe/ARouter/后量子——失败关闭
+    const codePatternFindings = await scanProjectCodePatterns(this.config.inputPath)
+    this.context.audit.findings.push(...codePatternFindings)
+    // 源码侧 Smali 混淆特征检测(Phase 1 #71):极短名/ProGuard/R8/反射包装——失败关闭
+    const smaliFindings = buildSmaliFindings(detectSmaliObfuscation([]))  // DEX 字符串在 APK 模式下扫描
+    this.context.audit.findings.push(...smaliFindings)
+    // 源码侧 ProGuard/R8 规则分析(Phase 1 #75):混淆级别/keep 规则——失败关闭
+    const proguardResult = await analyzeProguardRules(this.config.inputPath)
+    this.context.audit.findings.push(...proguardResult.findings)
+    // 源码侧 Gradle 插件检测(Phase 1 #74):安全/混淆插件/R8 配置——失败关闭
+    const gradleResult = await detectGradlePlugins(this.config.inputPath)
+    this.context.audit.findings.push(...gradleResult.findings)
     if (audit.softwareComponents?.length) {
       this.context.audit.softwareComponents = [
         ...(this.context.audit.softwareComponents ?? []),
