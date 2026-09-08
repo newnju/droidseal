@@ -234,8 +234,8 @@ export function generateRandomSoName(): string {
 export interface ShellLoaderConfig {
   packageName: string
   originalApplication: string
-  randomPackageName?: string
-  randomSoName?: string
+  randomPackageName?: string | undefined
+  randomSoName?: string | undefined
   tripleEntry: TripleEntryPointConfig
   algorithm: "aes-256-gcm" | "chacha20-poly1305"
   useSplitKey: boolean
@@ -310,11 +310,72 @@ function generateDecryptorSmali(packageName: string, algorithm: string): string 
 .end method
 
 .method private static doDecrypt()V
-    .locals 0
-    # TODO:实际解密逻辑由加固工具注入
-    # 1. 还原 Split-Key(XOR)
-    # 2. AES-256-GCM 或 ChaCha20-Poly1305 解密
-    # 3. InMemoryDexClassLoader 加载
+    .locals 8
+
+    # 1. 还原 Split-Key(XOR):part1 XOR part2 = encryptionKey
+    sget-object v0, L${pkg}/DroidSealDecryptor;->KEY_PART1:[B
+    sget-object v1, L${pkg}/DroidSealDecryptor;->KEY_PART2:[B
+    array-length v2, v0
+    new-array v3, v2, [B
+    const/4 v4, 0x0
+    :xor_key_loop
+    if-ge v4, v2, :xor_key_done
+    aget-byte v5, v0, v4
+    aget-byte v6, v1, v4
+    xor-int/2addr v5, v6
+    int-to-byte v5, v5
+    aput-byte v5, v3, v4
+    add-int/lit8 v4, v4, 0x1
+    goto :xor_key_loop
+    :xor_key_done
+    # v3 = encryptionKey (32 bytes)
+
+    # 2. 读取加密 payload(nonce[12] + tag[16] + ciphertext)
+    sget-object v0, L${pkg}/DroidSealApplication;->ENCRYPTED_DEX:[B
+    const/16 v1, 0xc
+    new-array v4, v1, [B  # nonce
+    const/4 v5, 0x0
+    invoke-static {v0, v5, v4, v5, v1}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+    const/16 v1, 0x10
+    new-array v5, v1, [B  # tag
+    const/16 v6, 0xc
+    invoke-static {v0, v6, v5, v5, v1}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+    array-length v1, v0
+    const/16 v6, 0x1c
+    sub-int/2addr v1, v6
+    new-array v7, v1, [B  # ciphertext
+    invoke-static {v0, v6, v7, v5, v1}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+
+    # 3. AES-256-GCM 解密
+    const-string v0, "AES/GCM/NoPadding"
+    invoke-static {v0}, Ljavax/crypto/Cipher;->getInstance(Ljava/lang/String;)Ljavax/crypto/Cipher;
+    move-result-object v0
+
+    new-instance v1, Ljavax/crypto/spec/SecretKeySpec;
+    const-string v6, "AES"
+    invoke-direct {v1, v3, v6}, Ljavax/crypto/spec/SecretKeySpec;-><init>([BLjava/lang/String;)V
+
+    new-instance v3, Ljavax/crypto/spec/GCMParameterSpec;
+    const/16 v6, 0x80
+    invoke-direct {v3, v6, v4}, Ljavax/crypto/spec/GCMParameterSpec;-><init>(I[B)V
+
+    const/4 v4, 0x2
+    invoke-virtual {v0, v4, v1, v3}, Ljavax/crypto/Cipher;->init(ILjava/security/Key;Ljava/security/spec/AlgorithmParameterSpec;)V
+
+    invoke-virtual {v0, v7}, Ljavax/crypto/Cipher;->doFinal([B)[B
+    move-result-object v0
+    # v0 = decrypted DEX bytes
+
+    # 4. InMemoryDexClassLoader 加载
+    new-instance v1, Ldalvik/system/InMemoryDexClassLoader;
+    invoke-static {}, Ljava/lang/ClassLoader;->getSystemClassLoader()Ljava/lang/ClassLoader;
+    move-result-object v2
+    const-string v3, ""
+    invoke-direct {v1, v0, v3, v2}, Ldalvik/system/InMemoryDexClassLoader;-><init>([BLjava/lang/String;Ljava/lang/ClassLoader;)V
+
+    # 5. 加载原始 Application 类
+    # (由壳 Application.onCreate 调用此处后反射启动原始 Application)
+
     return-void
 .end method
 `

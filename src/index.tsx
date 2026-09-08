@@ -15,8 +15,27 @@ function usage(): string {
 用法:
   droidseal             打开交互式 TUI
   droidseal doctor      以 JSON 输出环境诊断
+  droidseal harden      加固 APK(DEX加密+SO加密+资源加密+字符串加密+运行时保护)
   droidseal --help      显示帮助
   droidseal --version   显示版本
+
+harden 子命令:
+  droidseal harden <input.apk> [选项]
+    --output <dir>           输出目录(默认:./hardened)
+    --package <name>         包名(默认:从 APK 提取)
+    --app <class>            原始 Application 类名
+    --algorithm <alg>        加密算法:aes-256-gcm(默认) | chacha20-poly1305
+    --cert-sha256 <hash>     签名证书 SHA-256(用于密钥派生)
+    --no-dex                 禁用 DEX 加密
+    --no-so                  禁用 SO 加密
+    --no-resource            禁用资源加密
+    --no-string              禁用字符串加密
+    --no-runtime             禁用运行时保护
+    --enable-vmp             启用 VMP 虚拟机保护
+    --no-split-key           禁用 Split-Key 混淆
+    --no-triple-entry        禁用三重入口
+    --no-random-names        禁用随机包名/SO名
+    --exclude <pattern>      类排除规则(可多次指定)
 
 TUI 命令:
   /guided    分步处理
@@ -49,6 +68,70 @@ if (args[0] === "doctor") {
     },
   }, null, 2))
   process.exit(0)
+}
+
+if (args[0] === "harden") {
+  const { runHardenPipeline, generateHardenReport, DEFAULT_HARDEN_CONFIG } = await import("./core/harden-pipeline.ts")
+  const inputApk = args[1]
+  if (!inputApk) {
+    console.error("用法: droidseal harden <input.apk> [选项]")
+    console.error("运行 droidseal --help 查看完整选项列表")
+    process.exit(1)
+  }
+  const getArg = (flag: string): string | undefined => {
+    const idx = args.indexOf(flag)
+    return idx >= 0 && idx + 1 < args.length ? args[idx + 1] : undefined
+  }
+  const hasFlag = (flag: string): boolean => args.includes(flag)
+  const excludePatterns: string[] = []
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "--exclude" && args[i + 1]) excludePatterns.push(args[i + 1]!)
+  }
+  const config = {
+    ...DEFAULT_HARDEN_CONFIG,
+    inputApk,
+    outputDir: getArg("--output") ?? "./hardened",
+    packageName: getArg("--package") ?? "com.droidseal.protected",
+    originalApplication: getArg("--app") ?? "android.app.Application",
+    algorithm: (getArg("--algorithm") as "aes-256-gcm" | "chacha20-poly1305") ?? "aes-256-gcm",
+    certSha256: getArg("--cert-sha256") ?? undefined,
+    enableDexEncryption: !hasFlag("--no-dex"),
+    enableMethodHollow: !hasFlag("--no-dex"),
+    enableSoEncryption: !hasFlag("--no-so"),
+    enableResourceEncryption: !hasFlag("--no-resource"),
+    enableStringEncryption: !hasFlag("--no-string"),
+    enableRuntimeProtection: !hasFlag("--no-runtime"),
+    enableVmProtection: hasFlag("--enable-vmp"),
+    enableSplitKey: !hasFlag("--no-split-key"),
+    enableTripleEntry: !hasFlag("--no-triple-entry"),
+    enableRandomNames: !hasFlag("--no-random-names"),
+    classExclusionPatterns: excludePatterns,
+  }
+  console.log(`DroidSeal 加固流水线启动...`)
+  console.log(`  输入: ${config.inputApk}`)
+  console.log(`  输出: ${config.outputDir}`)
+  console.log(`  算法: ${config.algorithm}`)
+  console.log(`  Split-Key: ${config.enableSplitKey ? "是" : "否"}`)
+  console.log(`  三重入口: ${config.enableTripleEntry ? "是" : "否"}`)
+  console.log("")
+  try {
+    const result = await runHardenPipeline(config)
+    console.log(generateHardenReport(result))
+    if (result.generatedFiles.length > 0) {
+      const { mkdir: mkd, writeFile: wf } = await import("node:fs/promises")
+      await mkd(config.outputDir, { recursive: true })
+      for (const file of result.generatedFiles) {
+        const outPath = `${config.outputDir}/${file.name}`
+        await mkd(outPath.replace(/\/[^/]+$/, ""), { recursive: true })
+        await wf(outPath, file.content, "utf8")
+      }
+      console.log(`\n已输出 ${result.generatedFiles.length} 个文件到 ${config.outputDir}/`)
+    }
+    process.exit(result.success ? 0 : 1)
+  } catch (error) {
+    console.error(`加固失败: ${error instanceof Error ? error.message : String(error)}`)
+    process.exit(1)
+  }
 }
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
