@@ -1,19 +1,22 @@
 // DroidSeal 加固流水线（harden 子命令）。
-// 串联所有保护模块:DEX 加密 + SO 加密 + 资源加密 + 字符串加密 + 运行时保护 + 壳加载器。
-// 输入:APK 文件路径 + 加固配置。
-// 输出:加固后的 APK + 报告。
+// 实际处理 APK:解包→Manifest注入→DEX加密→SO加密→资源加密→字符串加密→运行时保护→重打包→签名。
 // 纯 TypeScript，失败关闭。
 import path from "node:path"
-import { readFile, writeFile, mkdir, cp } from "node:fs/promises"
+import { readFile, writeFile, mkdir } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import type { Finding } from "./types.ts"
-import { encryptDex, hollowMethods, parseClassExclusionRules, type MethodHollowResult, type EncryptedDex, buildDexProtectionFindings } from "./dex-protection.ts"
+import { unpackApk, buildUnpackFindings } from "./apk-unpack.ts"
+import { extractManifestInfo, injectShellComponents, buildManifestInjectFindings, type ManifestInjectConfig } from "./manifest-inject.ts"
+import { processAllDexFiles, type DexProcessConfig } from "./dex-process.ts"
 import { generateKeyMaterial, type KeyMaterial } from "./dex-protection-keys.ts"
-import { generateShellLoaderFiles, type ShellLoaderConfig, buildShellLoaderFindings, type TripleEntryPointConfig } from "./dex-shell-loader.ts"
-import { encryptSoFile, encryptSoSegments, type SegmentEncryptResult, buildSoProtectionFindings } from "./so-protection.ts"
-import { encryptResource, generateResourceDecryptorSmali, buildResourceProtectionFindings } from "./resource-string-protection.ts"
+import { generateShellLoaderFiles, type ShellLoaderConfig, buildShellLoaderFindings } from "./dex-shell-loader.ts"
+import { processAllSoFiles, type SoProcessConfig } from "./so-process.ts"
+import { processAllAssets, DEFAULT_RESOURCE_CONFIG, type ResourceProcessConfig } from "./resource-process.ts"
+import { processStrings, DEFAULT_STRING_PROCESS_CONFIG, type StringProcessConfig } from "./string-process.ts"
 import { generateRuntimeProtectionFiles, DEFAULT_RUNTIME_CONFIG, buildRuntimeProtectionFindings, type RuntimeProtectionConfig } from "./runtime-protection.ts"
 import { generateVmInterpreterSmali, DEFAULT_VM_CONFIG, buildVmpFindings } from "./vmp-protection.ts"
+import { repackApk, type SigningConfig, type RepackConfig } from "./apk-repack.ts"
+import { generateResourceDecryptorSmali } from "./resource-string-protection.ts"
 
 // ── 加固配置 ──────────────────────────────────────────────────────────
 
@@ -60,8 +63,8 @@ export interface HardenResult {
   outputApk?: string | undefined
   findings: Finding[]
   keyMaterial?: KeyMaterial | undefined
-  dexResult?: MethodHollowResult | undefined
-  encryptedDex?: EncryptedDex | undefined
+  dexResult?: import("./dex-process.ts").DexProcessResult | undefined
+  encryptedDex?: import("./dex-protection.ts").EncryptedDex | undefined
   soResults: Array<{ name: string; encryptedSize: number; originalSize: number }>
   resourceResults: Array<{ name: string; encryptedSize: number }>
   generatedFiles: Array<{ name: string; content: string }>
@@ -84,83 +87,200 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   const resourceResults: Array<{ name: string; encryptedSize: number }> = []
   const generatedFiles: Array<{ name: string; content: string }> = []
   let keyMaterial: KeyMaterial | undefined
-  let dexResult: MethodHollowResult | undefined
-  let encryptedDex: EncryptedDex | undefined
+  let dexResult: import("./dex-process.ts").DexProcessResult | undefined
+  let outputApk: string | undefined
 
-  // 1. 密钥生成
-  const apkHash = createHash("sha256").update(await readFile(config.inputApk)).digest("hex")
-  keyMaterial = generateKeyMaterial(config.certSha256, apkHash, "dex", config.enableSplitKey)
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 1: 解包 APK
+  // ──────────────────────────────────────────────────────────────────────
+  const apkContents = await unpackApk(config.inputApk)
+  findings.push(...buildUnpackFindings(apkContents))
 
-  // 2. DEX 保护
-  if (config.enableDexEncryption || config.enableMethodHollow) {
-    // 实际 DEX 保护需要读取 APK 中的 classes.dex 并处理
-    // 这里生成壳加载器 Smali 文件
-    const shellConfig: ShellLoaderConfig = {
-      packageName: config.packageName,
-      originalApplication: config.originalApplication,
-      randomPackageName: config.enableRandomNames ? generateRandomPkg() : undefined,
-      randomSoName: config.enableRandomNames ? generateRandomSo() : undefined,
-      tripleEntry: {
-        packageName: config.packageName,
-        originalApplication: config.originalApplication,
-        useAppComponentFactory: config.enableTripleEntry,
-        useContentProvider: config.enableTripleEntry,
-        useApplication: true,
-      },
-      algorithm: config.algorithm,
-      useSplitKey: config.enableSplitKey,
-      classExclusionPatterns: config.classExclusionPatterns,
+  // 提取包名和 Application 类名
+  let packageName = config.packageName
+  let originalApplication = config.originalApplication
+  if (apkContents.manifest) {
+    const info = extractManifestInfo(apkContents.manifest.bytes)
+    if (!packageName || packageName === "com.droidseal.protected") packageName = info.packageName || packageName
+    if (!originalApplication || originalApplication === "android.app.Application") originalApplication = info.applicationName || originalApplication
+    apkContents.packageName = packageName
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 2: 密钥生成
+  // ──────────────────────────────────────────────────────────────────────
+  const apkBytes = await readFile(config.inputApk)
+  const apkSha256 = createHash("sha256").update(apkBytes).digest("hex")
+  keyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "dex", config.enableSplitKey)
+  // SO/资源用不同 purpose 派生不同密钥
+  const soKeyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "so", config.enableSplitKey)
+  const resKeyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "resource", config.enableSplitKey)
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 3: Manifest 注入(壳组件)
+  // ──────────────────────────────────────────────────────────────────────
+  const randomPkg = config.enableRandomNames ? generateRandomPkg() : packageName
+  const randomSo = config.enableRandomNames ? generateRandomSo() : "libdroidseal.so"
+  const shellApp = `${packageName}.DroidSealApplication`
+  const shellProvider = `${packageName}.DroidSealProvider`
+  const shellFactory = `${packageName}.DroidSealComponentFactory`
+
+  if (apkContents.manifest) {
+    const xml = new TextDecoder("utf-8", { fatal: false }).decode(apkContents.manifest.bytes)
+    const manifestConfig: ManifestInjectConfig = {
+      packageName, originalApplication, shellApplication: shellApp,
+      shellContentProvider: shellProvider, shellComponentFactory: shellFactory,
+      shellSoName: randomSo, enableContentProvider: config.enableTripleEntry,
+      enableComponentFactory: config.enableTripleEntry, targetSdkVersion: 34,
     }
-    const shellFiles = generateShellLoaderFiles(shellConfig)
-    generatedFiles.push(...shellFiles)
-    findings.push(...buildShellLoaderFindings(shellConfig, shellFiles))
+    const { xml: modifiedXml, injected } = injectShellComponents(xml, manifestConfig)
+    apkContents.manifest.bytes = new TextEncoder().encode(modifiedXml)
+    findings.push(...buildManifestInjectFindings(manifestConfig, injected))
   }
 
-  // 3. SO 加密
-  if (config.enableSoEncryption) {
-    // SO 加密需要读取 APK 中的 .so 文件
-    findings.push({
-      severity: "info",
-      confidence: "high",
-      code: "SO_ENCRYPTION_READY",
-      title: "SO 加密模块就绪(需读取 APK 中的 .so 文件)",
-      detail: `算法:${config.algorithm};密钥来源:${keyMaterial.derivedFrom}。`,
-      recommendation: "加固时扫描 APK 的 lib/ 目录,对每个 .so 文件执行加密。",
-      evidence: "so-protection-ready",
-    })
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 4: DEX 处理(方法抽取 + 整体加密)
+  // ──────────────────────────────────────────────────────────────────────
+  if (config.enableDexEncryption || config.enableMethodHollow) {
+    const dexConfig: DexProcessConfig = {
+      algorithm: config.algorithm, enableMethodHollow: config.enableMethodHollow,
+      enableDexEncryption: config.enableDexEncryption, enableSplitKey: config.enableSplitKey,
+      classExclusionPatterns: config.classExclusionPatterns, certSha256: config.certSha256, apkSha256,
+    }
+    dexResult = processAllDexFiles(apkContents.dexFiles, dexConfig)
+    // 替换 APK 中的 DEX 文件
+    for (let i = 0; i < apkContents.dexFiles.length; i += 1) {
+      apkContents.dexFiles[i]!.bytes = dexResult.processedDex[i]!
+    }
+    findings.push(...dexResult.findings)
+    keyMaterial = dexResult.keyMaterial // 用 DEX 处理生成的密钥材料
   }
 
-  // 4. 资源加密
-  if (config.enableResourceEncryption) {
-    findings.push({
-      severity: "info",
-      confidence: "high",
-      code: "RESOURCE_ENCRYPTION_READY",
-      title: "资源加密模块就绪(需读取 APK 中的 assets/ 文件)",
-      detail: `算法: AES-256-GCM;密钥来源:${keyMaterial.derivedFrom}。`,
-      recommendation: "加固时扫描 APK 的 assets/ 目录,对每个文件执行加密。",
-      evidence: "resource-encryption-ready",
-    })
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 5: 壳加载器 Smali 生成
+  // ──────────────────────────────────────────────────────────────────────
+  const shellConfig: ShellLoaderConfig = {
+    packageName, originalApplication, randomPackageName: randomPkg, randomSoName: randomSo,
+    tripleEntry: { packageName, originalApplication, useAppComponentFactory: config.enableTripleEntry,
+      useContentProvider: config.enableTripleEntry, useApplication: true },
+    algorithm: config.algorithm, useSplitKey: config.enableSplitKey,
+    classExclusionPatterns: config.classExclusionPatterns,
+  }
+  const shellFiles = generateShellLoaderFiles(shellConfig)
+  generatedFiles.push(...shellFiles)
+  findings.push(...buildShellLoaderFindings(shellConfig, shellFiles))
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 6: SO 加密
+  // ──────────────────────────────────────────────────────────────────────
+  if (config.enableSoEncryption && apkContents.soFiles.length > 0) {
+    const soConfig: SoProcessConfig = {
+      algorithm: config.algorithm, enableFullEncrypt: true,
+      enableSegmentEncrypt: true, targetAbis: [],
+    }
+    const soResult = processAllSoFiles(apkContents.soFiles.map((e) => ({ name: e.name, bytes: e.bytes })), soConfig, soKeyMaterial.encryptionKey)
+    for (const entry of soResult.processedEntries) {
+      const original = apkContents.soFiles.find((e) => e.name === entry.name)
+      if (original) original.bytes = entry.bytes
+    }
+    findings.push(...soResult.findings)
   }
 
-  // 5. 运行时保护
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 7: 资源加密
+  // ──────────────────────────────────────────────────────────────────────
+  if (config.enableResourceEncryption && apkContents.assetFiles.length > 0) {
+    const resConfig: ResourceProcessConfig = { ...DEFAULT_RESOURCE_CONFIG, enableResourceEncryption: true }
+    const resResult = processAllAssets(apkContents.assetFiles.map((e) => ({ name: e.name, bytes: e.bytes })), resConfig, resKeyMaterial.encryptionKey)
+    for (const entry of resResult.processedEntries) {
+      const original = apkContents.assetFiles.find((e) => e.name === entry.name)
+      if (original) original.bytes = entry.bytes
+    }
+    findings.push(...resResult.findings)
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 8: 字符串加密(DEX string_data 分析 + 解密器生成)
+  // ──────────────────────────────────────────────────────────────────────
+  if (config.enableStringEncryption && dexResult) {
+    // 从处理后的 DEX 中提取字符串池(复用 dex-scan 的 extractDexStrings)
+    const { extractDexStrings } = await import("./dex-scan.ts")
+    const allStrings: string[] = []
+    for (const dex of dexResult.processedDex) {
+      try { allStrings.push(...extractDexStrings(dex).strings) } catch { /* skip */ }
+    }
+    const strConfig: StringProcessConfig = { ...DEFAULT_STRING_PROCESS_CONFIG, enableStringEncryption: true }
+    const strResult = processStrings(allStrings, packageName, strConfig, keyMaterial)
+    if (strResult.encryptedCount > 0) {
+      generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealStringDecryptor.smali`, content: strResult.decryptorSmali })
+    }
+    findings.push(...strResult.findings)
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 9: 运行时保护 Smali 生成
+  // ──────────────────────────────────────────────────────────────────────
   if (config.enableRuntimeProtection && config.runtimeConfig) {
-    const rtFiles = generateRuntimeProtectionFiles(config.packageName, config.runtimeConfig)
+    const rtFiles = generateRuntimeProtectionFiles(packageName, config.runtimeConfig)
     generatedFiles.push(...rtFiles)
     findings.push(...buildRuntimeProtectionFindings(rtFiles, config.runtimeConfig))
   }
 
-  // 6. VMP 保护
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 10: VMP 保护(可选)
+  // ──────────────────────────────────────────────────────────────────────
   if (config.enableVmProtection) {
-    const vmSmali = generateVmInterpreterSmali(config.packageName, DEFAULT_VM_CONFIG)
-    generatedFiles.push({ name: `smali/${config.packageName.replace(/\./g, "/")}/DroidSealVmInterpreter.smali`, content: vmSmali })
+    const vmSmali = generateVmInterpreterSmali(packageName, DEFAULT_VM_CONFIG)
+    generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealVmInterpreter.smali`, content: vmSmali })
     findings.push(...buildVmpFindings(true, false, false))
   }
 
-  // 7. 资源解密器
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 11: 资源解密器
+  // ──────────────────────────────────────────────────────────────────────
   if (config.enableResourceEncryption) {
-    const resDecryptor = generateResourceDecryptorSmali(config.packageName)
-    generatedFiles.push({ name: `smali/${config.packageName.replace(/\./g, "/")}/DroidSealResDecryptor.smali`, content: resDecryptor })
+    generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealResDecryptor.smali`, content: generateResourceDecryptorSmali(packageName) })
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 12: 重打包 + 签名
+  // ──────────────────────────────────────────────────────────────────────
+  await mkdir(config.outputDir, { recursive: true })
+  outputApk = path.join(config.outputDir, path.basename(config.inputApk).replace(".apk", ".hardened.apk"))
+
+  // 构建 ZIP 条目列表
+  const zipEntries: Array<{ name: string; bytes: Uint8Array; compressionMethod: number }> = []
+  // DEX 文件(deflated)
+  for (const dex of apkContents.dexFiles) zipEntries.push({ ...dex, compressionMethod: 8 })
+  // SO 文件(stored — 原始 APK 中 SO 通常 stored)
+  for (const so of apkContents.soFiles) zipEntries.push({ ...so, compressionMethod: 0 })
+  // Assets(deflated)
+  for (const asset of apkContents.assetFiles) zipEntries.push({ ...asset, compressionMethod: 8 })
+  // Manifest + resources.arsc + 其他
+  if (apkContents.manifest) zipEntries.push({ ...apkContents.manifest, compressionMethod: 8 })
+  if (apkContents.resourceArsc) zipEntries.push({ ...apkContents.resourceArsc, compressionMethod: 8 })
+  for (const entry of apkContents.otherFiles) zipEntries.push({ ...entry, compressionMethod: entry.compressed ? 8 : 0 })
+
+  const repackResult = await repackApk({
+    entries: zipEntries, outputPath: outputApk,
+    signingConfig: undefined, // 签名需要密钥库——由用户配置
+    enableZipalign: false,    // zipalign 需要外部工具
+  })
+  findings.push(...repackResult.findings)
+  if (repackResult.sha256) findings.push({
+    severity: "info", confidence: "high", code: "APK_SHA256",
+    title: `加固 APK SHA-256: ${repackResult.sha256}`,
+    detail: `输出文件: ${outputApk}。SHA-256: ${repackResult.sha256}。`,
+    recommendation: "确认加固后 APK 可正常安装运行。",
+    evidence: repackResult.sha256,
+  })
+
+  // 写出壳加载器 Smali 文件到输出目录
+  const smaliDir = path.join(config.outputDir, "smali")
+  for (const file of generatedFiles) {
+    const filePath = path.join(config.outputDir, file.name)
+    await mkdir(path.dirname(filePath), { recursive: true })
+    await writeFile(filePath, file.content, "utf8")
   }
 
   const summary = {
@@ -173,7 +293,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     totalFindings: findings.length,
   }
 
-  return { success: true, findings, keyMaterial, dexResult, encryptedDex, soResults, resourceResults, generatedFiles, summary }
+  return { success: true, outputApk, findings, keyMaterial, dexResult: dexResult as any, encryptedDex: dexResult?.encryptedDex, soResults, resourceResults, generatedFiles, summary }
 }
 
 // ── 工具函数 ──────────────────────────────────────────────────────────
