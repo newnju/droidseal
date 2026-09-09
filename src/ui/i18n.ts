@@ -66,23 +66,19 @@ const en = {
 
   // 欢迎页
   welcomeTitle: "Welcome to DroidSeal",
-  welcomeDesc1:
-    "DroidSeal runs the Release build, R8/Manifest/APK audit, security baseline, zipalign, apksigner signing and verification entirely on this machine.",
-  welcomeDesc2:
-    "Not familiar with the flow? Choose “Guided”; every step explains its purpose and keeps jargon in the original form.",
-  welcomeDesc3:
-    "“Skipped” marks not-applicable, user choice, per-config, safety protection, or a missing prerequisite APK; skipping is not failure.",
-  welcomeDesc4: "All processing uses an isolated copy; failures roll back to the last valid APK.",
+  welcomeDesc1: "DroidSeal runs the full audit + hardening pipeline locally: source audit, APK audit, DEX/SO/resource/string encryption, runtime protection, signing.",
+  welcomeDesc2: "One-click needs only a path — all options auto-configured. Guided mode confirms each step.",
+  welcomeDesc3: "All processing uses an isolated copy; failures roll back. Skipping is not always a failure.",
+  welcomeDesc4: "Paste an APK path to auto-enter one-click mode; paste a project directory for audit mode.",
 
-  // 输入提示(被动提示行)
-  passiveRecovery: "No input needed · click a recovery action above, or press D / H / R",
-  passiveChoice: "No input needed · click an option above, or press the matching number key",
-  passiveReady: "Configuration ready · click “Start”, or press Enter",
-  passiveBusy: "Processing · no input needed right now",
-  passiveDone: "Pipeline finished · use the buttons above to start a new task or exit",
-  passiveFailureAdvance: "No input needed · click the rollback button, or press Enter to continue",
-  passiveGuided: "No input needed · click “Execute”/“Skip”, or press Enter / S",
-  passiveOneClick: "Running continuously · no input needed",
+  passiveRecovery: "Click a recovery option, or press D / H / R",
+  passiveChoice: "Click an option above, or press the shortcut key",
+  passiveReady: "Ready · click \"Start\" or press Enter",
+  passiveBusy: "Processing · please wait",
+  passiveDone: "Done · use the buttons above to start a new task or exit",
+  passiveFailureAdvance: "Click the rollback button, or press Enter to continue",
+  passiveGuided: "Click \"Execute\"/\"Skip\", or press Enter / S",
+  passiveOneClick: "Running · please wait",
 
   // 按钮
   btnStart: "Start",
@@ -475,19 +471,19 @@ const zh: Record<keyof typeof en, string> = {
   bottomBar: "交互区 {zoom}% · Ctrl± · 敏感信息已脱敏",
 
   welcomeTitle: "欢迎使用 DroidSeal",
-  welcomeDesc1: "DroidSeal 在本机完成 Release 构建、R8/Manifest/APK 审计、安全审计基线、zipalign、apksigner 签名与验证。",
-  welcomeDesc2: "不熟悉流程可选择“分步处理”；每一步都会说明用途，专业术语保持原名。",
-  welcomeDesc3: "“跳过”会标明是不适用、用户选择、按配置、安全保护或缺少前置 APK；跳过不一定是失败。",
-  welcomeDesc4: "所有处理使用独立副本，失败时回退到上一个有效 APK。",
+  welcomeDesc1: "DroidSeal 在本机完成审计+加固全流程：源码审计、APK 审计、DEX/SO/资源/字符串加密、运行时保护、签名验证。",
+  welcomeDesc2: "“一键处理”只需输入路径，自动配置全部选项并执行；“分步处理”每步确认后执行。",
+  welcomeDesc3: "所有处理使用独立副本，失败时回退到上一个有效 APK；跳过不一定是失败。",
+  welcomeDesc4: "输入 APK 路径自动进入一键模式；输入项目目录进入审计模式。",
 
-  passiveRecovery: "无需输入文字 · 请点击上方恢复方式，或按 D / H / R",
-  passiveChoice: "无需输入文字 · 请点击上方选项，或直接按对应数字键",
-  passiveReady: "配置已就绪 · 点击“开始处理”，或按 Enter",
-  passiveBusy: "正在处理 · 当前不需要输入",
-  passiveDone: "流程已结束 · 请使用上方按钮开始新任务或退出",
-  passiveFailureAdvance: "无需输入文字 · 点击回退按钮，或按 Enter 进入下一步",
-  passiveGuided: "无需输入文字 · 点击“执行此步”/“跳过”，或按 Enter / S",
-  passiveOneClick: "正在连续处理 · 当前不需要输入",
+  passiveRecovery: "无需输入 · 点击上方恢复方式，或按 D / H / R",
+  passiveChoice: "无需输入 · 点击上方选项，或直接按对应数字键",
+  passiveReady: "配置已就绪 · 点击\"开始处理\"，或按 Enter",
+  passiveBusy: "正在处理 · 请等待",
+  passiveDone: "流程已结束 · 使用上方按钮开始新任务或退出",
+  passiveFailureAdvance: "点击回退按钮，或按 Enter 进入下一步",
+  passiveGuided: "点击\"执行此步\"/\"跳过\"，或按 Enter / S",
+  passiveOneClick: "正在连续处理 · 请等待",
 
   btnStart: "开始处理",
   btnStartDetail: "按上方摘要创建流水线",

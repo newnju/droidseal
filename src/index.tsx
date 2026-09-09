@@ -80,11 +80,13 @@ function usage(): string {
   --json                   JSON 格式输出(适合 CI/CD)
 
 batch 子命令:
-  droidseal batch <清单.json | --dir <目录>> [选项]
+  droidseal batch <目标> [选项]
+    目标:目录(扫描*.apk) 或 JSON清单文件
     --base <url>           REST API 地址(默认:http://127.0.0.1:8787)
     --token <token>        Bearer 认证令牌
     --parallel <N>         并发数(默认:1)
     --retry <N>            失败重试次数(默认:0)
+    --report <file>        汇总报告输出路径(默认:batch-report.json)
 
 TUI 内置命令:
   /guided    分步处理
@@ -310,46 +312,72 @@ if (resolved && resolved.inputPath) {
 // ── batch(批量审计) ──────────────────────────────────────────────────────
 
 if (args[0] === "batch") {
-  const { readFile: rf, readdir } = await import("node:fs/promises")
+  const { readFile: rf, readdir, writeFile: wf, stat: fstat } = await import("node:fs/promises")
   const p = await import("node:path")
 
-  const dirMode = args[1] === "--dir"
-  const manifestPath = dirMode ? args[2] : args[1]
-  if (!manifestPath) {
-    console.error("用法: droidseal batch <清单.json> [选项]  或  droidseal batch --dir <APK目录> [选项]")
+  const target = args[1]
+  if (!target || target.startsWith("-")) {
+    console.error("用法: droidseal batch <目录或清单.json> [选项]")
     process.exit(1)
   }
+
+  // 自动检测:目录 → 扫描 *.apk; 文件 → 读 JSON 清单
+  const targetStat = await fstat(target).catch(() => null)
+  const isDir = targetStat?.isDirectory() ?? false
+  const isFile = targetStat?.isFile() ?? false
 
   const base = getArg("--base") ?? "http://127.0.0.1:8787"
   const token = getArg("--token")
   const parallel = parseInt(getArg("--parallel") ?? "1", 10) || 1
   const retry = parseInt(getArg("--retry") ?? "0", 10) || 0
+  const reportPath = getArg("--report") ?? "batch-report.json"
 
   interface BatchItem { name: string; inputKind: "apk" | "project"; inputPath: string; signingMode: string }
   let items: BatchItem[]
 
-  if (dirMode) {
-    const entries = await readdir(manifestPath, { recursive: true }).catch(() => [] as string[])
+  if (isDir) {
+    // 目录模式:递归扫描 *.apk
+    const entries = await readdir(target, { recursive: true }).catch(() => [] as string[])
     const apks = entries.filter((e: string) => e.toLowerCase().endsWith(".apk"))
-    if (apks.length === 0) { console.error(`目录中未找到 APK: ${manifestPath}`); process.exit(1) }
+    if (apks.length === 0) { console.error(`目录中未找到 APK: ${target}`); process.exit(1) }
     items = apks.map((entry: string) => ({
       name: p.basename(entry),
       inputKind: "apk" as const,
-      inputPath: p.join(manifestPath, entry),
+      inputPath: p.resolve(p.join(target, entry)),
       signingMode: "skip",
     }))
-    console.log(`目录批量模式:发现 ${items.length} 个 APK`)
+  } else if (isFile) {
+    // JSON 清单模式
+    items = JSON.parse(await rf(target, "utf8")) as BatchItem[]
   } else {
-    items = JSON.parse(await rf(manifestPath, "utf8")) as BatchItem[]
+    console.error(`目标不存在: ${target}`)
+    process.exit(1)
   }
   if (items.length === 0) { console.error("清单为空"); process.exit(1) }
+
+  console.log(`DroidSeal 批量审计`)
+  console.log(`  目标: ${target} (${isDir ? "目录" : "清单"})`)
+  console.log(`  数量: ${items.length} 个`)
+  console.log(`  并发: ${parallel}  重试: ${retry}`)
+  console.log(`  API:  ${base}`)
+  console.log("")
 
   const headers: Record<string, string> = { "Content-Type": "application/json" }
   if (token) headers["Authorization"] = `Bearer ${token}`
 
-  interface RunResult { name: string; ok: boolean; seconds: number; stepsOk: number; gate?: string | undefined; error?: string | undefined }
+  interface RunResult { name: string; ok: boolean; seconds: number; stepsOk: number; stepsSkipped: number; gate?: string | undefined; error?: string | undefined; findings?: number | undefined }
   const results: RunResult[] = []
   const startedAt = Date.now()
+
+  // 进度条
+  let completed = 0
+  const progressBar = () => {
+    const pct = Math.round((completed / items.length) * 100)
+    const filled = Math.round((completed / items.length) * 30)
+    const bar = "█".repeat(filled) + "░".repeat(30 - filled)
+    process.stderr.write(`\r  [${bar}] ${pct}% ${completed}/${items.length}`)
+  }
+  progressBar()
 
   const runOne = async (index: number): Promise<void> => {
     const item = items[index]!
@@ -361,37 +389,66 @@ if (args[0] === "batch") {
       try {
         const res = await fetch(`${base}/run`, { method: "POST", headers, body: JSON.stringify(item) })
         const data: any = await res.json().catch(() => null)
-        if (!data || data.ok !== true) { failure = data?.error?.message ?? `HTTP ${res.status}`; continue }
+        if (!data || data.ok !== true) { failure = data?.error?.message ?? `HTTP ${res.status}`; if (attempts <= retry) continue; break }
         const seconds = (Date.now() - t0) / 1000
         const stepsOk = data.steps?.filter((s: any) => s.status === "success").length ?? 0
-        console.log(`[${index + 1}/${items.length}] ${item.name} ✓ ${seconds.toFixed(1)}s ${stepsOk}步${data.gate ? ` 门禁:${data.gate}` : ""}${attempts > 1 ? ` 重试${attempts - 1}次` : ""}`)
-        results[index] = { name: item.name, ok: true, seconds, stepsOk, gate: data.gate }
+        const stepsSkipped = data.steps?.filter((s: any) => s.status === "skipped").length ?? 0
+        results[index] = { name: item.name, ok: true, seconds, stepsOk, stepsSkipped, gate: data.gate, findings: data.findings?.length }
+        completed++
+        progressBar()
         return
-      } catch { failure = "请求失败" }
+      } catch { failure = "请求失败"; if (attempts <= retry) continue }
     }
     const seconds = (Date.now() - t0) / 1000
-    console.log(`[${index + 1}/${items.length}] ${item.name} ✗ ${seconds.toFixed(1)}s ${failure ?? ""}`)
-    results[index] = { name: item.name, ok: false, seconds, stepsOk: 0, error: failure }
+    results[index] = { name: item.name, ok: false, seconds, stepsOk: 0, stepsSkipped: 0, error: failure }
+    completed++
+    progressBar()
   }
 
+  // 并发池
   let next = 0
   const workers = Array.from({ length: Math.min(parallel, items.length) }, async () => {
     while (true) { const idx = next++; if (idx >= items.length) return; await runOne(idx) }
   })
   await Promise.all(workers)
+  process.stderr.write("\r" + " ".repeat(80) + "\r")
 
+  // 汇总
   const ok = results.filter((r) => r.ok).length
+  const failed = results.filter((r) => !r.ok).length
   const totalSeconds = ((Date.now() - startedAt) / 1000).toFixed(1)
+  const totalFindings = results.filter((r) => r.ok).reduce((s, r) => s + (r.findings ?? 0), 0)
+  const blocked = results.filter((r) => r.gate === "block").length
+
   console.log(`\n===== 批量汇总 =====`)
-  console.log(`成功 ${ok}/${results.length}  总耗时 ${totalSeconds}s`)
+  console.log(`成功 ${ok}/${results.length}  失败 ${failed}  总耗时 ${totalSeconds}s  总发现 ${totalFindings} 条`)
+  if (blocked > 0) console.log(`门禁阻断: ${blocked} 个`)
+  console.log("")
   for (const r of results) {
-    console.log(`  ${r.ok ? "✓" : "✗"} ${r.name}${r.ok ? ` (${r.seconds.toFixed(1)}s, ${r.stepsOk}步)` : ` ${r.error ?? ""}`}`)
+    if (r.ok) {
+      console.log(`  ✓ ${r.name}  ${r.seconds.toFixed(1)}s  ${r.stepsOk}步${r.gate ? `  门禁:${r.gate}` : ""}`)
+    } else {
+      console.log(`  ✗ ${r.name}  ${r.error ?? "未知错误"}`)
+    }
   }
-  if (results.some((r) => r.gate === "block")) {
-    console.log("\n检测到 block 门禁条目——非零退出(CI 门禁)")
-    process.exitCode = 1
+
+  // 输出汇总报告 JSON
+  const report = {
+    timestamp: new Date().toISOString(),
+    target,
+    total: results.length,
+    success: ok,
+    failed,
+    blocked,
+    totalSeconds: parseFloat(totalSeconds),
+    totalFindings,
+    results,
   }
-  process.exit(ok < results.length ? 1 : 0)
+  await wf(reportPath, JSON.stringify(report, null, 2), "utf8").catch(() => undefined)
+  console.log(`\n报告已保存: ${reportPath}`)
+
+  if (blocked > 0 || failed > 0) process.exitCode = 1
+  process.exit()
 }
 
 // ── 未知子命令 ──────────────────────────────────────────────────────────
