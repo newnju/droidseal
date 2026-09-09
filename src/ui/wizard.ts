@@ -59,6 +59,18 @@ export interface WizardDraft {
   country: string
   validityDays: number
   keyAlgorithm: "RSA" | "EC"
+  // 加固选项
+  enableHarden?: boolean
+  enableDexEncryption?: boolean
+  enableSoEncryption?: boolean
+  enableResourceEncryption?: boolean
+  enableStringEncryption?: boolean
+  enableRuntimeProtection?: boolean
+  enableVmProtection?: boolean
+  enableSplitKey?: boolean
+  enableTripleEntry?: boolean
+  enableRandomNames?: boolean
+  hardenAlgorithm?: "aes-256-gcm" | "chacha20-poly1305"
 }
 
 export function createDraft(runMode: RunMode): WizardDraft {
@@ -81,7 +93,76 @@ export function createDraft(runMode: RunMode): WizardDraft {
     country: "CN",
     validityDays: 9_125,
     keyAlgorithm: "RSA",
+    // 一键模式默认加固配置
+    enableHarden: true,
+    enableDexEncryption: true,
+    enableSoEncryption: true,
+    enableResourceEncryption: true,
+    enableStringEncryption: true,
+    enableRuntimeProtection: true,
+    enableVmProtection: false,
+    enableSplitKey: true,
+    enableTripleEntry: true,
+    enableRandomNames: true,
+    hardenAlgorithm: "aes-256-gcm",
   }
+}
+
+/**
+ * 创建一键模式预填充 draft(跳过所有可选问题,仅需输入路径)。
+ */
+export function createOneClickDraft(inputPath: string): WizardDraft {
+  const isApk = inputPath.toLowerCase().endsWith(".apk")
+  return {
+    runMode: "one-click",
+    inputKind: isApk ? "apk" : "project",
+    inputPath,
+    gradleTask: "assembleRelease",
+    buildMode: "full",
+    explicitBuiltApkPath: "",
+    outputDirectory: isApk ? "./droidseal-report" : "./build/droidseal-report",
+    enableAlignment: true,
+    enableWebAssetMinification: true,
+    enableArscObfuscation: false,
+    keepIntermediates: false,
+    signingMode: "skip",
+    renewKey: false,
+    keystorePath: "",
+    keyAlias: "",
+    storePassword: "",
+    keyPassword: "",
+    commonName: "",
+    organizationalUnit: "",
+    organization: "",
+    locality: "",
+    state: "",
+    country: "CN",
+    validityDays: 9_125,
+    keyAlgorithm: "RSA",
+    // 加固默认配置
+    enableHarden: isApk,
+    enableDexEncryption: true,
+    enableSoEncryption: true,
+    enableResourceEncryption: true,
+    enableStringEncryption: true,
+    enableRuntimeProtection: true,
+    enableVmProtection: false,
+    enableSplitKey: true,
+    enableTripleEntry: true,
+    enableRandomNames: true,
+    hardenAlgorithm: "aes-256-gcm",
+  }
+}
+
+/**
+ * 一键模式:自动填充所有问题为默认值,返回所有已回答的 ID。
+ */
+export function autoAnswerAll(draft: WizardDraft): Set<string> {
+  const answered = new Set<string>()
+  for (const q of questionsFor(draft)) {
+    answered.add(q.id)
+  }
+  return answered
 }
 
 function withoutOuterQuotes(value: string): string {
@@ -375,6 +456,128 @@ export function questionsFor(draft: WizardDraft): WizardQuestion[] {
       },
     )
   }
+
+  // ── 加固选项(APK 模式才展示) ──
+  if (draft.inputKind === "apk") {
+    questions.push(
+      {
+        id: "enableHarden",
+        kind: "choice",
+        title: "加固保护",
+        prompt: "是否对 APK 进行加固保护?(DEX 加密 + SO 加密 + 运行时保护)",
+        detail: "加固会在审计完成后额外执行:方法抽取、DEX/SO/资源/字符串加密、三重入口壳加载器、运行时反调试。",
+        choices: [
+          { value: "yes", label: "是 — 审计+加固", detail: "先审计发现漏洞,再加固保护整个 APK", shortcut: "1" },
+          { value: "no", label: "否 — 仅审计", detail: "只做安全审计,不修改 APK 结构", shortcut: "2" },
+        ],
+      },
+    )
+  }
+
+  if (draft.enableHarden === true) {
+    questions.push(
+      {
+        id: "enableDexEncryption",
+        kind: "choice",
+        title: "DEX 加密",
+        prompt: "启用 DEX 加密?(方法抽取 + AES-256-GCM/ChaCha20 整体加密)",
+        detail: "方法抽取挖空 CodeItem,整体加密保护 classes.dex。运行时通过壳 Application 解密。",
+        choices: [
+          { value: "yes", label: "是(推荐)", detail: "方法抽取 + 整体加密,抗静态分析最强", shortcut: "1" },
+          { value: "no", label: "否", detail: "跳过 DEX 加密", shortcut: "2" },
+        ],
+      },
+      {
+        id: "enableSoEncryption",
+        kind: "choice",
+        title: "SO 加密",
+        prompt: "启用 Native SO 加密?(AES-256-GCM 全文件 / RC4 段级)",
+        detail: "加密 lib/ 目录下的 .so 文件,运行时通过 JNI 解密。",
+        choices: [
+          { value: "yes", label: "是(推荐)", detail: "全文件 AES-256-GCM + 段级 RC4 双模式", shortcut: "1" },
+          { value: "no", label: "否", detail: "跳过 SO 加密", shortcut: "2" },
+        ],
+      },
+      {
+        id: "enableResourceEncryption",
+        kind: "choice",
+        title: "资源加密",
+        prompt: "启用 assets/ 资源加密?(AES-256-GCM)",
+        detail: "加密 assets/ 目录下的文件,运行时解密到缓存目录。",
+        choices: [
+          { value: "yes", label: "是", detail: "加密所有 assets 文件(跳过已加密和超大文件)", shortcut: "1" },
+          { value: "no", label: "否", detail: "跳过资源加密", shortcut: "2" },
+        ],
+      },
+      {
+        id: "enableStringEncryption",
+        kind: "choice",
+        title: "字符串加密",
+        prompt: "启用敏感字符串加密?(XOR/AES + 每串随机密钥)",
+        detail: "扫描 DEX 字符串池中的敏感字符串(password/token/key/secret),加密后通过解密器还原。",
+        choices: [
+          { value: "yes", label: "是(推荐)", detail: "敏感模式匹配 + 高熵检测 + XOR 加密", shortcut: "1" },
+          { value: "no", label: "否", detail: "跳过字符串加密", shortcut: "2" },
+        ],
+      },
+      {
+        id: "enableRuntimeProtection",
+        kind: "choice",
+        title: "运行时保护",
+        prompt: "启用运行时保护?(反 Dump + 反 Frida + Timing-safe 签名 + Crash-on-detect)",
+        detail: "注入运行时检测 Smali:反内存 Dump、反 Frida CRC、Timing-safe 签名比对、检测到攻击直接 crash。",
+        choices: [
+          { value: "yes", label: "是(推荐)", detail: "8 项运行时检测,可分别启用/禁用", shortcut: "1" },
+          { value: "no", label: "否", detail: "跳过运行时保护", shortcut: "2" },
+        ],
+      },
+      {
+        id: "enableVmProtection",
+        kind: "choice",
+        title: "VMP 虚拟机保护",
+        prompt: "启用 VMP 虚拟机保护?(性能影响较大)",
+        detail: "25 条 VM 操作码 + dispatch loop + 寄存器/栈模拟。性能影响较大,默认关闭。",
+        choices: [
+          { value: "no", label: "否(推荐)", detail: "跳过 VMP(性能影响较大)", shortcut: "1" },
+          { value: "yes", label: "是", detail: "启用 VMP 虚拟机保护", shortcut: "2" },
+        ],
+      },
+      {
+        id: "enableSplitKey",
+        kind: "choice",
+        title: "Split-Key 混淆",
+        prompt: "启用 Split-Key 密钥混淆?(密钥拆分两部分异或)",
+        detail: "将加密密钥拆分为两部分异或存储,静态分析无法直接提取完整密钥。",
+        choices: [
+          { value: "yes", label: "是(推荐)", detail: "密钥拆分 + 编译时内联", shortcut: "1" },
+          { value: "no", label: "否", detail: "密钥整体存储", shortcut: "2" },
+        ],
+      },
+      {
+        id: "enableTripleEntry",
+        kind: "choice",
+        title: "三重入口",
+        prompt: "启用三重入口壳加载器?(AppComponentFactory > ContentProvider > Application)",
+        detail: "三级入口兜底,兼容 Android 4.4~16。AppComponentFactory(Android 9+)为最早入口。",
+        choices: [
+          { value: "yes", label: "是(推荐)", detail: "三重入口兼容性最好", shortcut: "1" },
+          { value: "no", label: "否", detail: "仅 Application 入口", shortcut: "2" },
+        ],
+      },
+      {
+        id: "hardenAlgorithm",
+        kind: "choice",
+        title: "加密算法",
+        prompt: "选择加固加密算法",
+        detail: "AES-256-GCM 为标准选择;ChaCha20-Poly1305 在 ARM 设备上有硬件加速。",
+        choices: [
+          { value: "aes-256-gcm", label: "AES-256-GCM(推荐)", detail: "NIST 标准 AEAD,Android 原生支持", shortcut: "1" },
+          { value: "chacha20-poly1305", label: "ChaCha20-Poly1305", detail: "ARM 硬件加速,移动端性能更优", shortcut: "2" },
+        ],
+      },
+    )
+  }
+
   return questions
 }
 
@@ -497,6 +700,38 @@ export function applyAnswer(
       if (value !== "RSA" && value !== "EC") throw new Error(t("errKeyAlg"))
       next.keyAlgorithm = value
       break
+    // ── 加固选项 ──
+    case "enableHarden":
+      next.enableHarden = value === "yes"
+      break
+    case "enableDexEncryption":
+      next.enableDexEncryption = value === "yes"
+      break
+    case "enableSoEncryption":
+      next.enableSoEncryption = value === "yes"
+      break
+    case "enableResourceEncryption":
+      next.enableResourceEncryption = value === "yes"
+      break
+    case "enableStringEncryption":
+      next.enableStringEncryption = value === "yes"
+      break
+    case "enableRuntimeProtection":
+      next.enableRuntimeProtection = value === "yes"
+      break
+    case "enableVmProtection":
+      next.enableVmProtection = value === "yes"
+      break
+    case "enableSplitKey":
+      next.enableSplitKey = value === "yes"
+      break
+    case "enableTripleEntry":
+      next.enableTripleEntry = value === "yes"
+      break
+    case "hardenAlgorithm":
+      if (value !== "aes-256-gcm" && value !== "chacha20-poly1305") throw new Error("无效算法")
+      next.hardenAlgorithm = value
+      break
     default:
       throw new Error(t("errUnknownField").replace("{id}", question.id))
   }
@@ -563,6 +798,20 @@ export function buildPipelineConfig(draft: WizardDraft): PipelineConfig {
     keepIntermediates: draft.keepIntermediates ?? false,
     signing,
     protection,
+    // 加固选项(从 wizard draft 传入)
+    ...(draft.enableHarden ? {
+      enableHarden: true,
+      enableDexEncryption: draft.enableDexEncryption ?? true,
+      enableSoEncryption: draft.enableSoEncryption ?? true,
+      enableResourceEncryption: draft.enableResourceEncryption ?? true,
+      enableStringEncryption: draft.enableStringEncryption ?? true,
+      enableRuntimeProtection: draft.enableRuntimeProtection ?? true,
+      enableVmProtection: draft.enableVmProtection ?? false,
+      enableSplitKey: draft.enableSplitKey ?? true,
+      enableTripleEntry: draft.enableTripleEntry ?? true,
+      enableRandomNames: true,
+      hardenAlgorithm: draft.hardenAlgorithm ?? "aes-256-gcm",
+    } : {}),
   }
   if (draft.explicitBuiltApkPath) config.explicitBuiltApkPath = draft.explicitBuiltApkPath
   return config
@@ -604,5 +853,11 @@ export function summaryLines(draft: WizardDraft): string[] {
           t("sumPassword"),
         ]
       : []),
+    // 加固摘要
+    ...(draft.enableHarden ? [
+      `加固: 启用 (${draft.hardenAlgorithm ?? "aes-256-gcm"})`,
+      `  DEX: ${draft.enableDexEncryption !== false ? "✓" : "✗"}  SO: ${draft.enableSoEncryption !== false ? "✓" : "✗"}  资源: ${draft.enableResourceEncryption !== false ? "✓" : "✗"}  字符串: ${draft.enableStringEncryption !== false ? "✓" : "✗"}`,
+      `  运行时: ${draft.enableRuntimeProtection !== false ? "✓" : "✗"}  VMP: ${draft.enableVmProtection ? "✓" : "✗"}  Split-Key: ${draft.enableSplitKey !== false ? "✓" : "✗"}  三重入口: ${draft.enableTripleEntry !== false ? "✓" : "✗"}`,
+    ] : ["加固: 未启用(仅审计)"]),
   ]
 }

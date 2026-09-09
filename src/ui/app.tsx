@@ -63,6 +63,8 @@ import {
   applyAnswer,
   buildPipelineConfig,
   createDraft,
+  createOneClickDraft,
+  autoAnswerAll,
   nextQuestion,
   questionsFor,
   summaryLines,
@@ -571,11 +573,75 @@ export function App() {
       mode === "one-click" ? t("msgOneClickSelected") : t("msgGuidedSelected"),
       [
         mode === "one-click"
-          ? "填写必要信息后，所有步骤将连续执行；失败步骤自动回退并继续。"
+          ? "输入 APK/项目路径后自动配置并执行；失败步骤自动回退并继续。"
           : "填写必要信息后，每个步骤执行前都会再次询问，可以点击“跳过”。",
       ],
     )
-    presentQuestion(questionsFor(nextDraft)[0], nextDraft)
+    if (mode === "one-click") {
+      presentQuestion({
+        id: "oneclick-path",
+        kind: "text",
+        title: "输入路径",
+        prompt: "请输入 APK 文件或项目目录路径",
+        detail: "支持 .apk 文件或 Gradle 项目目录；所有选项将自动配置为推荐值。",
+        placeholder: "C:\\path\\to\\app.apk",
+      }, nextDraft)
+    } else {
+      presentQuestion(questionsFor(nextDraft)[0], nextDraft)
+    }
+  }
+
+  /**
+   * 一键模式:路径填写后自动填充所有默认值并直接执行。
+   */
+  const submitOneClickPath = (raw: string) => {
+    const inputPath = raw.trim()
+    if (!inputPath) return
+    const oneClickDraft = createOneClickDraft(inputPath)
+    const allAnswered = autoAnswerAll(oneClickDraft)
+    setDraft(oneClickDraft)
+    setAnswered(allAnswered)
+    setSecretBuffer("")
+    addMessage("user", inputPath)
+    addMessage("assistant", "自动配置完成", [
+      `输入: ${inputPath}`,
+      `类型: ${oneClickDraft.inputKind === "apk" ? "APK" : "项目"}`,
+      oneClickDraft.enableHarden ? "加固: 启用 (AES-256-GCM + 全保护层)" : "加固: 未启用 (仅审计)",
+      "即将开始执行…",
+    ])
+    setTimeout(() => {
+      const config = buildPipelineConfig(oneClickDraft)
+      const active = new Pipeline(config)
+      active.onEvent((event) => {
+        if (event.type === "step-started") {
+          setSteps((prev) => prev.map((s) => s.id === event.step.id ? { ...s, status: "processing" } : s))
+        } else if (event.type === "step-progress") {
+          setThinking(event.message)
+        } else if (event.type === "step-finished") {
+          setSteps((prev) => prev.map((s) => s.id === event.step.id ? { ...s, status: event.result.status, result: event.result } : s))
+          setThinking("")
+        }
+      })
+      setPipeline(active)
+      setScreen("pipeline")
+      setBusy(true)
+      void runOneClickMode(active)
+    }, 300)
+  }
+
+  /**
+   * 一键模式执行:连续运行所有步骤,失败自动回退并继续。
+   */
+  const runOneClickMode = async (active: Pipeline) => {
+    for (const definition of STEP_DEFINITIONS) {
+      if (definition.id === "doctor") continue
+      const result = await active.runStep(definition.id)
+      if (result.status === "failed" && definition.id === "keystore") {
+        await resumeSigningAfterFailure(definition.id)
+        return
+      }
+    }
+    finishPipeline()
   }
 
   const submitWizardAnswer = (raw: string, displayOverride?: string) => {
@@ -1039,7 +1105,13 @@ export function App() {
     }
 
     if (screen() === "wizard") {
-      if (currentQuestion()) submitWizardAnswer(raw)
+      const q = currentQuestion()
+      // 一键模式:路径输入 → 自动配置并直接执行
+      if (q && q.id === "oneclick-path") {
+        if (raw.trim()) submitOneClickPath(raw)
+        return
+      }
+      if (q) submitWizardAnswer(raw)
       else if (["开始", "执行", "确认", "start", "run"].includes(raw.toLowerCase())) startConfiguredPipeline()
       else addMessage("warning", "配置已完成", ["点击“开始处理”，或输入“开始”。"])
       return
