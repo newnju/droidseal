@@ -30,6 +30,7 @@ export interface ApkContents {
 
 import { spawnSync } from "node:child_process"
 import { readFile } from "node:fs/promises"
+import { inflateRawSync } from "node:zlib"
 
 function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
   const entries: ApkEntry[] = []
@@ -69,9 +70,18 @@ function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
     const dataSize = compressionMethod === 0 ? uncompressedSize : compressedSize
 
     if (dataOffset + dataSize <= bytes.length) {
+      let entryBytes = bytes.slice(dataOffset, dataOffset + dataSize)
+      // deflate 压缩的条目需要解压
+      if (compressionMethod === 8 && entryBytes.length > 0) {
+        try {
+          entryBytes = new Uint8Array(inflateRawSync(entryBytes))
+        } catch {
+          // 解压失败则保留原始字节
+        }
+      }
       entries.push({
         name,
-        bytes: bytes.slice(dataOffset, dataOffset + dataSize),
+        bytes: entryBytes,
         compressed: compressionMethod !== 0,
         compressionMethod,
         crc32,
