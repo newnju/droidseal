@@ -109,10 +109,40 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   // ──────────────────────────────────────────────────────────────────────
   // Step 1: 解包 APK
   // ──────────────────────────────────────────────────────────────────────
-  const apkContents = await unpackApk(config.inputApk)
+  let apkContents: Awaited<ReturnType<typeof unpackApk>>
+  try {
+    apkContents = await unpackApk(config.inputApk)
+  } catch (unpackError) {
+    // unpackApk 失败时降级:创建空 ApkContents,跳过解包步骤
+    findings.push({
+      severity: "high", confidence: "high", code: "APK_UNPACK_FALLBACK",
+      title: "APK 解包失败,启用降级模式",
+      detail: `错误: ${unpackError instanceof Error ? unpackError.message : String(unpackError)}`,
+      recommendation: "APK 可能含有畸形 ZIP 条目;加固将在降级模式下执行。",
+      evidence: String(unpackError).slice(0, 200),
+    })
+    apkContents = {
+      entries: [], dexFiles: [], soFiles: [], assetFiles: [],
+      manifest: undefined, resourceArsc: undefined, otherFiles: [],
+      packageName: "",
+    }
+  }
+  // 降级补救:如果 unpackApk 返回空 dexFiles,尝试用 Bun 内置解压直接提取
+  if (apkContents.dexFiles.length === 0) {
+    try {
+      const { $ } = await import("bun")
+      const result = await $`unzip -l ${config.inputApk} | grep classes.dex`.text().catch(() => "")
+      if (result.includes("classes.dex")) {
+        // 用 unzip -p 直接解压到内存
+        const dexBuf = await $`unzip -p ${config.inputApk} classes.dex`.arrayBuffer().catch(() => null)
+        if (dexBuf && dexBuf.byteLength > 0 && dexBuf.byteLength < 50_000_000) {
+          apkContents.dexFiles = [{ name: "classes.dex", bytes: new Uint8Array(dexBuf), compressed: false, compressionMethod: 0, crc32: 0 }]
+          findings.push({ severity: "info", confidence: "high", code: "APK_DEX_FALLBACK", title: "通过 unzip 直接提取 classes.dex", detail: `大小: ${dexBuf.byteLength}B`, recommendation: "", evidence: "unzip-fallback" })
+        }
+      }
+    } catch { /* unzip fallback 也失败则继续 */ }
+  }
   findings.push(...buildUnpackFindings(apkContents))
-
-  // 提取包名和 Application 类名
   let packageName = config.packageName
   let originalApplication = config.originalApplication
   if (apkContents.manifest) {
@@ -125,10 +155,15 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   // ──────────────────────────────────────────────────────────────────────
   // Step 2: 密钥生成
   // ──────────────────────────────────────────────────────────────────────
-  const apkBytes = await readFile(config.inputApk)
+  let apkBytes: Uint8Array
+  try {
+    apkBytes = new Uint8Array(await readFile(config.inputApk))
+  } catch (readErr) {
+    findings.push({ severity: "high", confidence: "high", code: "APK_READ_FAILED", title: "APK 文件读取失败", detail: String(readErr), recommendation: "确认 APK 路径正确且文件可读。", evidence: String(readErr).slice(0, 200) })
+    return { success: false, findings, soResults: [], resourceResults: [], generatedFiles: [], summary: { dexProtected: false, soProtected: false, resourceProtected: false, stringProtected: false, runtimeProtected: false, vmProtected: false, totalFindings: findings.length } }
+  }
   const apkSha256 = createHash("sha256").update(apkBytes).digest("hex")
   keyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "dex", config.enableSplitKey)
-  // SO/资源用不同 purpose 派生不同密钥
   const soKeyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "so", config.enableSplitKey)
   const resKeyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "resource", config.enableSplitKey)
 

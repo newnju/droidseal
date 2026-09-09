@@ -288,6 +288,7 @@ if (resolved && resolved.inputPath) {
       }
     } catch (error) {
       console.error(`加固失败: ${error instanceof Error ? error.message : String(error)}`)
+      if (error instanceof Error && error.stack) console.error(error.stack)
     }
   }
 
