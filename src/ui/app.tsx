@@ -631,14 +631,58 @@ export function App() {
 
   /**
    * 一键模式执行:连续运行所有步骤,失败自动回退并继续。
+   * 如果 enableHarden 为 true,审计完成后自动调用加固流水线。
    */
   const runOneClickMode = async (active: Pipeline) => {
+    const currentDraft = draft()
+    // Phase 1: 审计流水线
     for (const definition of STEP_DEFINITIONS) {
       if (definition.id === "doctor") continue
       const result = await active.runStep(definition.id)
       if (result.status === "failed" && definition.id === "keystore") {
         await resumeSigningAfterFailure(definition.id)
         return
+      }
+    }
+    // Phase 2: 加固流水线(如果启用)
+    if (currentDraft.enableHarden && currentDraft.inputKind === "apk") {
+      addMessage("assistant", "审计完成,开始加固…", [
+        `算法: ${currentDraft.hardenAlgorithm ?? "aes-256-gcm"}`,
+        `保护层: DEX${currentDraft.enableDexEncryption !== false ? "✓" : "✗"} SO${currentDraft.enableSoEncryption !== false ? "✓" : "✗"} 资源${currentDraft.enableResourceEncryption !== false ? "✓" : "✗"} 字符串${currentDraft.enableStringEncryption !== false ? "✓" : "✗"} 运行时${currentDraft.enableRuntimeProtection !== false ? "✓" : "✗"}`,
+      ])
+      try {
+        const { runHardenPipeline, generateHardenReport } = await import("../core/harden-pipeline.ts")
+        const hardenConfig = {
+          inputApk: currentDraft.inputPath,
+          outputDir: currentDraft.outputDirectory + "/hardened",
+          packageName: "com.droidseal.protected",
+          originalApplication: "android.app.Application",
+          algorithm: currentDraft.hardenAlgorithm ?? "aes-256-gcm",
+          enableDexEncryption: currentDraft.enableDexEncryption !== false,
+          enableMethodHollow: currentDraft.enableDexEncryption !== false,
+          enableSoEncryption: currentDraft.enableSoEncryption !== false,
+          enableResourceEncryption: currentDraft.enableResourceEncryption !== false,
+          enableStringEncryption: currentDraft.enableStringEncryption !== false,
+          enableRuntimeProtection: currentDraft.enableRuntimeProtection !== false,
+          enableVmProtection: currentDraft.enableVmProtection ?? false,
+          enableSplitKey: currentDraft.enableSplitKey !== false,
+          enableTripleEntry: currentDraft.enableTripleEntry !== false,
+          enableRandomNames: true,
+          classExclusionPatterns: [] as string[],
+        }
+        const hardenResult = await runHardenPipeline(hardenConfig)
+        if (hardenResult.success) {
+          addMessage("success", "加固完成", [
+            `输出: ${hardenResult.outputApk ?? hardenConfig.outputDir}`,
+            `保护层: ${hardenResult.summary.dexProtected ? "DEX✓" : "DEX✗"} ${hardenResult.summary.soProtected ? "SO✓" : "SO✗"} ${hardenResult.summary.resourceProtected ? "资源✓" : "资源✗"}`,
+            `生成文件: ${hardenResult.generatedFiles.length} 个`,
+          ])
+          if (hardenResult.outputApk) setArtifactPath(hardenResult.outputApk)
+        } else {
+          addMessage("warning", "加固部分完成", [`${hardenResult.findings.length} 条发现;某些保护层可能未完成`])
+        }
+      } catch (error) {
+        addMessage("error", "加固失败", [error instanceof Error ? error.message : String(error)])
       }
     }
     finishPipeline()
