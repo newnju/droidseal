@@ -27,6 +27,7 @@ import { encryptAndReplaceStrings } from "./string-encrypt-writeback.ts"
 import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings } from "./vmp-compiler.ts"
 import { compileNativeSo, generateCmakeListsForShell } from "./native-so-compile.ts"
 import { generateEnhancedRuntimeSmali, generateEnhancedNativeC, buildEnhancedGuardFindings } from "./enhanced-guard.ts"
+import { buildCodeItemTable, encryptCodeItemTable, injectCodeItemTableIntoShellDex, generateCodeItemRestoreHeader } from "./codeitem-table.ts"
 
 // ── 加固配置 ──────────────────────────────────────────────────────────
 
@@ -173,6 +174,31 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
         )
         apkContents.dexFiles[i]!.bytes = resultDex
         findings.push(...injectFindings)
+      }
+    }
+    // Step 4.5: CodeItem 表构建+加密+注入壳 DEX 末尾
+    // (将方法抽取提取的原始 CodeItem 打包为加密 payload,追加到壳 DEX)
+    if (keyMaterial && dexResult && dexResult.hollowResult) {
+      const { extractedCodeItems, stubMethods } = dexResult.hollowResult
+      if (extractedCodeItems.size > 0) {
+        // 构建 CodeItem 表 → 加密 → 注入壳 DEX
+        const ciTable = buildCodeItemTable(extractedCodeItems, stubMethods)
+        const ciEncrypted = encryptCodeItemTable(ciTable, keyMaterial.encryptionKey)
+        // 注入到第一个 DEX(壳 DEX)
+        const shellDexWithTable = injectCodeItemTableIntoShellDex(
+          apkContents.dexFiles[0]!.bytes,
+          ciEncrypted,
+        )
+        apkContents.dexFiles[0]!.bytes = shellDexWithTable
+        findings.push({
+          severity: "info",
+          confidence: "high",
+          code: "CODEITEM_TABLE_INJECTED",
+          title: `CodeItem 表注入壳 DEX:${stubMethods.length} 个方法的原始 CodeItem`,
+          detail: `CodeItem 表 ${ciTable.length}B → AES-256-GCM 加密 ${ciEncrypted.length}B → 注入壳 DEX 末尾。Native 壳 SO 在 JNI_OnLoad 时从 file_size 偏移读取并还原。`,
+          recommendation: "确认 Native 壳 SO 能正确读取并解密 CodeItem 表。",
+          evidence: `methods=${stubMethods.length} table=${ciTable.length}B encrypted=${ciEncrypted.length}B`,
+        })
       }
     }
     findings.push(...dexResult.findings)
