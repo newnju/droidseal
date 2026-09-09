@@ -141,8 +141,8 @@ if (args[0] === "doctor") {
 // ── unified / scan / harden(统一命令 + 向后兼容别名) ────────────────────
 
 function resolveInputAndMode(): { inputPath: string; mode: "full" } | undefined {
-  // 统一命令: droidseal <input>
-  if (args[0] && !args[0].startsWith("-")) {
+  // 统一命令: droidseal <input> (排除已知子命令)
+  if (args[0] && !args[0].startsWith("-") && args[0] !== "doctor" && args[0] !== "batch") {
     return { inputPath: args[0], mode: "full" }
   }
   return undefined
