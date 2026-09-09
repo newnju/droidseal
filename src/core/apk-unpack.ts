@@ -63,15 +63,31 @@ function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
     const nameBytes = bytes.slice(cursor + 46, cursor + 46 + nameLen)
     const name = new TextDecoder("utf-8", { fatal: false }).decode(nameBytes)
 
-    // 从 Local File Header 读取数据
+    // 从 Local File Header 读取数据——必须先验证 LFH signature
     if (localHeaderOffset + 30 > bytes.length) { cursor += 46 + nameLen + extraLen + commentLen; continue }
+    if (view.getUint32(localHeaderOffset, true) !== 0x04034b50) { cursor += 46 + nameLen + extraLen + commentLen; continue }
     const localNameLen = view.getUint16(localHeaderOffset + 26, true)
     const localExtraLen = view.getUint16(localHeaderOffset + 28, true)
     const dataOffset = localHeaderOffset + 30 + localNameLen + localExtraLen
     const dataSize = compressionMethod === 0 ? uncompressedSize : compressedSize
 
-    // 防护：跳过大小异常的条目(> APK 大小 或为0)
-    if (dataSize === 0 || dataOffset + dataSize > bytes.length) {
+    // 防护：跳过大小异常的条目(dataOffset 超出 APK 或 dataSize 为0)
+    if (dataSize === 0 || dataOffset > bytes.length || dataOffset + dataSize > bytes.length) {
+      cursor += 46 + nameLen + extraLen + commentLen
+      continue
+    }
+
+    // 防护：LFH 中声明的 nameLen/extraLen 不应超过合理范围(防止读到垃圾值)
+    if (localNameLen > 1024 || localExtraLen > 4096) {
+      cursor += 46 + nameLen + extraLen + commentLen
+      continue
+    }
+
+    // 防护：uncompressedSize 不应超过 APK 本身大小的 10 倍(真正的 zip bomb 防护)
+    // 这里不限 50MB,而是动态计算:单个条目不可能比整个 APK 大太多倍
+    const apkSize = bytes.length
+    const maxReasonable = Math.max(apkSize * 10, 200 * 1024 * 1024) // APK大小×10 或 200MB 取较大值
+    if (uncompressedSize > maxReasonable) {
       cursor += 46 + nameLen + extraLen + commentLen
       continue
     }
@@ -79,10 +95,21 @@ function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
     let entryBytes = bytes.slice(dataOffset, dataOffset + dataSize)
     // deflate 压缩的条目需要解压
     if (compressionMethod === 8 && entryBytes.length > 0) {
-      try {
-        entryBytes = new Uint8Array(inflateRawSync(entryBytes))
-      } catch {
-        // 解压失败则保留原始字节(可能是存储而非压缩)
+      // 压缩输入超过 APK 本身大小的不尝试解压(畸形数据)
+      if (entryBytes.length <= apkSize) {
+        try {
+          const inflated = inflateRawSync(entryBytes)
+          // 解压后大小 vs ZIP 声明的 uncompressedSize 对比:
+          // 正常情况两者一致(误差<10%);zip bomb 时解压结果远超声明值
+          const declaredSize = uncompressedSize || inflated.length
+          const tolerance = Math.max(declaredSize * 0.5, 4096) // 允许50%误差或至少4KB
+          if (inflated.length > 0 && inflated.length <= declaredSize + tolerance) {
+            entryBytes = new Uint8Array(inflated)
+          }
+          // 解压结果远超声明 → 疑似 zip bomb,保留压缩原始字节
+        } catch {
+          // 解压失败则保留原始字节(可能是存储而非压缩)
+        }
       }
     }
     entries.push({
