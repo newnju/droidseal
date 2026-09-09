@@ -38,18 +38,12 @@ function usage(): string {
 
 用法:
   droidseal <input> [选项]          审计+加固全流程(APK),或仅审计(项目)
-  droidseal scan <input> [选项]     仅审计(别名,等同 --audit-only)
-  droidseal harden <input> [选项]   仅加固(别名,等同 --harden-only)
   droidseal doctor                  环境诊断
   droidseal batch <清单|目录> [选项] 批量审计
   droidseal --help                  显示帮助
   droidseal --version               显示版本
 
 流程控制:
-  --audit-only             仅执行审计,不加固
-  --harden-only            仅执行加固,跳过审计
-  --no-harden              审计后不加固(等同 --audit-only)
-  --no-audit               跳过审计(等同 --harden-only)
   --continue-on-error      审计失败不中断
 
 审计选项:
@@ -144,17 +138,10 @@ if (args[0] === "doctor") {
 
 // ── unified / scan / harden(统一命令 + 向后兼容别名) ────────────────────
 
-function resolveInputAndMode(): { inputPath: string; mode: "full" | "audit-only" | "harden-only" } | undefined {
-  // scan 别名 → audit-only
-  if (args[0] === "scan") return { inputPath: args[1] ?? "", mode: "audit-only" }
-  // harden 别名 → harden-only
-  if (args[0] === "harden") return { inputPath: args[1] ?? "", mode: "harden-only" }
+function resolveInputAndMode(): { inputPath: string; mode: "full" } | undefined {
   // 统一命令: droidseal <input>
   if (args[0] && !args[0].startsWith("-")) {
-    const mode = hasFlag("--audit-only") || hasFlag("--no-harden") ? "audit-only"
-      : hasFlag("--harden-only") || hasFlag("--no-audit") ? "harden-only"
-      : "full"
-    return { inputPath: args[0], mode }
+    return { inputPath: args[0], mode: "full" }
   }
   return undefined
 }
@@ -162,7 +149,7 @@ function resolveInputAndMode(): { inputPath: string; mode: "full" | "audit-only"
 const resolved = resolveInputAndMode()
 
 if (resolved && resolved.inputPath) {
-  const { inputPath, mode } = resolved
+  const { inputPath } = resolved
   const isApk = isApkInput(inputPath)
   const outputDir = getArg("--output") ?? (isApk ? "./droidseal-output" : "./build/droidseal-report")
   const continueOnError = hasFlag("--continue-on-error")
@@ -173,74 +160,74 @@ if (resolved && resolved.inputPath) {
   let allFindings: any[] = []
   let auditSuccess = true
 
-  if (mode !== "harden-only") {
-    const auditConfig = {
-      runMode: "one-click" as const,
-      inputKind: isApk ? "apk" as const : "project" as const,
-      inputPath,
-      outputDirectory: outputDir,
-      gradleTask: "assembleRelease",
-      buildMode: "full" as const,
-      enableAlignment: !hasFlag("--no-alignment"),
-      enableWebAssetMinification: !hasFlag("--no-web-minify"),
-      enableArscObfuscation: hasFlag("--arsc-obfuscate"),
-      customRulesFile: getArg("--rules") ?? undefined,
-      behaviorRulesFile: getArg("--behavior") ?? undefined,
-      taintRulesFile: getArg("--taint") ?? undefined,
-      keyFormatsFile: getArg("--key-formats") ?? undefined,
-      packageName: getArg("--package") ?? undefined,
-      applicationClass: getArg("--app") ?? undefined,
-      signing: { mode: "skip" as const },
-      protection: { mode: "local-safe" as const },
-    } as import("./core/types.ts").PipelineConfig
+  // ── 审计 ──────────────────────────────────────────────────
 
-    console.log(`DroidSeal 启动`)
-    console.log(`  输入: ${inputPath}`)
-    console.log(`  类型: ${isApk ? "APK" : "项目"}`)
-    console.log(`  模式: ${mode === "full" ? "审计+加固" : "仅审计"}`)
-    console.log(`  输出: ${outputDir}`)
-    console.log("")
+  const auditConfig = {
+    runMode: "one-click" as const,
+    inputKind: isApk ? "apk" as const : "project" as const,
+    inputPath,
+    outputDirectory: outputDir,
+    gradleTask: "assembleRelease",
+    buildMode: "full" as const,
+    enableAlignment: !hasFlag("--no-alignment"),
+    enableWebAssetMinification: !hasFlag("--no-web-minify"),
+    enableArscObfuscation: hasFlag("--arsc-obfuscate"),
+    customRulesFile: getArg("--rules") ?? undefined,
+    behaviorRulesFile: getArg("--behavior") ?? undefined,
+    taintRulesFile: getArg("--taint") ?? undefined,
+    keyFormatsFile: getArg("--key-formats") ?? undefined,
+    packageName: getArg("--package") ?? undefined,
+    applicationClass: getArg("--app") ?? undefined,
+    signing: { mode: "skip" as const },
+    protection: { mode: "local-safe" as const },
+  } as import("./core/types.ts").PipelineConfig
 
-    try {
-      const pipeline = new Pipeline(auditConfig)
-      const results: Record<string, unknown> = {}
-      let failedStep = ""
-      for (const def of STEP_DEFINITIONS) {
-        const result = await pipeline.runStep(def.id)
-        results[def.id] = result
-        if (result.status === "failed") {
-          console.error(`  ✗ ${def.title}: ${result.summary}`)
-          failedStep = def.id
-          if (!continueOnError) { auditSuccess = false; break }
-        } else {
-          console.log(`  ✓ ${def.title}: ${result.summary}`)
-        }
+  console.log(`DroidSeal 启动`)
+  console.log(`  输入: ${inputPath}`)
+  console.log(`  类型: ${isApk ? "APK" : "项目"}`)
+  console.log(`  模式: 审计${isApk ? "+加固" : ""}`)
+  console.log(`  输出: ${outputDir}`)
+  console.log("")
+
+  try {
+    const pipeline = new Pipeline(auditConfig)
+    const results: Record<string, unknown> = {}
+    let failedStep = ""
+    for (const def of STEP_DEFINITIONS) {
+      const result = await pipeline.runStep(def.id)
+      results[def.id] = result
+      if (result.status === "failed") {
+        console.error(`  ✗ ${def.title}: ${result.summary}`)
+        failedStep = def.id
+        if (!continueOnError) { auditSuccess = false; break }
+      } else {
+        console.log(`  ✓ ${def.title}: ${result.summary}`)
       }
-      allFindings = (pipeline as any).context?.audit?.findings ?? []
-      const reportDir = (pipeline as any).context?.reportDirectory ?? outputDir
-      const successCount = Object.values(results).filter((r: any) => r.status === "success").length
-      if (!jsonOutput) {
-        console.log(`\n审计完成: ${successCount} 步成功${failedStep ? ` (${failedStep} 失败)` : ""}`)
-        if (allFindings.length > 0) {
-          console.log(`发现 ${allFindings.length} 条:`)
-          for (const f of allFindings.slice(0, 30)) {
-            console.log(`  [${f.severity}] ${f.title}`)
-          }
-          if (allFindings.length > 30) console.log(`  ... +${allFindings.length - 30} 条`)
-        }
-        console.log(`报告目录: ${reportDir}`)
-      }
-    } catch (error) {
-      console.error(`审计失败: ${error instanceof Error ? error.message : String(error)}`)
-      auditSuccess = false
     }
+    allFindings = (pipeline as any).context?.audit?.findings ?? []
+    const reportDir = (pipeline as any).context?.reportDirectory ?? outputDir
+    const successCount = Object.values(results).filter((r: any) => r.status === "success").length
+    if (!jsonOutput) {
+      console.log(`\n审计完成: ${successCount} 步成功${failedStep ? ` (${failedStep} 失败)` : ""}`)
+      if (allFindings.length > 0) {
+        console.log(`发现 ${allFindings.length} 条:`)
+        for (const f of allFindings.slice(0, 30)) {
+          console.log(`  [${f.severity}] ${f.title}`)
+        }
+        if (allFindings.length > 30) console.log(`  ... +${allFindings.length - 30} 条`)
+      }
+      console.log(`报告目录: ${reportDir}`)
+    }
+  } catch (error) {
+    console.error(`审计失败: ${error instanceof Error ? error.message : String(error)}`)
+    auditSuccess = false
   }
 
-  // ── Phase 2: 加固(仅 APK + mode=full) ─────────────────────────────
+  // ── 加固(仅 APK 且审计成功时) ─────────────────────────────
 
   let hardenResult: any = undefined
 
-  if (mode !== "audit-only" && isApk && auditSuccess) {
+  if (isApk && auditSuccess) {
     console.log(`\n${"─".repeat(40)}`)
     console.log(`加固流水线启动`)
     console.log("")
@@ -305,7 +292,7 @@ if (resolved && resolved.inputPath) {
   // ── JSON 输出 ──────────────────────────────────────────────────────
 
   if (jsonOutput) {
-    const output: any = { inputPath, mode, findings: allFindings }
+    const output: any = { inputPath, mode: "full", findings: allFindings }
     if (hardenResult) {
       output.harden = {
         success: hardenResult.success,
