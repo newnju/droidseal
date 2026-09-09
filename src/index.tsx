@@ -25,66 +25,76 @@ function collectMulti(flag: string): string[] {
   return result
 }
 
+// ── 判断输入是否为 APK ────────────────────────────────────────────────
+
+function isApkInput(p: string): boolean {
+  return p.toLowerCase().endsWith(".apk")
+}
+
 // ── 用法 ──────────────────────────────────────────────────────────────
 
 function usage(): string {
   return `droidseal ${VERSION} — Android Release Seal
 
 用法:
-  droidseal                       打开交互式 TUI(默认)
-  droidseal scan <input> [选项]   非交互审计(APK/项目源码)
-  droidseal harden <input> [选项] 非交互加固(APK→加密+保护+重打包)
-  droidseal doctor                环境诊断(JSON 输出)
-  droidseal --help                显示帮助
-  droidseal --version             显示版本
+  droidseal <input> [选项]          审计+加固全流程(APK),或仅审计(项目)
+  droidseal scan <input> [选项]     仅审计(别名,等同 --audit-only)
+  droidseal harden <input> [选项]   仅加固(别名,等同 --harden-only)
+  droidseal doctor                  环境诊断
+  droidseal batch <清单|目录> [选项] 批量审计
+  droidseal --help                  显示帮助
+  droidseal --version               显示版本
+
+流程控制:
+  --audit-only             仅执行审计,不加固
+  --harden-only            仅执行加固,跳过审计
+  --no-harden              审计后不加固(等同 --audit-only)
+  --no-audit               跳过审计(等同 --harden-only)
+  --continue-on-error      审计失败不中断
+
+审计选项:
+  --package <name>         包名(默认:自动提取)
+  --app <class>            Application 类名(默认:自动提取)
+  --output <dir>           输出目录
+  --rules <file>           自定义检测规则(JSON/Semgrep YAML)
+  --behavior <file>        自定义行为规则
+  --taint <file>           污点规则文件
+  --key-formats <file>     密钥格式文件
+  --no-alignment           跳过 zipalign
+  --no-web-minify          跳过 Web 资源压缩
+  --arsc-obfuscate         启用资源名混淆
+
+加固选项:
+  --algorithm <aes-256-gcm|chacha20-poly1305>  加密算法(默认:aes-256-gcm)
+  --cert-sha256 <hash>     签名证书 SHA-256(密钥派生)
+  --no-dex                 禁用 DEX 加密
+  --no-so                  禁用 SO 加密
+  --no-resource            禁用资源加密
+  --no-string              禁用字符串加密
+  --no-runtime             禁用运行时保护
+  --enable-vmp             启用 VMP 虚拟机保护
+  --no-split-key           禁用 Split-Key 混淆
+  --no-triple-entry        禁用三重入口
+  --no-random-names        禁用随机包名/SO 名
+  --exclude <pattern>      类排除规则(可多次指定)
+  --keystore <path>        签名密钥库路径
+  --ks-alias <alias>       密钥别名
+  --ks-pass <password>     密钥库密码
+  --key-pass <password>    密钥密码
 
 通用选项:
-  --output <dir>           输出目录
   --json                   JSON 格式输出(适合 CI/CD)
 
-scan 子命令(审计):
-  droidseal scan <input.apk | project-dir> [选项]
-    --package <name>         包名(默认:自动提取)
-    --app <class>            Application 类名(默认:自动提取)
-    --rules <file>           自定义检测规则文件(JSON/Semgrep YAML)
-    --behavior <file>        自定义行为规则文件
-    --taint <file>           污点规则文件
-    --key-formats <file>     密钥格式文件
-    --no-alignment           跳过 zipalign
-    --no-web-minify          跳过 Web 资源压缩
-    --arsc-obfuscate         启用资源名混淆
-
-harden 子命令(加固):
-  droidseal harden <input.apk> [选项]
-    --package <name>         包名(默认:自动提取)
-    --app <class>            原始 Application 类名
-    --algorithm <alg>        加密算法:aes-256-gcm(默认) | chacha20-poly1305
-    --cert-sha256 <hash>     签名证书 SHA-256(密钥派生)
-    --no-dex                 禁用 DEX 加密
-    --no-so                  禁用 SO 加密
-    --no-resource            禁用资源加密
-    --no-string              禁用字符串加密
-    --no-runtime             禁用运行时保护
-    --enable-vmp             启用 VMP 虚拟机保护
-    --no-split-key           禁用 Split-Key 混淆
-    --no-triple-entry        禁用三重入口
-    --no-random-names        禁用随机包名/SO名
-    --exclude <pattern>      类排除规则(可多次指定)
-    --keystore <path>        签名密钥库路径
-    --ks-alias <alias>       密钥别名
-    --ks-pass <password>     密钥库密码
-    --key-pass <password>    密钥密码
-
-batch 子命令(批量审计):
-  droidseal batch <清单.json | --dir <APK目录>> [选项]
-    --base <url>             REST API 地址(默认:http://127.0.0.1:8787)
-    --token <token>          Bearer 认证令牌
-    --parallel <N>           并发数(默认:1)
-    --retry <N>              失败重试次数(默认:0)
+batch 子命令:
+  droidseal batch <清单.json | --dir <目录>> [选项]
+    --base <url>           REST API 地址(默认:http://127.0.0.1:8787)
+    --token <token>        Bearer 认证令牌
+    --parallel <N>         并发数(默认:1)
+    --retry <N>            失败重试次数(默认:0)
 
 TUI 内置命令:
-  /guided    分步处理(每步确认)
-  /oneclick  一键处理(全自动)
+  /guided    分步处理
+  /oneclick  一键处理
   /doctor    环境诊断
   /restart   返回首页
   /quit      退出
@@ -132,153 +142,182 @@ if (args[0] === "doctor") {
   process.exit(0)
 }
 
-// ── scan(非交互审计) ──────────────────────────────────────────────────
+// ── unified / scan / harden(统一命令 + 向后兼容别名) ────────────────────
 
-if (args[0] === "scan") {
-  const inputPath = args[1]
-  if (!inputPath) {
-    console.error("用法: droidseal scan <input.apk | project-dir> [选项]")
-    process.exit(1)
+function resolveInputAndMode(): { inputPath: string; mode: "full" | "audit-only" | "harden-only" } | undefined {
+  // scan 别名 → audit-only
+  if (args[0] === "scan") return { inputPath: args[1] ?? "", mode: "audit-only" }
+  // harden 别名 → harden-only
+  if (args[0] === "harden") return { inputPath: args[1] ?? "", mode: "harden-only" }
+  // 统一命令: droidseal <input>
+  if (args[0] && !args[0].startsWith("-")) {
+    const mode = hasFlag("--audit-only") || hasFlag("--no-harden") ? "audit-only"
+      : hasFlag("--harden-only") || hasFlag("--no-audit") ? "harden-only"
+      : "full"
+    return { inputPath: args[0], mode }
   }
-  const { Pipeline } = await import("./core/pipeline.ts")
-  const isApk = inputPath.toLowerCase().endsWith(".apk")
-  const outputDir = getArg("--output") ?? (isApk ? "./audit-report" : "./build/droidseal-report")
-  const config = {
-    runMode: "one-click" as const,
-    inputKind: isApk ? "apk" as const : "project" as const,
-    inputPath,
-    outputDirectory: outputDir,
-    gradleTask: "assembleRelease",
-    buildMode: "full" as const,
-    enableAlignment: !hasFlag("--no-alignment"),
-    enableWebAssetMinification: !hasFlag("--no-web-minify"),
-    enableArscObfuscation: hasFlag("--arsc-obfuscate"),
-    customRulesFile: getArg("--rules") ?? undefined,
-    behaviorRulesFile: getArg("--behavior") ?? undefined,
-    taintRulesFile: getArg("--taint") ?? undefined,
-    keyFormatsFile: getArg("--key-formats") ?? undefined,
-    packageName: getArg("--package") ?? undefined,
-    applicationClass: getArg("--app") ?? undefined,
-    signing: { mode: "skip" as const },
-    protection: { mode: "local-safe" as const },
-  } as import("./core/types.ts").PipelineConfig
-  const continueOnError = hasFlag("--continue-on-error")
-  console.log(`DroidSeal 审计启动`)
-  console.log(`  输入: ${config.inputPath}`)
-  console.log(`  类型: ${config.inputKind}`)
-  console.log(`  输出: ${config.outputDirectory}`)
-  console.log("")
-  try {
-    const pipeline = new Pipeline(config)
-    const results: Record<string, unknown> = {}
-    let failedStep = ""
-    for (const def of STEP_DEFINITIONS) {
-      const result = await pipeline.runStep(def.id)
-      results[def.id] = result
-      if (result.status === "failed") {
-        console.error(`  ✗ ${def.title}: ${result.summary}`)
-        failedStep = def.id
-        if (!continueOnError) break
-      } else {
-        console.log(`  ✓ ${def.title}: ${result.summary}`)
-      }
-    }
-    const allFindings = (pipeline as any).context?.audit?.findings ?? []
-    const reportDir = (pipeline as any).context?.reportDirectory ?? config.outputDirectory
-    if (hasFlag("--json")) {
-      console.log(JSON.stringify({ steps: results, findings: allFindings, reportDir }, null, 2))
-    } else {
-      const successCount = Object.values(results).filter((r: any) => r.status === "success").length
-      console.log(`\n审计完成: ${successCount} 步成功${failedStep ? ` (${failedStep} 失败)` : ""}`)
-      if (allFindings.length > 0) {
-        console.log(`发现 ${allFindings.length} 条:`)
-        for (const f of allFindings.slice(0, 30)) {
-          console.log(`  [${f.severity}] ${f.title}`)
-        }
-        if (allFindings.length > 30) console.log(`  ... +${allFindings.length - 30} 条`)
-      }
-      console.log(`\n报告目录: ${reportDir}`)
-    }
-    process.exit(0)
-  } catch (error) {
-    console.error(`审计失败: ${error instanceof Error ? error.message : String(error)}`)
-    process.exit(1)
-  }
+  return undefined
 }
 
-// ── harden(非交互加固) ──────────────────────────────────────────────────
+const resolved = resolveInputAndMode()
 
-if (args[0] === "harden") {
-  const { runHardenPipeline, generateHardenReport, DEFAULT_HARDEN_CONFIG } = await import("./core/harden-pipeline.ts")
-  const inputApk = args[1]
-  if (!inputApk) {
-    console.error("用法: droidseal harden <input.apk> [选项]")
-    process.exit(1)
-  }
-  const excludePatterns = collectMulti("--exclude")
-  const config = {
-    ...DEFAULT_HARDEN_CONFIG,
-    inputApk,
-    outputDir: getArg("--output") ?? "./hardened",
-    packageName: getArg("--package") ?? "com.droidseal.protected",
-    originalApplication: getArg("--app") ?? "android.app.Application",
-    algorithm: (getArg("--algorithm") as "aes-256-gcm" | "chacha20-poly1305") ?? "aes-256-gcm",
-    certSha256: getArg("--cert-sha256") ?? undefined,
-    enableDexEncryption: !hasFlag("--no-dex"),
-    enableMethodHollow: !hasFlag("--no-dex"),
-    enableSoEncryption: !hasFlag("--no-so"),
-    enableResourceEncryption: !hasFlag("--no-resource"),
-    enableStringEncryption: !hasFlag("--no-string"),
-    enableRuntimeProtection: !hasFlag("--no-runtime"),
-    enableVmProtection: hasFlag("--enable-vmp"),
-    enableSplitKey: !hasFlag("--no-split-key"),
-    enableTripleEntry: !hasFlag("--no-triple-entry"),
-    enableRandomNames: !hasFlag("--no-random-names"),
-    classExclusionPatterns: excludePatterns,
-    signingConfig: getArg("--keystore") ? {
-      mode: "keystore" as const,
-      keystorePath: getArg("--keystore")!,
-      keyAlias: getArg("--ks-alias") ?? "droidseal",
-      storePassword: getArg("--ks-pass") ?? "droidseal123",
-      keyPassword: getArg("--key-pass") ?? getArg("--ks-pass") ?? "droidseal123",
-    } : undefined,
-  }
-  console.log(`DroidSeal 加固流水线启动`)
-  console.log(`  输入: ${config.inputApk}`)
-  console.log(`  输出: ${config.outputDir}`)
-  console.log(`  算法: ${config.algorithm}`)
-  console.log(`  Split-Key: ${config.enableSplitKey ? "是" : "否"}`)
-  console.log(`  三重入口: ${config.enableTripleEntry ? "是" : "否"}`)
-  console.log("")
-  try {
-    const result = await runHardenPipeline(config)
-    if (hasFlag("--json")) {
-      console.log(JSON.stringify(result, null, 2))
-    } else {
-      console.log(generateHardenReport(result))
-      if (result.generatedFiles.length > 0) {
-        const { mkdir: mkd, writeFile: wf } = await import("node:fs/promises")
-        await mkd(config.outputDir, { recursive: true })
-        for (const file of result.generatedFiles) {
-          const outPath = `${config.outputDir}/${file.name}`
-          await mkd(outPath.replace(/\/[^/]+$/, ""), { recursive: true })
-          await wf(outPath, file.content, "utf8")
+if (resolved && resolved.inputPath) {
+  const { inputPath, mode } = resolved
+  const isApk = isApkInput(inputPath)
+  const outputDir = getArg("--output") ?? (isApk ? "./droidseal-output" : "./build/droidseal-report")
+  const continueOnError = hasFlag("--continue-on-error")
+  const jsonOutput = hasFlag("--json")
+
+  // ── Phase 1: 审计 ──────────────────────────────────────────────────
+
+  let allFindings: any[] = []
+  let auditSuccess = true
+
+  if (mode !== "harden-only") {
+    const auditConfig = {
+      runMode: "one-click" as const,
+      inputKind: isApk ? "apk" as const : "project" as const,
+      inputPath,
+      outputDirectory: outputDir,
+      gradleTask: "assembleRelease",
+      buildMode: "full" as const,
+      enableAlignment: !hasFlag("--no-alignment"),
+      enableWebAssetMinification: !hasFlag("--no-web-minify"),
+      enableArscObfuscation: hasFlag("--arsc-obfuscate"),
+      customRulesFile: getArg("--rules") ?? undefined,
+      behaviorRulesFile: getArg("--behavior") ?? undefined,
+      taintRulesFile: getArg("--taint") ?? undefined,
+      keyFormatsFile: getArg("--key-formats") ?? undefined,
+      packageName: getArg("--package") ?? undefined,
+      applicationClass: getArg("--app") ?? undefined,
+      signing: { mode: "skip" as const },
+      protection: { mode: "local-safe" as const },
+    } as import("./core/types.ts").PipelineConfig
+
+    console.log(`DroidSeal 启动`)
+    console.log(`  输入: ${inputPath}`)
+    console.log(`  类型: ${isApk ? "APK" : "项目"}`)
+    console.log(`  模式: ${mode === "full" ? "审计+加固" : "仅审计"}`)
+    console.log(`  输出: ${outputDir}`)
+    console.log("")
+
+    try {
+      const pipeline = new Pipeline(auditConfig)
+      const results: Record<string, unknown> = {}
+      let failedStep = ""
+      for (const def of STEP_DEFINITIONS) {
+        const result = await pipeline.runStep(def.id)
+        results[def.id] = result
+        if (result.status === "failed") {
+          console.error(`  ✗ ${def.title}: ${result.summary}`)
+          failedStep = def.id
+          if (!continueOnError) { auditSuccess = false; break }
+        } else {
+          console.log(`  ✓ ${def.title}: ${result.summary}`)
         }
-        console.log(`\n已输出 ${result.generatedFiles.length} 个文件到 ${config.outputDir}/`)
       }
-      if (result.outputApk) {
-        const { stat } = await import("node:fs/promises")
-        const info = await stat(result.outputApk).catch(() => null)
-        console.log(`\n加固 APK: ${result.outputApk}`)
-        if (info) console.log(`  大小: ${(info.size / 1024 / 1024).toFixed(1)} MiB`)
-        if (result.keyMaterial) console.log(`  密钥来源: ${result.keyMaterial.derivedFrom}`)
+      allFindings = (pipeline as any).context?.audit?.findings ?? []
+      const reportDir = (pipeline as any).context?.reportDirectory ?? outputDir
+      const successCount = Object.values(results).filter((r: any) => r.status === "success").length
+      if (!jsonOutput) {
+        console.log(`\n审计完成: ${successCount} 步成功${failedStep ? ` (${failedStep} 失败)` : ""}`)
+        if (allFindings.length > 0) {
+          console.log(`发现 ${allFindings.length} 条:`)
+          for (const f of allFindings.slice(0, 30)) {
+            console.log(`  [${f.severity}] ${f.title}`)
+          }
+          if (allFindings.length > 30) console.log(`  ... +${allFindings.length - 30} 条`)
+        }
+        console.log(`报告目录: ${reportDir}`)
+      }
+    } catch (error) {
+      console.error(`审计失败: ${error instanceof Error ? error.message : String(error)}`)
+      auditSuccess = false
+    }
+  }
+
+  // ── Phase 2: 加固(仅 APK + mode=full) ─────────────────────────────
+
+  let hardenResult: any = undefined
+
+  if (mode !== "audit-only" && isApk && auditSuccess) {
+    console.log(`\n${"─".repeat(40)}`)
+    console.log(`加固流水线启动`)
+    console.log("")
+
+    const { runHardenPipeline, generateHardenReport, DEFAULT_HARDEN_CONFIG } = await import("./core/harden-pipeline.ts")
+    const excludePatterns = collectMulti("--exclude")
+    const hardenConfig = {
+      ...DEFAULT_HARDEN_CONFIG,
+      inputApk: inputPath,
+      outputDir: outputDir + "/hardened",
+      packageName: getArg("--package") ?? "com.droidseal.protected",
+      originalApplication: getArg("--app") ?? "android.app.Application",
+      algorithm: (getArg("--algorithm") as "aes-256-gcm" | "chacha20-poly1305") ?? "aes-256-gcm",
+      certSha256: getArg("--cert-sha256") ?? undefined,
+      enableDexEncryption: !hasFlag("--no-dex"),
+      enableMethodHollow: !hasFlag("--no-dex"),
+      enableSoEncryption: !hasFlag("--no-so"),
+      enableResourceEncryption: !hasFlag("--no-resource"),
+      enableStringEncryption: !hasFlag("--no-string"),
+      enableRuntimeProtection: !hasFlag("--no-runtime"),
+      enableVmProtection: hasFlag("--enable-vmp"),
+      enableSplitKey: !hasFlag("--no-split-key"),
+      enableTripleEntry: !hasFlag("--no-triple-entry"),
+      enableRandomNames: !hasFlag("--no-random-names"),
+      classExclusionPatterns: excludePatterns,
+      signingConfig: getArg("--keystore") ? {
+        mode: "keystore" as const,
+        keystorePath: getArg("--keystore")!,
+        keyAlias: getArg("--ks-alias") ?? "droidseal",
+        storePassword: getArg("--ks-pass") ?? "droidseal123",
+        keyPassword: getArg("--key-pass") ?? getArg("--ks-pass") ?? "droidseal123",
+      } : undefined,
+    }
+
+    try {
+      hardenResult = await runHardenPipeline(hardenConfig)
+      if (!jsonOutput) {
+        console.log(generateHardenReport(hardenResult))
+        if (hardenResult.generatedFiles.length > 0) {
+          const { mkdir: mkd, writeFile: wf } = await import("node:fs/promises")
+          await mkd(hardenConfig.outputDir, { recursive: true })
+          for (const file of hardenResult.generatedFiles) {
+            const outPath = `${hardenConfig.outputDir}/${file.name}`
+            await mkd(outPath.replace(/\/[^/]+$/, ""), { recursive: true })
+            await wf(outPath, file.content, "utf8")
+          }
+          console.log(`\n已输出 ${hardenResult.generatedFiles.length} 个文件到 ${hardenConfig.outputDir}/`)
+        }
+        if (hardenResult.outputApk) {
+          const { stat } = await import("node:fs/promises")
+          const info = await stat(hardenResult.outputApk).catch(() => null)
+          console.log(`\n加固 APK: ${hardenResult.outputApk}`)
+          if (info) console.log(`  大小: ${(info.size / 1024 / 1024).toFixed(1)} MiB`)
+          if (hardenResult.keyMaterial) console.log(`  密钥来源: ${hardenResult.keyMaterial.derivedFrom}`)
+        }
+      }
+    } catch (error) {
+      console.error(`加固失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  // ── JSON 输出 ──────────────────────────────────────────────────────
+
+  if (jsonOutput) {
+    const output: any = { inputPath, mode, findings: allFindings }
+    if (hardenResult) {
+      output.harden = {
+        success: hardenResult.success,
+        outputApk: hardenResult.outputApk,
+        summary: hardenResult.summary,
+        generatedFiles: hardenResult.generatedFiles.length,
       }
     }
-    process.exit(result.success ? 0 : 1)
-  } catch (error) {
-    console.error(`加固失败: ${error instanceof Error ? error.message : String(error)}`)
-    process.exit(1)
+    console.log(JSON.stringify(output, null, 2))
   }
+
+  process.exit(auditSuccess ? 0 : 1)
 }
 
 // ── batch(批量审计) ──────────────────────────────────────────────────────
@@ -348,7 +387,6 @@ if (args[0] === "batch") {
     results[index] = { name: item.name, ok: false, seconds, stepsOk: 0, error: failure }
   }
 
-  // 并发池
   let next = 0
   const workers = Array.from({ length: Math.min(parallel, items.length) }, async () => {
     while (true) { const idx = next++; if (idx >= items.length) return; await runOne(idx) }
@@ -380,7 +418,7 @@ if (args[0] && !args[0].startsWith("-")) {
 // ── TUI 启动(默认) ──────────────────────────────────────────────────────
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
-  console.error("DroidSeal TUI 需要交互式终端。使用 `droidseal scan` 或 `droidseal harden` 进行非交互操作。")
+  console.error("DroidSeal TUI 需要交互式终端。使用 `droidseal <apk>` 或 `droidseal scan` 进行非交互操作。")
   process.stdin.resume()
   await new Promise<void>((resolve) => {
     const done = () => resolve()
