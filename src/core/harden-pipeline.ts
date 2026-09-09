@@ -28,6 +28,7 @@ import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings } from 
 import { compileNativeSo, generateCmakeListsForShell } from "./native-so-compile.ts"
 import { generateEnhancedRuntimeSmali, generateEnhancedNativeC, buildEnhancedGuardFindings } from "./enhanced-guard.ts"
 import { buildCodeItemTable, encryptCodeItemTable, injectCodeItemTableIntoShellDex, generateCodeItemRestoreHeader } from "./codeitem-table.ts"
+import { generateEnhancedNativeAntiAnalysis, generateEnhancedJavaGuard, buildAntiAnalysisFindings } from "./enhanced-anti-analysis.ts"
 
 // ── 加固配置 ──────────────────────────────────────────────────────────
 
@@ -290,6 +291,15 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   if (config.enableResourceEncryption) {
     generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealResDecryptor.smali`, content: generateResourceDecryptorSmali(packageName) })
   }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 11.5: 增强防绕过保护(Java + Native 多层)
+  // ──────────────────────────────────────────────────────────────────────
+  const enhancedJavaGuard = generateEnhancedJavaGuard(packageName)
+  generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealEnhancedGuard.smali`, content: enhancedJavaGuard })
+  const enhancedNativeC = generateEnhancedNativeAntiAnalysis(packageName)
+  generatedFiles.push({ name: `native/enhanced_guard.c`, content: enhancedNativeC })
+  findings.push(...buildAntiAnalysisFindings(true, true, config.enableDexEncryption))
 
   // ──────────────────────────────────────────────────────────────────────
   // Step 12: Native 壳 SO 生成(C 源 + CMake——需 NDK 编译)
