@@ -410,6 +410,39 @@ export class Pipeline {
       state.status = result.status
       state.result = result
       this.context.stepResults.push(result)
+      // 测试学习模式:每步完成后附加中间产物路径+大小+前后变化
+      if (this.config.keepIntermediates && result.status === "success") {
+        const artifactAfter = this.context.currentArtifact
+        const detailExtra: string[] = []
+        if (artifactAfter) {
+          try {
+            const { stat } = await import("node:fs/promises")
+            const info = await stat(artifactAfter).catch(() => null)
+            const sizeStr = info ? `${(info.size / 1024 / 1024).toFixed(1)} MiB` : "未知大小"
+            detailExtra.push(`产物: ${artifactAfter}  (${sizeStr})`)
+            // 前后大小对比
+            if (artifactBefore && artifactBefore !== artifactAfter) {
+              const beforeInfo = await stat(artifactBefore).catch(() => null)
+              if (beforeInfo && info) {
+                const delta = info.size - beforeInfo.size
+                const sign = delta >= 0 ? "+" : ""
+                const deltaStr = delta === 0 ? "无变化" : `${sign}${(delta / 1024).toFixed(1)} KiB`
+                detailExtra.push(`变化: ${(beforeInfo.size / 1024 / 1024).toFixed(1)} → ${(info.size / 1024 / 1024).toFixed(1)} MiB  (${deltaStr})`)
+              }
+            }
+            // findings 前后对比
+            if (result.findings && result.findings.length > 0) {
+              const prevFindingsCount = this.context.stepResults
+                .filter((r) => r.findings)
+                .reduce((sum, r) => sum + (r.findings?.length ?? 0), 0) - result.findings.length
+              detailExtra.push(`新增发现: +${result.findings.length} 条 (累计 ${prevFindingsCount + result.findings.length} 条)`)
+            }
+          } catch { /* 静默 */ }
+        }
+        if (detailExtra.length > 0) {
+          result.detail = [...(result.detail ?? []), ...detailExtra]
+        }
+      }
       this.emit({ type: "step-finished", step: state, result })
       if (stepId === "report") await writeReports(this.config, this.context)
       return result
@@ -2030,15 +2063,29 @@ export class Pipeline {
     }
     const reports = await writeReports(this.config, this.context)
 
-    // 默认经典模式(keepIntermediates=false):清理中间 APK,只保留最终 release
+    // 默认经典模式(keepIntermediates=false):清理中间产物,只保留最终 release
     // (输出目录的 sealed-*)与报告(报告目录的 json/md/junit/证据/SBOM/修复包)。
     if (!this.config.keepIntermediates) {
       const intermediates = await readdir(this.context.artifactDirectory).catch(() => [] as string[])
       for (const entry of intermediates) {
+        // 清理中间 APK
         if (entry.endsWith(".apk")) {
           await this.safeRemove(path.join(this.context.artifactDirectory, entry))
         }
+        // 清理 Gradle init 脚本(构建时注入,不保留)
+        if (entry.endsWith(".init.gradle") || entry.endsWith(".gradle")) {
+          await this.safeRemove(path.join(this.context.artifactDirectory, entry))
+        }
+        // 清理临时 XML/JSON 产物
+        if (entry.endsWith(".tmp") || entry.endsWith(".temp")) {
+          await this.safeRemove(path.join(this.context.artifactDirectory, entry))
+        }
       }
+      // 清理项目目录下的 Gradle 构建缓存(如果存在)
+      try {
+        const buildCacheDir = path.join(this.config.inputPath, ".gradle", "droidseal-cache")
+        await rm(buildCacheDir, { recursive: true, force: true }).catch(() => undefined)
+      } catch { /* 静默 */ }
     }
 
     const result: OperationResult = {
