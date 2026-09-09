@@ -280,34 +280,53 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   for (const entry of apkContents.otherFiles) zipEntries.push({ ...entry, compressionMethod: entry.compressed ? 8 : 0 })
 
   // 自动签名:如果用户未提供 keystore,自动生成自签名密钥库
+  // 如果提供了 certSha256,用其派生签名密钥密码(绑定证书指纹)
   let signingConfig: SigningConfig | undefined
   if (config.signingConfig) {
     signingConfig = config.signingConfig
   } else {
     const { generateKeystore } = await import("./apk-repack.ts")
     const ksPath = path.join(config.outputDir, "droidseal-keystore.jks")
-    const ksPassword = "droidseal123"
+    const ksPassword = config.certSha256
+      ? createHash("sha256").update(config.certSha256).digest("hex").slice(0, 16)
+      : "droidseal123"
     const keyAlias = "droidseal"
     const genOk = generateKeystore(ksPath, { keyAlias, storePassword: ksPassword, keyPassword: ksPassword, validity: 36500 })
     if (genOk) {
       signingConfig = { mode: "keystore", keystorePath: ksPath, keyAlias, storePassword: ksPassword, keyPassword: ksPassword }
       findings.push({
         severity: "info", confidence: "high", code: "KEYSTORE_GENERATED",
-        title: "自签名密钥库已生成",
-        detail: `路径: ${ksPath};别名: ${keyAlias};有效期: 100 年。release 发布请替换为正式密钥库。`,
+        title: config.certSha256
+          ? "自签名密钥库已生成(密码绑定证书指纹)"
+          : "自签名密钥库已生成(默认密码)",
+        detail: config.certSha256
+          ? `路径: ${ksPath};密码由 --cert-sha256 派生;有效期: 100 年。release 发布请替换为正式密钥库。`
+          : `路径: ${ksPath};默认密码 droidseal123;有效期: 100 年。release 发布请替换为正式密钥库。`,
         recommendation: "自签名 keystore 仅用于开发测试——正式发布请使用专用 release 密钥。",
         evidence: ksPath,
       })
     }
   }
 
-  const repackResult = await repackApk({
-    entries: zipEntries, outputPath: outputApk,
-    signingConfig,
-    enableZipalign: false,
-  })
-  findings.push(...repackResult.findings)
-  if (repackResult.sha256) findings.push({
+  let repackResult: import("./apk-repack.ts").RepackResult | undefined
+  try {
+    repackResult = await repackApk({
+      entries: zipEntries, outputPath: outputApk,
+      signingConfig,
+      enableZipalign: false,
+    })
+    findings.push(...repackResult.findings)
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    findings.push({
+      severity: "high", confidence: "high", code: "REPACK_FAILED",
+      title: "APK 重打包失败",
+      detail: `重打包过程抛出异常: ${msg}。加固后的 Smali/C/CMake 文件仍已输出到 ${config.outputDir}/,可手动集成到项目。`,
+      recommendation: "检查 APK 文件完整性;确认 ZIP 条目无损坏;手动集成壳加载器 Smali 文件到项目后重新构建。",
+      evidence: msg.slice(0, 200),
+    })
+  }
+  if (repackResult?.sha256) findings.push({
     severity: "info", confidence: "high", code: "APK_SHA256",
     title: `加固 APK SHA-256: ${repackResult.sha256}`,
     detail: `输出文件: ${outputApk}。SHA-256: ${repackResult.sha256}。`,
