@@ -94,14 +94,34 @@ if (hasFlag("--version") || hasFlag("-v")) { console.log(VERSION); process.exit(
 if (args[0] === "doctor") {
   const result = await discoverToolchain()
   const recovery = createToolRecoveryPlan(undefined, result)
-  console.log(JSON.stringify({
+  const jsonData = {
     ...result,
     recovery: {
       missing: recovery.missing.map((tool) => tool.name),
       canAutoInstallInTui: recovery.canAutoInstall,
       instructions: recovery.manualInstructions,
     },
-  }, null, 2))
+  }
+  if (hasFlag("--json")) {
+    console.log(JSON.stringify(jsonData, null, 2))
+  } else {
+    console.log(`DroidSeal 环境诊断`)
+    console.log("")
+    const tc = result as any
+    const has = (v: any) => v?.path ? `✓ ${v.version ?? ""} (${v.path})` : "✗ 未找到"
+    console.log(`  JDK:       ${has(tc.java)}`)
+    console.log(`  keytool:   ${has(tc.keytool)}`)
+    console.log(`  aapt2:     ${has(tc.aapt)}`)
+    console.log(`  apksigner: ${has(tc.apksigner)}`)
+    console.log(`  zipalign:  ${has(tc.zipalign)}`)
+    if (recovery.missing.length > 0) {
+      console.log(`\n缺失 ${recovery.missing.length} 个工具:`)
+      for (const tool of recovery.missing) console.log(`  - ${tool.name}`)
+      if (recovery.manualInstructions) console.log(`\n${recovery.manualInstructions}`)
+    } else {
+      console.log("\n✓ 所有工具就绪")
+    }
+  }
   process.exit(0)
 }
 
@@ -130,9 +150,12 @@ if (args[0] === "scan") {
     behaviorRulesFile: getArg("--behavior") ?? undefined,
     taintRulesFile: getArg("--taint") ?? undefined,
     keyFormatsFile: getArg("--key-formats") ?? undefined,
+    packageName: getArg("--package") ?? undefined,
+    applicationClass: getArg("--app") ?? undefined,
     signing: { mode: "skip" as const },
     protection: { mode: "local-safe" as const },
   } as import("./core/types.ts").PipelineConfig
+  const continueOnError = hasFlag("--continue-on-error")
   console.log(`DroidSeal 审计启动`)
   console.log(`  输入: ${config.inputPath}`)
   console.log(`  类型: ${config.inputKind}`)
@@ -141,20 +164,25 @@ if (args[0] === "scan") {
   try {
     const pipeline = new Pipeline(config)
     const results: Record<string, unknown> = {}
+    let failedStep = ""
     for (const def of STEP_DEFINITIONS) {
       const result = await pipeline.runStep(def.id)
       results[def.id] = result
       if (result.status === "failed") {
         console.error(`  ✗ ${def.title}: ${result.summary}`)
-        break
+        failedStep = def.id
+        if (!continueOnError) break
+      } else {
+        console.log(`  ✓ ${def.title}: ${result.summary}`)
       }
-      console.log(`  ✓ ${def.title}: ${result.summary}`)
     }
     const allFindings = (pipeline as any).context?.audit?.findings ?? []
+    const reportDir = (pipeline as any).context?.reportDirectory ?? config.outputDirectory
     if (hasFlag("--json")) {
-      console.log(JSON.stringify({ steps: results, findings: allFindings }, null, 2))
+      console.log(JSON.stringify({ steps: results, findings: allFindings, reportDir }, null, 2))
     } else {
-      console.log(`\n审计完成: ${Object.values(results).filter((r: any) => r.status === "success").length} 步成功`)
+      const successCount = Object.values(results).filter((r: any) => r.status === "success").length
+      console.log(`\n审计完成: ${successCount} 步成功${failedStep ? ` (${failedStep} 失败)` : ""}`)
       if (allFindings.length > 0) {
         console.log(`发现 ${allFindings.length} 条:`)
         for (const f of allFindings.slice(0, 30)) {
@@ -162,6 +190,7 @@ if (args[0] === "scan") {
         }
         if (allFindings.length > 30) console.log(`  ... +${allFindings.length - 30} 条`)
       }
+      console.log(`\n报告目录: ${reportDir}`)
     }
     process.exit(0)
   } catch (error) {
@@ -229,6 +258,13 @@ if (args[0] === "harden") {
           await wf(outPath, file.content, "utf8")
         }
         console.log(`\n已输出 ${result.generatedFiles.length} 个文件到 ${config.outputDir}/`)
+      }
+      if (result.outputApk) {
+        const { stat } = await import("node:fs/promises")
+        const info = await stat(result.outputApk).catch(() => null)
+        console.log(`\n加固 APK: ${result.outputApk}`)
+        if (info) console.log(`  大小: ${(info.size / 1024 / 1024).toFixed(1)} MiB`)
+        if (result.keyMaterial) console.log(`  密钥来源: ${result.keyMaterial.derivedFrom}`)
       }
     }
     process.exit(result.success ? 0 : 1)
