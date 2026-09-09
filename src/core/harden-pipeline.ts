@@ -18,6 +18,15 @@ import { generateVmInterpreterSmali, DEFAULT_VM_CONFIG, buildVmpFindings } from 
 import { repackApk, type SigningConfig, type RepackConfig } from "./apk-repack.ts"
 import { generateResourceDecryptorSmali } from "./resource-string-protection.ts"
 import { generateNativeShellFiles, buildNativeShellFindings, type NativeShellConfig } from "./native-shell.ts"
+import { compileAndMergeSmali } from "./smali-merge.ts"
+import { injectPayloadIntoShellDex, processAndInjectPayload } from "./dex-payload-inject.ts"
+import { generateSplitKeyInjectionData } from "./split-key-inject.ts"
+import { recompileAndInjectManifest } from "./axml-recompile.ts"
+import { injectRuntimeProtection, generateRuntimeInitCall } from "./runtime-inject.ts"
+import { encryptAndReplaceStrings } from "./string-encrypt-writeback.ts"
+import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings } from "./vmp-compiler.ts"
+import { compileNativeSo, generateCmakeListsForShell } from "./native-so-compile.ts"
+import { generateEnhancedRuntimeSmali, generateEnhancedNativeC, buildEnhancedGuardFindings } from "./enhanced-guard.ts"
 
 // ── 加固配置 ──────────────────────────────────────────────────────────
 
@@ -154,8 +163,20 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     for (let i = 0; i < apkContents.dexFiles.length; i += 1) {
       apkContents.dexFiles[i]!.bytes = dexResult.processedDex[i]!
     }
+    // Step 4.5: 加密 payload 注入壳 DEX 末尾
+    if (keyMaterial && dexResult) {
+      for (let i = 0; i < apkContents.dexFiles.length; i += 1) {
+        const { resultDex, findings: injectFindings } = processAndInjectPayload(
+          dexResult.processedDex[i]!,
+          apkContents.dexFiles[i]!.bytes,
+          keyMaterial.encryptionKey,
+        )
+        apkContents.dexFiles[i]!.bytes = resultDex
+        findings.push(...injectFindings)
+      }
+    }
     findings.push(...dexResult.findings)
-    keyMaterial = dexResult.keyMaterial // 用 DEX 处理生成的密钥材料
+    keyMaterial = dexResult.keyMaterial
   }
 
   // ──────────────────────────────────────────────────────────────────────
