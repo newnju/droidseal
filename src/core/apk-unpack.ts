@@ -64,29 +64,34 @@ function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
     const name = new TextDecoder("utf-8", { fatal: false }).decode(nameBytes)
 
     // 从 Local File Header 读取数据
-    const dataOffset = localHeaderOffset + 30
-      + view.getUint16(localHeaderOffset + 26, true)
-      + view.getUint16(localHeaderOffset + 28, true)
+    if (localHeaderOffset + 30 > bytes.length) { cursor += 46 + nameLen + extraLen + commentLen; continue }
+    const localNameLen = view.getUint16(localHeaderOffset + 26, true)
+    const localExtraLen = view.getUint16(localHeaderOffset + 28, true)
+    const dataOffset = localHeaderOffset + 30 + localNameLen + localExtraLen
     const dataSize = compressionMethod === 0 ? uncompressedSize : compressedSize
 
-    if (dataOffset + dataSize <= bytes.length) {
-      let entryBytes = bytes.slice(dataOffset, dataOffset + dataSize)
-      // deflate 压缩的条目需要解压
-      if (compressionMethod === 8 && entryBytes.length > 0) {
-        try {
-          entryBytes = new Uint8Array(inflateRawSync(entryBytes))
-        } catch {
-          // 解压失败则保留原始字节
-        }
-      }
-      entries.push({
-        name,
-        bytes: entryBytes,
-        compressed: compressionMethod !== 0,
-        compressionMethod,
-        crc32,
-      })
+    // 防护：跳过大小异常的条目(> APK 大小 或为0)
+    if (dataSize === 0 || dataOffset + dataSize > bytes.length) {
+      cursor += 46 + nameLen + extraLen + commentLen
+      continue
     }
+
+    let entryBytes = bytes.slice(dataOffset, dataOffset + dataSize)
+    // deflate 压缩的条目需要解压
+    if (compressionMethod === 8 && entryBytes.length > 0) {
+      try {
+        entryBytes = new Uint8Array(inflateRawSync(entryBytes))
+      } catch {
+        // 解压失败则保留原始字节(可能是存储而非压缩)
+      }
+    }
+    entries.push({
+      name,
+      bytes: entryBytes,
+      compressed: compressionMethod !== 0,
+      compressionMethod,
+      crc32,
+    })
 
     cursor += 46 + nameLen + extraLen + commentLen
   }
