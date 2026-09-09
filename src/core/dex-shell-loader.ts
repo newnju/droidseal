@@ -35,43 +35,52 @@ export function generateShellApplicationSmali(
 
 .method public onCreate()V
     .locals 5
-    invoke-super {p0}, Landroid/app/Application;->onCreate()V
+    invoke-super {p0}, Landroid/app/Application;-><init>()V
 
-    # Step 1:还原 Split-Key
-    sget-object v0, L${pkg}/DroidSealApplication;->KEY_PART1:[B
-    sget-object v1, L${pkg}/DroidSealApplication;->KEY_PART2:[B
-    array-length v2, v0
-    new-array v2, v2, [B
-    const/4 v3, 0x0
-    :xor_loop
-    if-ge v3, v2, :xor_done
-    aget-byte v4, v0, v3
-    xor-int/lit8 v4, v4, 0x0  # part1[i] XOR part2[i]
-    aget-byte v0, v1, v3
-    xor-int/2addr v4, v0
-    int-to-byte v4, v4
-    aput-byte v4, v2, v3
-    add-int/lit8 v3, v3, 0x1
-    goto :xor_loop
-    :xor_done
+    # Step 1:触发解密+类加载(所有逻辑在 DroidSealDecryptor 中)
+    invoke-static {}, L${pkg}/DroidSealDecryptor;->ensureDecrypted()V
 
-    # Step 2:解密 DEX(AES-256-GCM)
-    sget-object v0, L${pkg}/DroidSealApplication;->${encryptedPayloadField}:[B
-    # ... 解密逻辑(运行时调用 javax.crypto.Cipher)
+    # Step 2:通过 InMemoryDexClassLoader 获取已加载的类加载器
+    sget-object v0, L${pkg}/DroidSealDecryptor;->classLoader:Ljava/lang/ClassLoader;
+    if-eqz v0, :fallback
+    const-string v1, "${originalApplication}"
+    invoke-virtual {v0, v1}, Ljava/lang/ClassLoader;->loadClass(Ljava/lang/String;)Ljava/lang/Class;
+    move-result-object v1
 
-    # Step 3:InMemoryDexClassLoader 加载(不落盘)
-    new-instance v1, Ldalvik/system/InMemoryDexClassLoader;
-    invoke-virtual {p0}, Landroid/content/Context;->getClassLoader()Ljava/lang/ClassLoader;
+    # Step 3:反射调用原始 Application 的 attachBaseContext
+    const-string v2, "attachBaseContext"
+    const/4 v3, 0x1
+    new-array v3, v3, [Ljava/lang/Class;
+    const-class v4, Landroid/content/Context;
+    const/4 v5, 0x0
+    aput-object v4, v3, v5
+    invoke-virtual {v1, v2, v3}, Ljava/lang/Class;->getDeclaredMethod(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;
     move-result-object v2
-    const-string v3, ""
-    invoke-direct {v1, v0, v3, v2}, Ldalvik/system/InMemoryDexClassLoader;-><init>([BLjava/lang/String;Ljava/lang/ClassLoader;)V
+    const/4 v3, 0x1
+    invoke-virtual {v2, v3}, Ljava/lang/reflect/Method;->setAccessible(Z)V
+    const/4 v3, 0x1
+    new-array v3, v3, [Ljava/lang/Object;
+    invoke-virtual {p0}, L${pkg}/DroidSealApplication;->getBaseContext()Landroid/content/Context;
+    move-result-object v4
+    aput-object v4, v3, v5
+    invoke-virtual {v2, p0, v3}, Ljava/lang/reflect/Method;->invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;
 
-    # Step 4:调用原始 Application.onCreate
-    const-string v0, "${originalApplication}"
-    invoke-virtual {v1, v0}, Ljava/lang/ClassLoader;->loadClass(Ljava/lang/String;)Ljava/lang/Class;
-    move-result-object v0
-    # ... 反射调用 onCreate
+    # Step 4:反射调用原始 Application 的 onCreate
+    const-string v2, "onCreate"
+    const/4 v3, 0x0
+    new-array v3, v3, [Ljava/lang/Class;
+    invoke-virtual {v1, v2, v3}, Ljava/lang/Class;->getDeclaredMethod(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;
+    move-result-object v1
+    invoke-virtual {v1, v3}, Ljava/lang/reflect/Method;->setAccessible(Z)V
+    const/4 v2, 0x0
+    new-array v2, v2, [Ljava/lang/Object;
+    invoke-virtual {v1, p0, v2}, Ljava/lang/reflect/Method;->invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;
 
+    return-void
+
+    :fallback
+    # 解密失败——正常启动(降级到壳 Application)
+    invoke-super {p0}, Landroid/app/Application;->onCreate()V
     return-void
 .end method
 
@@ -273,6 +282,7 @@ function generateDecryptorSmali(packageName: string, algorithm: string): string 
 
 .field private static volatile decrypted:Z
 .field private static final lock:Ljava/lang/Object;
+.field public static classLoader:Ljava/lang/ClassLoader;
 
 .method static constructor <clinit>()V
     .locals 1
@@ -373,8 +383,8 @@ function generateDecryptorSmali(packageName: string, algorithm: string): string 
     const-string v3, ""
     invoke-direct {v1, v0, v3, v2}, Ldalvik/system/InMemoryDexClassLoader;-><init>([BLjava/lang/String;Ljava/lang/ClassLoader;)V
 
-    # 5. 加载原始 Application 类
-    # (由壳 Application.onCreate 调用此处后反射启动原始 Application)
+    # 5. 存储类加载器供 Application.onCreate 使用
+    sput-object v1, L${pkg}/DroidSealDecryptor;->classLoader:Ljava/lang/ClassLoader;
 
     return-void
 .end method
