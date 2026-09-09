@@ -198,10 +198,21 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       enableDexEncryption: config.enableDexEncryption, enableSplitKey: config.enableSplitKey,
       classExclusionPatterns: config.classExclusionPatterns, certSha256: config.certSha256, apkSha256,
     }
-    dexResult = processAllDexFiles(apkContents.dexFiles, dexConfig)
-    // 替换 APK 中的 DEX 文件
-    for (let i = 0; i < apkContents.dexFiles.length; i += 1) {
-      apkContents.dexFiles[i]!.bytes = dexResult.processedDex[i]!
+    try {
+      dexResult = processAllDexFiles(apkContents.dexFiles, dexConfig)
+      for (let i = 0; i < apkContents.dexFiles.length; i += 1) {
+        apkContents.dexFiles[i]!.bytes = dexResult.processedDex[i]!
+      }
+      findings.push(...dexResult.findings)
+      keyMaterial = dexResult.keyMaterial
+    } catch (dexErr) {
+      findings.push({
+        severity: "high", confidence: "high", code: "DEX_PROCESS_FAILED",
+        title: "DEX 处理失败,跳过 DEX 保护",
+        detail: `错误: ${dexErr instanceof Error ? dexErr.message : String(dexErr)}`,
+        recommendation: "DEX 文件可能损坏或格式不兼容;加固后 APK 的 DEX 保持原样。",
+        evidence: String(dexErr).slice(0, 200),
+      })
     }
     // Step 4.5: 加密 payload 注入壳 DEX 末尾
     if (keyMaterial && dexResult) {
@@ -240,8 +251,8 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
         })
       }
     }
-    findings.push(...dexResult.findings)
-    keyMaterial = dexResult.keyMaterial
+    findings.push(...(dexResult?.findings ?? []))
+    if (dexResult) keyMaterial = dexResult.keyMaterial
   }
 
   // ──────────────────────────────────────────────────────────────────────

@@ -130,7 +130,11 @@ function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
  */
 export async function unpackApk(apkPath: string): Promise<ApkContents> {
   const bytes = new Uint8Array(await readFile(apkPath))
-  const entries = extractRawZipEntries(bytes)
+  const rawEntries = extractRawZipEntries(bytes)
+
+  // 最终硬性兜底:丢弃字节数异常的条目(超过 APK 本身大小说明解压有问题)
+  const apkSize = bytes.length
+  const entries = rawEntries.filter((e) => e.bytes.length <= apkSize && e.bytes.length > 0)
 
   const dexFiles = entries.filter((e) => /^classes\d*\.dex$/.test(e.name))
   const soFiles = entries.filter((e) => e.name.startsWith("lib/") && e.name.endsWith(".so"))
