@@ -71,6 +71,10 @@ export interface WizardDraft {
   enableTripleEntry?: boolean
   enableRandomNames?: boolean
   hardenAlgorithm?: "aes-256-gcm" | "chacha20-poly1305"
+  // 加固额外配置
+  packageName?: string | undefined
+  applicationClass?: string | undefined
+  certSha256?: string | undefined
 }
 
 export function createDraft(runMode: RunMode): WizardDraft {
