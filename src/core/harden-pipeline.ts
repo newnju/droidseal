@@ -29,6 +29,9 @@ import { compileNativeSo, generateCmakeListsForShell } from "./native-so-compile
 import { generateEnhancedRuntimeSmali, generateEnhancedNativeC, buildEnhancedGuardFindings } from "./enhanced-guard.ts"
 import { buildCodeItemTable, encryptCodeItemTable, injectCodeItemTableIntoShellDex, generateCodeItemRestoreHeader } from "./codeitem-table.ts"
 import { generateEnhancedNativeAntiAnalysis, generateEnhancedJavaGuard, buildAntiAnalysisFindings } from "./enhanced-anti-analysis.ts"
+import { generatePltHookC } from "./art-hook-plt.ts"
+import { generateSyscallDetectionC, generateSyscallDetectionSmali, buildSyscallDetectionFindings } from "./syscall-detection.ts"
+import { generateControlFlowObfuscationSmali, generateDex2cBridge, generateVmIsa, generateMultiLayerStringEncryption, buildResearchProtectionFindings } from "./research-protection.ts"
 
 // ── 加固配置 ──────────────────────────────────────────────────────────
 
@@ -316,6 +319,21 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   const nativeFiles = generateNativeShellFiles(nativeConfig)
   generatedFiles.push(...nativeFiles)
   findings.push(...buildNativeShellFindings(nativeConfig, nativeFiles.length))
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 12.5: 研究级保护(控制流混淆 + syscall 检测 + PLT Hook)
+  // ──────────────────────────────────────────────────────────────────────
+  // 控制流混淆
+  generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealCfObfuscator.smali`, content: generateControlFlowObfuscationSmali(packageName) })
+  // 多层字符串加密
+  generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealStringCrypto.smali`, content: generateMultiLayerStringEncryption(packageName) })
+  // syscall 级反分析(Native C + Smali)
+  generatedFiles.push({ name: `native/syscall_detection.c`, content: generateSyscallDetectionC(packageName) })
+  generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealNativeGuard.smali`, content: generateSyscallDetectionSmali(packageName) })
+  // PLT Hook 模块
+  generatedFiles.push({ name: `native/art_hook_plt.c`, content: generatePltHookC(packageName) })
+  findings.push(...buildSyscallDetectionFindings())
+  findings.push(...buildResearchProtectionFindings())
 
   // ──────────────────────────────────────────────────────────────────────
   // Step 13: 重打包 + 签名
