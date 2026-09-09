@@ -603,10 +603,15 @@ export function App() {
     setAnswered(allAnswered)
     setSecretBuffer("")
     addMessage("user", inputPath)
+    const isProject = !inputPath.toLowerCase().endsWith(".apk")
     addMessage("assistant", "自动配置完成", [
       `输入: ${inputPath}`,
-      `类型: ${oneClickDraft.inputKind === "apk" ? "APK" : "项目"}`,
-      oneClickDraft.enableHarden ? "加固: 启用 (AES-256-GCM + 全保护层)" : "加固: 未启用 (仅审计)",
+      `类型: ${isProject ? "项目(Gradle)" : "APK"}`,
+      isProject
+        ? "流程: 环境诊断 → 源码审计 → Gradle 构建 → APK 审计 → 生成报告"
+        : oneClickDraft.enableHarden
+          ? "流程: 环境诊断 → 准备 → 源码审计 → APK 审计 → DEX/SO/资源/字符串加密 → 运行时保护 → 签名 → 生成报告"
+          : "流程: 环境诊断 → 准备 → 源码审计 → APK 审计 → 签名 → 生成报告",
       "即将开始执行…",
     ])
     setTimeout(() => {
