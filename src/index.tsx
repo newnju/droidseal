@@ -75,6 +75,13 @@ harden 子命令(加固):
     --ks-pass <password>     密钥库密码
     --key-pass <password>    密钥密码
 
+batch 子命令(批量审计):
+  droidseal batch <清单.json | --dir <APK目录>> [选项]
+    --base <url>             REST API 地址(默认:http://127.0.0.1:8787)
+    --token <token>          Bearer 认证令牌
+    --parallel <N>           并发数(默认:1)
+    --retry <N>              失败重试次数(默认:0)
+
 TUI 内置命令:
   /guided    分步处理(每步确认)
   /oneclick  一键处理(全自动)
@@ -272,6 +279,94 @@ if (args[0] === "harden") {
     console.error(`加固失败: ${error instanceof Error ? error.message : String(error)}`)
     process.exit(1)
   }
+}
+
+// ── batch(批量审计) ──────────────────────────────────────────────────────
+
+if (args[0] === "batch") {
+  const { readFile: rf, readdir } = await import("node:fs/promises")
+  const p = await import("node:path")
+
+  const dirMode = args[1] === "--dir"
+  const manifestPath = dirMode ? args[2] : args[1]
+  if (!manifestPath) {
+    console.error("用法: droidseal batch <清单.json> [选项]  或  droidseal batch --dir <APK目录> [选项]")
+    process.exit(1)
+  }
+
+  const base = getArg("--base") ?? "http://127.0.0.1:8787"
+  const token = getArg("--token")
+  const parallel = parseInt(getArg("--parallel") ?? "1", 10) || 1
+  const retry = parseInt(getArg("--retry") ?? "0", 10) || 0
+
+  interface BatchItem { name: string; inputKind: "apk" | "project"; inputPath: string; signingMode: string }
+  let items: BatchItem[]
+
+  if (dirMode) {
+    const entries = await readdir(manifestPath, { recursive: true }).catch(() => [] as string[])
+    const apks = entries.filter((e: string) => e.toLowerCase().endsWith(".apk"))
+    if (apks.length === 0) { console.error(`目录中未找到 APK: ${manifestPath}`); process.exit(1) }
+    items = apks.map((entry: string) => ({
+      name: p.basename(entry),
+      inputKind: "apk" as const,
+      inputPath: p.join(manifestPath, entry),
+      signingMode: "skip",
+    }))
+    console.log(`目录批量模式:发现 ${items.length} 个 APK`)
+  } else {
+    items = JSON.parse(await rf(manifestPath, "utf8")) as BatchItem[]
+  }
+  if (items.length === 0) { console.error("清单为空"); process.exit(1) }
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  if (token) headers["Authorization"] = `Bearer ${token}`
+
+  interface RunResult { name: string; ok: boolean; seconds: number; stepsOk: number; gate?: string | undefined; error?: string | undefined }
+  const results: RunResult[] = []
+  const startedAt = Date.now()
+
+  const runOne = async (index: number): Promise<void> => {
+    const item = items[index]!
+    const t0 = Date.now()
+    let failure: string | undefined
+    let attempts = 0
+    while (attempts <= retry) {
+      attempts += 1
+      try {
+        const res = await fetch(`${base}/run`, { method: "POST", headers, body: JSON.stringify(item) })
+        const data: any = await res.json().catch(() => null)
+        if (!data || data.ok !== true) { failure = data?.error?.message ?? `HTTP ${res.status}`; continue }
+        const seconds = (Date.now() - t0) / 1000
+        const stepsOk = data.steps?.filter((s: any) => s.status === "success").length ?? 0
+        console.log(`[${index + 1}/${items.length}] ${item.name} ✓ ${seconds.toFixed(1)}s ${stepsOk}步${data.gate ? ` 门禁:${data.gate}` : ""}${attempts > 1 ? ` 重试${attempts - 1}次` : ""}`)
+        results[index] = { name: item.name, ok: true, seconds, stepsOk, gate: data.gate }
+        return
+      } catch { failure = "请求失败" }
+    }
+    const seconds = (Date.now() - t0) / 1000
+    console.log(`[${index + 1}/${items.length}] ${item.name} ✗ ${seconds.toFixed(1)}s ${failure ?? ""}`)
+    results[index] = { name: item.name, ok: false, seconds, stepsOk: 0, error: failure }
+  }
+
+  // 并发池
+  let next = 0
+  const workers = Array.from({ length: Math.min(parallel, items.length) }, async () => {
+    while (true) { const idx = next++; if (idx >= items.length) return; await runOne(idx) }
+  })
+  await Promise.all(workers)
+
+  const ok = results.filter((r) => r.ok).length
+  const totalSeconds = ((Date.now() - startedAt) / 1000).toFixed(1)
+  console.log(`\n===== 批量汇总 =====`)
+  console.log(`成功 ${ok}/${results.length}  总耗时 ${totalSeconds}s`)
+  for (const r of results) {
+    console.log(`  ${r.ok ? "✓" : "✗"} ${r.name}${r.ok ? ` (${r.seconds.toFixed(1)}s, ${r.stepsOk}步)` : ` ${r.error ?? ""}`}`)
+  }
+  if (results.some((r) => r.gate === "block")) {
+    console.log("\n检测到 block 门禁条目——非零退出(CI 门禁)")
+    process.exitCode = 1
+  }
+  process.exit(ok < results.length ? 1 : 0)
 }
 
 // ── 未知子命令 ──────────────────────────────────────────────────────────
