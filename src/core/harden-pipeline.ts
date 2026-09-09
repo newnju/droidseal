@@ -17,6 +17,7 @@ import { generateRuntimeProtectionFiles, DEFAULT_RUNTIME_CONFIG, buildRuntimePro
 import { generateVmInterpreterSmali, DEFAULT_VM_CONFIG, buildVmpFindings } from "./vmp-protection.ts"
 import { repackApk, type SigningConfig, type RepackConfig } from "./apk-repack.ts"
 import { generateResourceDecryptorSmali } from "./resource-string-protection.ts"
+import { generateNativeShellFiles, buildNativeShellFindings, type NativeShellConfig } from "./native-shell.ts"
 
 // ── 加固配置 ──────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ export interface HardenConfig {
   enableRandomNames: boolean
   classExclusionPatterns: string[]
   runtimeConfig?: RuntimeProtectionConfig | undefined
+  signingConfig?: import("./apk-repack.ts").SigningConfig | undefined
 }
 
 export const DEFAULT_HARDEN_CONFIG: Partial<HardenConfig> = {
@@ -243,7 +245,23 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   }
 
   // ──────────────────────────────────────────────────────────────────────
-  // Step 12: 重打包 + 签名
+  // Step 12: Native 壳 SO 生成(C 源 + CMake——需 NDK 编译)
+  // ──────────────────────────────────────────────────────────────────────
+  const nativeConfig: NativeShellConfig = {
+    packageName,
+    soName: randomSo,
+    algorithm: config.algorithm,
+    enableAntiFrida: true,
+    enableAntiDump: true,
+    enableAntiDebug: true,
+    enableArtHook: config.enableMethodHollow,
+  }
+  const nativeFiles = generateNativeShellFiles(nativeConfig)
+  generatedFiles.push(...nativeFiles)
+  findings.push(...buildNativeShellFindings(nativeConfig, nativeFiles.length))
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 13: 重打包 + 签名
   // ──────────────────────────────────────────────────────────────────────
   await mkdir(config.outputDir, { recursive: true })
   outputApk = path.join(config.outputDir, path.basename(config.inputApk).replace(".apk", ".hardened.apk"))
@@ -261,10 +279,32 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   if (apkContents.resourceArsc) zipEntries.push({ ...apkContents.resourceArsc, compressionMethod: 8 })
   for (const entry of apkContents.otherFiles) zipEntries.push({ ...entry, compressionMethod: entry.compressed ? 8 : 0 })
 
+  // 自动签名:如果用户未提供 keystore,自动生成自签名密钥库
+  let signingConfig: SigningConfig | undefined
+  if (config.signingConfig) {
+    signingConfig = config.signingConfig
+  } else {
+    const { generateKeystore } = await import("./apk-repack.ts")
+    const ksPath = path.join(config.outputDir, "droidseal-keystore.jks")
+    const ksPassword = "droidseal123"
+    const keyAlias = "droidseal"
+    const genOk = generateKeystore(ksPath, { keyAlias, storePassword: ksPassword, keyPassword: ksPassword, validity: 36500 })
+    if (genOk) {
+      signingConfig = { mode: "keystore", keystorePath: ksPath, keyAlias, storePassword: ksPassword, keyPassword: ksPassword }
+      findings.push({
+        severity: "info", confidence: "high", code: "KEYSTORE_GENERATED",
+        title: "自签名密钥库已生成",
+        detail: `路径: ${ksPath};别名: ${keyAlias};有效期: 100 年。release 发布请替换为正式密钥库。`,
+        recommendation: "自签名 keystore 仅用于开发测试——正式发布请使用专用 release 密钥。",
+        evidence: ksPath,
+      })
+    }
+  }
+
   const repackResult = await repackApk({
     entries: zipEntries, outputPath: outputApk,
-    signingConfig: undefined, // 签名需要密钥库——由用户配置
-    enableZipalign: false,    // zipalign 需要外部工具
+    signingConfig,
+    enableZipalign: false,
   })
   findings.push(...repackResult.findings)
   if (repackResult.sha256) findings.push({
