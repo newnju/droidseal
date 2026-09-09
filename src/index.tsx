@@ -119,7 +119,7 @@ if (args[0] === "doctor") {
       instructions: recovery.manualInstructions,
     },
   }
-  if (hasFlag("--json")) {
+  if (!hasFlag("--text") && !hasFlag("--human")) {
     console.log(JSON.stringify(jsonData, null, 2))
   } else {
     console.log(`DroidSeal 环境诊断`)

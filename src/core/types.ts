@@ -101,6 +101,9 @@ export interface PipelineConfig {
   keyFormatsFile?: string
   // 恶意行为评分分级阈值(默认 high 60 / medium 30——score >= high 为 medium 严重度, >= medium 为 low)。
   maliciousScoreThresholds?: { high?: number; medium?: number }
+  // 包名与 Application 类名(可选——由 CLI 或 TUI 传入;未传入时从 APK/Manifest 提取)。
+  packageName?: string | undefined
+  applicationClass?: string | undefined
   signing: SigningConfig
   protection: ProtectionConfig
 }
