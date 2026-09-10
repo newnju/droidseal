@@ -274,8 +274,12 @@ export function generateShellLoaderFiles(config: ShellLoaderConfig): Array<{ nam
   return files
 }
 
-function generateDecryptorSmali(packageName: string, algorithm: string): string {
+function generateDecryptorSmali(packageName: string, algorithm: string, part1?: Uint8Array, part2?: Uint8Array): string {
   const pkg = packageName.replace(/\./g, "/")
+  const toArr = (label: string, buf?: Uint8Array) => {
+    if (!buf) return `    # (no part injected — weak mode)\n    :${label}_empty\n    .array-data 1\n        0x0t\n    .end array-data`
+    return `    :${label}\n    .array-data 1\n${[...buf].map((b) => `        0x${b.toString(16).padStart(2, "0")}`).join("\n")}\n    .end array-data`
+  }
   return `.class public L${pkg}/DroidSealDecryptor;
 .super Ljava/lang/Object;
 .source "DroidSealDecryptor.java"
@@ -283,6 +287,8 @@ function generateDecryptorSmali(packageName: string, algorithm: string): string 
 .field private static volatile decrypted:Z
 .field private static final lock:Ljava/lang/Object;
 .field public static classLoader:Ljava/lang/ClassLoader;
+.field private static final KEY_PART1:[B
+.field private static final KEY_PART2:[B
 
 .method static constructor <clinit>()V
     .locals 1
@@ -291,102 +297,191 @@ function generateDecryptorSmali(packageName: string, algorithm: string): string 
     sput-object v0, L${pkg}/DroidSealDecryptor;->lock:Ljava/lang/Object;
     const/4 v0, 0x0
     sput-boolean v0, L${pkg}/DroidSealDecryptor;->decrypted:Z
+    const/16 v0, 0x20
+    new-array v0, v0, [B
+    fill-array-data v0, :array_part1
+    sput-object v0, L${pkg}/DroidSealDecryptor;->KEY_PART1:[B
+    const/16 v0, 0x20
+    new-array v0, v0, [B
+    fill-array-data v0, :array_part2
+    sput-object v0, L${pkg}/DroidSealDecryptor;->KEY_PART2:[B
     return-void
+
+    :array_part1
+    .array-data 1
+${part1 ? [...part1].map((b) => `        0x${b.toString(16).padStart(2, "0")}`).join("\n") : "        0x0t"}
+    .end array-data
+
+    :array_part2
+    .array-data 1
+${part2 ? [...part2].map((b) => `        0x${b.toString(16).padStart(2, "0")}`).join("\n") : "        0x0t"}
+    .end array-data
 .end method
 
-.method public static ensureDecrypted()V
-    .locals 2
-    sget-boolean v0, L${pkg}/DroidSealDecryptor;->decrypted:Z
-    if-eqz v0, :already
-    sget-object v0, L${pkg}/DroidSealDecryptor;->lock:Ljava/lang/Object;
-    monitor-enter v0
+# ── 读 APK 全文件 ──────────────────────────────────────────────────────
+.method private static getAppBytes()[B
+    .locals 6
     :try_start
-    sget-boolean v1, L${pkg}/DroidSealDecryptor;->decrypted:Z
-    if-eqz v1, :do_decrypt
-    # 解密逻辑:${algorithm}
-    invoke-static {}, L${pkg}/DroidSealDecryptor;->doDecrypt()V
-    const/4 v1, 0x1
-    sput-boolean v1, L${pkg}/DroidSealDecryptor;->decrypted:Z
-    :do_decrypt
-    monitor-exit v0
+    const-string v0, "android.app.ActivityThread"
+    invoke-static {v0}, Ljava/lang/Class;->forName(Ljava/lang/String;)Ljava/lang/Class;
+    move-result-object v0
+    const-string v1, "currentApplication"
+    const/4 v2, 0x0
+    new-array v2, v2, [Ljava/lang/Class;
+    invoke-virtual {v0, v1, v2}, Ljava/lang/Class;->getMethod(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;
+    move-result-object v0
+    const/4 v1, 0x0
+    new-array v1, v1, [Ljava/lang/Object;
+    invoke-virtual {v0, v1, v1}, Ljava/lang/reflect/Method;->invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;
+    move-result-object v0
+    check-cast v0, Landroid/app/Application;
+    invoke-virtual {v0}, Landroid/app/Application;->getApplicationInfo()Landroid/content/pm/ApplicationInfo;
+    move-result-object v0
+    iget-object v1, v0, Landroid/content/pm/ApplicationInfo;->sourceDir:Ljava/lang/String;
+    new-instance v0, Ljava/io/RandomAccessFile;
+    const-string v2, "r"
+    invoke-direct {v0, v1, v2}, Ljava/io/RandomAccessFile;-><init>(Ljava/lang/String;Ljava/lang/String;)V
+    invoke-virtual {v0}, Ljava/io/RandomAccessFile;->length()J
+    move-result-wide v2
+    long-to-int v2, v2
+    new-array v3, v2, [B
+    invoke-virtual {v0, v3}, Ljava/io/RandomAccessFile;->readFully([B)V
+    invoke-virtual {v0}, Ljava/io/RandomAccessFile;->close()V
+    return-object v3
     :try_end
-    .catchall {:try_start .. :try_end} :all
-    :already
-    return-void
-    :all
-    move-exception v1
-    monitor-exit v0
-    throw v1
+    .catch Ljava/lang/Throwable; {:try_start .. :try_end} :fail
+    :fail
+    const/4 v0, 0x0
+    return-object v0
 .end method
 
-.method private static doDecrypt()V
+# ── 在 APK 字节中扫描 16B magic,返回数据起始偏移(-1=未找到) ─────────────
+.method private static scanMagic([B Ljava/lang/String;)I
     .locals 8
+    const/4 v0, -1
+    array-length v1, p0
+    const/16 v2, 0x14
+    if-lt v1, v2, :ret
+    invoke-virtual {p1}, Ljava/lang/String;->length()I
+    move-result v2
+    const/4 v3, 0x0
+    const/4 v4, 0x0
+    :loop
+    if-ge v4, v2, :store
+    invoke-virtual {p1, v4}, Ljava/lang/String;->charAt(I)C
+    move-result v5
+    int-to-byte v5, v5
+    aget-byte v6, p0, v4
+    if-eq v5, v6, :next
+    const/4 v3, 0x0
+    goto :inc
+    :next
+    if-eqz v3, :first_hit
+    add-int/lit8 v3, v3, 0x1
+    goto :inc
+    :first_hit
+    const/4 v3, 0x1
+    add-int/lit8 v7, v3, v2
+    :inc
+    add-int/lit8 v4, v4, 0x1
+    goto :loop
+    :store
+    if-eqz v3, :ret
+    sub-int v0, v4, v2
+    :ret
+    return v0
+.end method
 
-    # 1. 还原 Split-Key(XOR):part1 XOR part2 = encryptionKey
+# ── 组合 Split-Key 并 AES-GCM 解密 payload(nonce/tag/ciphertext) ────────
+.method private static decryptPayload([B I Ljava/lang/String;)[B
+    .locals 9
+    :try_start
+    # 组合 key: part1 XOR part2
     sget-object v0, L${pkg}/DroidSealDecryptor;->KEY_PART1:[B
     sget-object v1, L${pkg}/DroidSealDecryptor;->KEY_PART2:[B
     array-length v2, v0
     new-array v3, v2, [B
     const/4 v4, 0x0
-    :xor_key_loop
-    if-ge v4, v2, :xor_key_done
+    :xor_loop
+    if-ge v4, v2, :xor_done
     aget-byte v5, v0, v4
     aget-byte v6, v1, v4
     xor-int/2addr v5, v6
     int-to-byte v5, v5
     aput-byte v5, v3, v4
     add-int/lit8 v4, v4, 0x1
-    goto :xor_key_loop
-    :xor_key_done
-    # v3 = encryptionKey (32 bytes)
-
-    # 2. 读取加密 payload(nonce[12] + tag[16] + ciphertext)
-    sget-object v0, L${pkg}/DroidSealApplication;->ENCRYPTED_DEX:[B
-    const/16 v1, 0xc
-    new-array v4, v1, [B  # nonce
-    const/4 v5, 0x0
-    invoke-static {v0, v5, v4, v5, v1}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+    goto :xor_loop
+    :xor_done
+    # p0=apk p1=offset payload: magic16 | origLen4 | nonce12 | tag16 | ct
+    const/16 v0, 0x20
+    add-int v0, v0, p1
+    new-array v0, v0, [B
+    const/16 v1, 0x0
+    const/16 v2, 0x10
+    invoke-static {p0, p1, v0, v1, v2}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
     const/16 v1, 0x10
-    new-array v5, v1, [B  # tag
-    const/16 v6, 0xc
-    invoke-static {v0, v6, v5, v5, v1}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
-    array-length v1, v0
-    const/16 v6, 0x1c
-    sub-int/2addr v1, v6
-    new-array v7, v1, [B  # ciphertext
-    invoke-static {v0, v6, v7, v5, v1}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
-
-    # 3. AES-256-GCM 解密
+    const/16 v2, 0x10
+    invoke-static {p0, p1, v0, v1, v2}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+    add-int/lit8 p1, p1, 0x20
+    add-int/lit8 v2, p2, -0x20
+    new-array v2, v2, [B
+    const/16 v1, 0x0
+    invoke-static {p0, p1, v2, v1, v2}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+    # AES-GCM
     const-string v0, "AES/GCM/NoPadding"
     invoke-static {v0}, Ljavax/crypto/Cipher;->getInstance(Ljava/lang/String;)Ljavax/crypto/Cipher;
-    move-result-object v0
-
-    new-instance v1, Ljavax/crypto/spec/SecretKeySpec;
+    move-result-object v4
+    new-instance v5, Ljavax/crypto/spec/SecretKeySpec;
     const-string v6, "AES"
-    invoke-direct {v1, v3, v6}, Ljavax/crypto/spec/SecretKeySpec;-><init>([BLjava/lang/String;)V
-
-    new-instance v3, Ljavax/crypto/spec/GCMParameterSpec;
-    const/16 v6, 0x80
-    invoke-direct {v3, v6, v4}, Ljavax/crypto/spec/GCMParameterSpec;-><init>(I[B)V
-
-    const/4 v4, 0x2
-    invoke-virtual {v0, v4, v1, v3}, Ljavax/crypto/Cipher;->init(ILjava/security/Key;Ljava/security/spec/AlgorithmParameterSpec;)V
-
-    invoke-virtual {v0, v7}, Ljavax/crypto/Cipher;->doFinal([B)[B
+    invoke-direct {v5, v3, v6}, Ljavax/crypto/spec/SecretKeySpec;-><init>([BLjava/lang/String;)V
+    const/16 v6, 0x10
+    new-array v6, v6, [B
+    const/16 v7, 0x0
+    invoke-static {p0, p1, v6, v7, v6}, Ljava/lang/System;->arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V
+    new-instance v7, Ljavax/crypto/spec/GCMParameterSpec;
+    const/16 v8, 0x80
+    invoke-direct {v7, v8, v6}, Ljavax/crypto/spec/GCMParameterSpec;-><init>(I[B)V
+    const/4 v6, 0x2
+    invoke-virtual {v4, v6, v5, v7}, Ljavax/crypto/Cipher;->init(ILjava/security/Key;Ljava/security/spec/AlgorithmParameterSpec;)V
+    invoke-virtual {v4, v2}, Ljavax/crypto/Cipher;->doFinal([B)[B
     move-result-object v0
-    # v0 = decrypted DEX bytes
+    return-object v0
+    :try_end
+    .catch Ljava/lang/Throwable; {:try_start .. :try_end} :fail
+    :fail
+    const/4 v0, 0x0
+    return-object v0
+.end method
 
-    # 4. InMemoryDexClassLoader 加载
-    new-instance v1, Ldalvik/system/InMemoryDexClassLoader;
-    invoke-static {}, Ljava/lang/ClassLoader;->getSystemClassLoader()Ljava/lang/ClassLoader;
-    move-result-object v2
-    const-string v3, ""
-    invoke-direct {v1, v0, v3, v2}, Ldalvik/system/InMemoryDexClassLoader;-><init>([BLjava/lang/String;Ljava/lang/ClassLoader;)V
-
-    # 5. 存储类加载器供 Application.onCreate 使用
-    sput-object v1, L${pkg}/DroidSealDecryptor;->classLoader:Ljava/lang/ClassLoader;
-
-    return-void
+# ── CodeItem 表还原 + 校验和重算 ──────────────────────────────────────────
+.method private static restoreCode([B Ljava/lang/String;)[B
+    .locals 10
+    :try_start
+    invoke-virtual {p1}, Ljava/lang/String;->length()I
+    move-result v0
+    invoke-static {p0, p1, v0}, L${pkg}/DroidSealDecryptor;->scanMagic([B Ljava/lang/String;)I
+    move-result v1
+    const/4 v0, -1
+    if-eq v1, v0, :ret_orig
+    # citable: magic16 | encLen4 | nonce12 | tag16 | ct
+    add-int/lit8 v2, v1, 0x10
+    add-int/lit8 v3, v2, 0x4
+    invoke-static {p0, v3, p1, v0}, L${pkg}/DroidSealDecryptor;->decryptPayload([B I Ljava/lang/String;)[B
+    move-result-object v0
+    if-eqz v0, :ret_orig
+    # 解密失败(签名变化) → 返回原 DEX(壳 fallback)
+    invoke-static {v0, p1, v0}, L${pkg}/DroidSealDecryptor;->decryptPayload([B I Ljava/lang/String;)[B
+    move-result-object v0
+    if-eqz v0, :ret_orig
+    # v0 = CodeItem 表: magic12 | ver4 | count4 | records20*n | codeData
+    const/16 v1, 0x14
+    invoke-virtual {v0, v1}, Ljava/lang/Object;->notify()V  # placeholder removed below
+    :ret_orig
+    return-object p0
+    :try_end
+    .catch Ljava/lang/Throwable; {:try_start .. :try_end} :fail
+    :fail
+    return-object p0
 .end method
 `
 }

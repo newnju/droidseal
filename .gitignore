@@ -44,3 +44,7 @@ build/
 # Python
 __pycache__/
 *.pyc
+
+# Node bundle 构建中间产物
+.droidseal-node-build/
+runtime/build/
