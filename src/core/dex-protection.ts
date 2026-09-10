@@ -35,9 +35,22 @@ function updateDexChecksum(bytes: Uint8Array): void {
 
 export interface EncryptedPayload { ciphertext: Uint8Array; nonce: Uint8Array; tag: Uint8Array }
 
+// 加密分块上限(512MB):避开 Node/Bun crypto 单次 update 的 2GB Buffer 参数上限
+const CIPHER_CHUNK = 512 * 1024 * 1024
+
+type AeadCipher = ReturnType<typeof createCipheriv>
+
+function chunkedUpdate(cipher: AeadCipher, data: Uint8Array): Buffer {
+  const parts: Buffer[] = []
+  for (let off = 0; off < data.length; off += CIPHER_CHUNK) {
+    parts.push(cipher.update(data.subarray(off, Math.min(off + CIPHER_CHUNK, data.length))))
+  }
+  return Buffer.concat(parts)
+}
+
 export function encryptAes256Gcm(plaintext: Uint8Array, key: Uint8Array, nonce: Uint8Array): EncryptedPayload {
   const cipher = createCipheriv("aes-256-gcm", key, nonce)
-  const enc = Buffer.concat([cipher.update(plaintext), cipher.final()])
+  const enc = Buffer.concat([chunkedUpdate(cipher, plaintext), cipher.final()])
   return { ciphertext: new Uint8Array(enc), nonce, tag: new Uint8Array(cipher.getAuthTag()) }
 }
 
@@ -48,7 +61,7 @@ export function decryptAes256Gcm(p: EncryptedPayload, key: Uint8Array): Uint8Arr
 
 export function encryptChaCha20Poly1305(plaintext: Uint8Array, key: Uint8Array, nonce: Uint8Array): EncryptedPayload {
   const cipher = createCipheriv("chacha20-poly1305", key, nonce, { authTagLength: 16 })
-  const enc = Buffer.concat([cipher.update(plaintext), cipher.final()])
+  const enc = Buffer.concat([chunkedUpdate(cipher, plaintext), cipher.final()])
   return { ciphertext: new Uint8Array(enc), nonce, tag: new Uint8Array(cipher.getAuthTag()) }
 }
 
@@ -86,16 +99,22 @@ export function hollowMethods(dexBytes: Uint8Array, excludePatterns: RegExp[] = 
   const v = new DataView(dexBytes.buffer, dexBytes.byteOffset, dexBytes.byteLength)
   const extracted = new Map<number, Uint8Array>()
   const stubs: HollowedMethod[] = []
-  const strings: string[] = []; for (let i = 0; i < Math.min(header.stringIdsSize, 4096); i += 1) strings.push(readDexString(dexBytes, v.getUint32(header.stringIdsOff + i * 4, true)))
-  const types: string[] = []; for (let i = 0; i < Math.min(header.typeIdsSize, 4096); i += 1) types.push(strings[v.getUint32(header.typeIdsOff + i * 4, true)] ?? "")
+  const strings: string[] = []; for (let i = 0; i < Math.min(header.stringIdsSize, 1 << 20); i += 1) strings.push(readDexString(dexBytes, v.getUint32(header.stringIdsOff + i * 4, true)))
+  const types: string[] = []; for (let i = 0; i < Math.min(header.typeIdsSize, 1 << 20); i += 1) types.push(strings[v.getUint32(header.typeIdsOff + i * 4, true)] ?? "")
   const out = new Uint8Array(dexBytes)
   let total = 0, hollowed = 0, skipped = 0, extractedBytes = 0
-  for (let c = 0; c < Math.min(header.classDefsSize, 1500); c += 1) {
+  for (let c = 0; c < header.classDefsSize; c += 1) {
     const cdOff = v.getUint32(header.classDefsOff + c * 32 + 24, true); if (!cdOff) continue
     const cls = types[v.getUint32(header.classDefsOff + c * 32, true)] ?? ""
     if (excludePatterns.some((p) => p.test(cls))) continue
-    const cnt = readUleb128Arr(dexBytes, cdOff, 4); let p = cnt.next; let mIdx = 0
-    for (const mc of [cnt.values[2]!, cnt.values[3]!]) {
+    // class_data_item 布局: static_fields + instance_fields + direct_methods + virtual_methods
+    // 必须先跳过两个字段列表(每项 fieldIdx+accessFlags 各一个 uleb128),否则方法解析从字段数据开始 → 全部漂移
+    const counts = readUleb128Arr(dexBytes, cdOff, 4); let p = counts.next; let mIdx = 0
+    for (let fi = 0; fi < counts.values[0]! + counts.values[1]!; fi += 1) {
+      const fIdx = readUleb128(dexBytes, p); p = fIdx.next
+      const fAcc = readUleb128(dexBytes, p); p = fAcc.next
+    }
+    for (const mc of [counts.values[2]!, counts.values[3]!]) {
       for (let m = 0; m < mc; m += 1) {
         const diff = readUleb128(dexBytes, p); mIdx += diff.value; p = diff.next
         const access = readUleb128(dexBytes, p); p = access.next

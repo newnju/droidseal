@@ -19,7 +19,8 @@ import { repackApk, type SigningConfig, type RepackConfig } from "./apk-repack.t
 import { generateResourceDecryptorSmali } from "./resource-string-protection.ts"
 import { generateNativeShellFiles, buildNativeShellFindings, type NativeShellConfig } from "./native-shell.ts"
 import { compileAndMergeSmali } from "./smali-merge.ts"
-import { injectPayloadIntoShellDex, processAndInjectPayload } from "./dex-payload-inject.ts"
+import { injectPayloadIntoShellDex } from "./dex-payload-inject.ts"
+import { decryptDex } from "./dex-protection.ts"
 import { generateSplitKeyInjectionData } from "./split-key-inject.ts"
 import { recompileAndInjectManifest } from "./axml-recompile.ts"
 import { injectRuntimeProtection, generateRuntimeInitCall } from "./runtime-inject.ts"
@@ -214,16 +215,32 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
         evidence: String(dexErr).slice(0, 200),
       })
     }
-    // Step 4.5: 加密 payload 注入壳 DEX 末尾
-    if (keyMaterial && dexResult) {
+    // Step 4.5: payload 完整性验证(不再二次注入——encryptDex 已把加密 payload
+    // 追加在壳 DEX 的 file_size 边界外,再次注入会双份 payload 且 magic 校验必失败)
+    if (keyMaterial && dexResult?.encryptedDex && config.enableDexEncryption) {
       for (let i = 0; i < apkContents.dexFiles.length; i += 1) {
-        const { resultDex, findings: injectFindings } = processAndInjectPayload(
-          dexResult.processedDex[i]!,
-          apkContents.dexFiles[i]!.bytes,
-          keyMaterial.encryptionKey,
-        )
-        apkContents.dexFiles[i]!.bytes = resultDex
-        findings.push(...injectFindings)
+        try {
+          const roundtrip = decryptDex(apkContents.dexFiles[i]!.bytes, keyMaterial.encryptionKey, config.algorithm)
+          const verified = roundtrip.length === dexResult.encryptedDex.originalSize
+          findings.push({
+            severity: verified ? "info" : "high", confidence: "high",
+            code: verified ? "PAYLOAD_VERIFIED" : "PAYLOAD_VERIFY_FAILED",
+            title: verified ? "加密 payload 验证通过" : "加密 payload 验证失败",
+            detail: verified
+              ? `壳 DEX ${apkContents.dexFiles[i]!.bytes.length}B,payload 可解密还原为 ${roundtrip.length}B(原始 ${dexResult.encryptedDex.originalSize}B)。`
+              : `解密结果 ${roundtrip.length}B 与原始 ${dexResult.encryptedDex.originalSize}B 不一致。`,
+            recommendation: verified ? "壳加载器解密逻辑与加密算法一致。" : "检查密钥材料与加密算法一致性。",
+            evidence: `dex[${i}] roundtrip=${roundtrip.length}B expected=${dexResult.encryptedDex.originalSize}B`,
+          })
+        } catch (verifyErr) {
+          findings.push({
+            severity: "high", confidence: "high", code: "PAYLOAD_VERIFY_FAILED",
+            title: "加密 payload 验证失败",
+            detail: `解密验证异常: ${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)}`,
+            recommendation: "检查密钥材料与加密算法一致性。",
+            evidence: `dex[${i}]`,
+          })
+        }
       }
     }
     // Step 4.5: CodeItem 表构建+加密+注入壳 DEX 末尾
