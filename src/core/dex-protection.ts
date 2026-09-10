@@ -103,6 +103,8 @@ export function hollowMethods(dexBytes: Uint8Array, excludePatterns: RegExp[] = 
         total += 1
         if (!code.value || (access.value & 0x100)) { skipped += 1; continue }
         const insnsSize = v.getUint32(code.value + 12, true); const sz = 16 + insnsSize * 2
+        // 防护:code_item 越界或 insnsSize 为垃圾值(单方法指令区不超过 64K insns=128KB+16B 头)
+        if (code.value + 16 > dexBytes.length || insnsSize > 0x10000 || code.value + sz > dexBytes.length) { skipped += 1; continue }
         extracted.set(code.value, dexBytes.slice(code.value, code.value + sz)); extractedBytes += sz
         out.set(generateReturnVoidStub(), code.value)
         new DataView(out.buffer, out.byteOffset, out.byteLength).setUint32(code.value + 12, 1, true)
