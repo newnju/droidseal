@@ -77,13 +77,9 @@ function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
       continue
     }
 
-    // 防护：LFH 中声明的 nameLen/extraLen 不应超过合理范围(防止读到垃圾值)
-    if (localNameLen > 1024 || localExtraLen > 4096) {
-      cursor += 46 + nameLen + extraLen + commentLen
-      continue
-    }
+    // 防护:LFH 签名已验证,localNameLen/localExtraLen 均为 u16 有界;dataOffset+dataSize 越界检查兜底
 
-    // 防护：uncompressedSize 不应超过 APK 本身大小的 10 倍(真正的 zip bomb 防护)
+    // 防护:uncompressedSize 不应超过 APK 本身大小的 10 倍(真正的 zip bomb 防护)
     // 这里不限 50MB,而是动态计算:单个条目不可能比整个 APK 大太多倍
     const apkSize = bytes.length
     const maxReasonable = Math.max(apkSize * 10, 200 * 1024 * 1024) // APK大小×10 或 200MB 取较大值
@@ -93,23 +89,14 @@ function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
     }
 
     let entryBytes = bytes.slice(dataOffset, dataOffset + dataSize)
-    // deflate 压缩的条目需要解压
-    if (compressionMethod === 8 && entryBytes.length > 0) {
-      // 压缩输入超过 APK 本身大小的不尝试解压(畸形数据)
-      if (entryBytes.length <= apkSize) {
-        try {
-          const inflated = inflateRawSync(entryBytes)
-          // 解压后大小 vs ZIP 声明的 uncompressedSize 对比:
-          // 正常情况两者一致(误差<10%);zip bomb 时解压结果远超声明值
-          const declaredSize = uncompressedSize || inflated.length
-          const tolerance = Math.max(declaredSize * 0.5, 4096) // 允许50%误差或至少4KB
-          if (inflated.length > 0 && inflated.length <= declaredSize + tolerance) {
-            entryBytes = new Uint8Array(inflated)
-          }
-          // 解压结果远超声明 → 疑似 zip bomb,保留压缩原始字节
-        } catch {
-          // 解压失败则保留原始字节(可能是存储而非压缩)
-        }
+    // deflate 压缩的条目需要解压;maxOutputLength 硬性截断解压输出(zip bomb 时 zlib 直接抛错,不产生超大 buffer)
+    if (compressionMethod === 8 && entryBytes.length > 0 && entryBytes.length <= apkSize) {
+      try {
+        const inflated = inflateRawSync(entryBytes, { maxOutputLength: maxReasonable })
+        entryBytes = new Uint8Array(inflated)
+      } catch {
+        // 解压失败保留压缩原始字节;compressed 标志保持 true,
+        // repack 侧 buildApkZip 对含 PK 头的字节不再二次 deflate(见 apk-repack.ts)
       }
     }
     entries.push({
@@ -132,9 +119,8 @@ export async function unpackApk(apkPath: string): Promise<ApkContents> {
   const bytes = new Uint8Array(await readFile(apkPath))
   const rawEntries = extractRawZipEntries(bytes)
 
-  // 最终硬性兜底:丢弃字节数异常的条目(超过 APK 本身大小说明解压有问题)
-  const apkSize = bytes.length
-  const entries = rawEntries.filter((e) => e.bytes.length <= apkSize && e.bytes.length > 0)
+  // 只过滤空条目;大条目合法(高压缩比 asset/SO),解压输出已由 maxOutputLength 截断防护
+  const entries = rawEntries.filter((e) => e.bytes.length > 0)
 
   const dexFiles = entries.filter((e) => /^classes\d*\.dex$/.test(e.name))
   const soFiles = entries.filter((e) => e.name.startsWith("lib/") && e.name.endsWith(".so"))
