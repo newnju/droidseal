@@ -5,6 +5,7 @@
 // 纯 TypeScript 失败关闭。
 import { spawnSync } from "node:child_process"
 import { writeFile, readFile, mkdir, rm } from "node:fs/promises"
+import { readdirSync, existsSync } from "node:fs"
 import path from "node:path"
 import type { Finding } from "./types.ts"
 
@@ -24,7 +25,7 @@ function findAapt2(): string | undefined {
     ]
     for (const dir of buildToolsDirs) {
       try {
-        const entries = require("node:fs").readdirSync(dir)
+        const entries = readdirSync(dir)
         for (const entry of entries) {
           const candidate = path.join(dir, entry, "aapt2")
           const result = spawnSync(candidate, ["version"], { timeout: 5000, stdio: "pipe" })
@@ -149,8 +150,7 @@ export async function recompileManifestXml(
  * 从 APK 中提取 AndroidManifest.xml。
  */
 async function extractManifestFromApk(apkPath: string): Promise<Uint8Array | undefined> {
-  const { spawnSync: spawn } = require("node:child_process")
-  const result = spawn("unzip", ["-p", apkPath, "AndroidManifest.xml"], { timeout: 10000, stdio: "pipe" })
+  const result = spawnSync("unzip", ["-p", apkPath, "AndroidManifest.xml"], { timeout: 10000, stdio: "pipe" })
   if (result.status === 0 && result.stdout.length > 0) {
     return new Uint8Array(result.stdout)
   }
@@ -166,11 +166,11 @@ function getAndroidJar(): string | undefined {
   // 尝试最高版本
   const platformsDir = path.join(sdkRoot, "platforms")
   try {
-    const entries = require("node:fs").readdirSync(platformsDir)
+    const entries = readdirSync(platformsDir)
     const sorted = entries.filter((e: string) => e.startsWith("android-")).sort().reverse()
     for (const entry of sorted) {
       const jar = path.join(platformsDir, entry, "android.jar")
-      if (require("node:fs").existsSync(jar)) return jar
+      if (existsSync(jar)) return jar
     }
   } catch { /* continue */ }
   return undefined

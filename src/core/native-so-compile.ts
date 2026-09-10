@@ -4,6 +4,7 @@
 // 纯 TypeScript，失败关闭。
 import { spawnSync } from "node:child_process"
 import { writeFile, readFile, mkdir, rm, readdir, stat } from "node:fs/promises"
+import { readdirSync, existsSync } from "node:fs"
 import path from "node:path"
 import type { Finding } from "./types.ts"
 
@@ -21,7 +22,7 @@ function findNdk(): { ndkRoot: string; cmakeBin: string; ndkBuild: string } | un
 
   for (const dir of candidates) {
     try {
-      const entries = require("node:fs").readdirSync(dir)
+      const entries = readdirSync(dir)
       const sorted = entries.sort().reverse()
       for (const entry of sorted) {
         const ndkRoot = path.join(dir, entry)
@@ -29,7 +30,7 @@ function findNdk(): { ndkRoot: string; cmakeBin: string; ndkBuild: string } | un
         const ndkBuild = path.join(ndkRoot, "ndk-build")
         const cmakeExe = process.platform === "win32" ? cmakeBin + ".exe" : cmakeBin
         const ndkBuildExe = process.platform === "win32" ? ndkBuild + ".cmd" : ndkBuild
-        if (require("node:fs").existsSync(cmakeExe) || require("node:fs").existsSync(ndkBuildExe)) {
+        if (existsSync(cmakeExe) || existsSync(ndkBuildExe)) {
           return { ndkRoot, cmakeBin: cmakeExe, ndkBuild: ndkBuildExe }
         }
       }

@@ -3,6 +3,7 @@
 // 纯 TypeScript，失败关闭。
 import { spawnSync } from "node:child_process"
 import { writeFile, readFile, mkdir, rm } from "node:fs/promises"
+import { deflateRawSync } from "node:zlib"
 import path from "node:path"
 import { createHash } from "node:crypto"
 import type { Finding } from "./types.ts"
@@ -30,7 +31,6 @@ function crc32(data: Uint8Array): number {
 
 function deflateSync(data: Uint8Array): Uint8Array {
   // 使用 node:zlib 的 deflateRawSync
-  const { deflateRawSync } = require("node:zlib") as typeof import("node:zlib")
   return new Uint8Array(deflateRawSync(data))
 }
 
