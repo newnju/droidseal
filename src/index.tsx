@@ -1,11 +1,8 @@
 #!/usr/bin/env bun
-import { createCliRenderer } from "@opentui/core"
-import { render } from "@opentui/solid"
+import { readFile } from "node:fs/promises"
 import { VERSION } from "./brand.ts"
 import { createToolRecoveryPlan } from "./core/tool-installer.ts"
 import { discoverToolchain } from "./core/toolchain.ts"
-import { theme } from "./ui/theme.ts"
-import { App } from "./ui/app.tsx"
 import { Pipeline, STEP_DEFINITIONS } from "./core/pipeline.ts"
 
 const args = process.argv.slice(2)
@@ -341,7 +338,7 @@ if (args[0] === "batch") {
       inputPath: p.resolve(p.join(target, entry)),
     }))
   } else if (isFile) {
-    const raw = JSON.parse(await require("node:fs").promises.readFile(target, "utf8")) as Array<{ name?: string; inputPath: string }>
+    const raw = JSON.parse(await readFile(target, "utf8")) as Array<{ name?: string; inputPath: string }>
     items = raw.map((r) => ({ name: r.name ?? p.basename(r.inputPath), inputPath: r.inputPath }))
   } else {
     console.error(`目标不存在: ${target}`)
@@ -467,7 +464,7 @@ if (args[0] && !args[0].startsWith("-")) {
   process.exit(1)
 }
 
-// ── TUI 启动(默认) ──────────────────────────────────────────────────────
+// ── TUI 启动(默认,动态加载——JSX/OpenTUI 依赖仅 TUI 分支需要) ──────────
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
   console.error("DroidSeal TUI 需要交互式终端。使用 `droidseal <apk>` 或 `droidseal scan` 进行非交互操作。")
@@ -481,21 +478,4 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
   process.exit(2)
 }
 
-const renderer = await createCliRenderer({
-  exitOnCtrlC: true,
-  useMouse: true,
-  enableMouseMovement: true,
-  targetFps: 60,
-  maxFps: 60,
-  gatherStats: false,
-  autoFocus: false,
-  screenMode: "alternate-screen",
-  backgroundColor: theme.background,
-  openConsoleOnError: false,
-  useKittyKeyboard: {
-    disambiguate: true,
-    alternateKeys: true,
-  },
-})
-
-await render(() => <App />, renderer)
+await import("./ui/tui-main.tsx")

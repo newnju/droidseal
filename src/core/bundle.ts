@@ -2,6 +2,7 @@ import path from "node:path"
 import { existsSync } from "node:fs"
 import { access, readFile } from "node:fs/promises"
 import { homedir } from "node:os"
+import { fileURLToPath } from "node:url"
 
 export type BundleToolName = "java" | "keytool" | "aapt" | "zipalign" | "apksigner"
 
@@ -49,8 +50,8 @@ export function bundleRoot(): string {
   // from the per-user ~/.droidseal directory.
   const candidates = [
     path.resolve(process.cwd(), "dependencies"),
-    path.resolve(import.meta.dir, "..", "..", "dependencies"),
-    path.resolve(import.meta.dir, "..", "dependencies"),
+    path.resolve(fileURLToPath(import.meta.url), "..", "..", "..", "dependencies"),
+    path.resolve(fileURLToPath(import.meta.url), "..", "..", "dependencies"),
   ]
   for (const candidate of [...new Set(candidates)]) {
     if (existsSync(path.join(candidate, "bundle-manifest.json"))) return candidate

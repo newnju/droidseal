@@ -1,4 +1,5 @@
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises"
 
 // Opt-in, build-time anti-debug stub scaffolder. Copies the self-developed JNI
@@ -19,7 +20,9 @@ export const ANTIDEBUG_STUB_FILES: readonly StubFile[] = [
 ] as const
 
 function assetsRoot(): string {
-  return path.join(import.meta.dir, "..", "assets", "antidebug-stub")
+  // Bun/Node 通用:import.meta.dir 仅 Bun 可用
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+  return path.join(moduleDir, "..", "assets", "antidebug-stub")
 }
 
 export interface InstallStubResult {
