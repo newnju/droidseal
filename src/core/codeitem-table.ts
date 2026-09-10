@@ -17,29 +17,33 @@ import type { Finding } from "./types.ts"
 /**
  * 单个被抽取方法的 CodeItem 记录。
  * classIdx + methodIdx 定位到 DEX 中的方法;
+ * originalCodeOff 是原始 CodeItem 在 DEX 中的文件偏移(运行时写回目标地址);
  * codeOffset 是原始 CodeItem 在 payload 中的偏移;
  * codeSize 是原始 CodeItem 的大小(字节)。
  */
 export interface CodeItemRecord {
   classIdx: number
   methodIdx: number
+  originalCodeOff: number // 原始 CodeItem 在 DEX 中的偏移(写回位置)
   codeOffset: number   // 在 payload 中的偏移
   codeSize: number     // 原始 CodeItem 大小
 }
 
 /**
  * CodeItem 表(追加到壳 DEX 末尾的结构化 payload)。
- * 格式:
+ * 格式(v2):
  *   magic: "DROIDSEAL_CI" (12 bytes)
- *   version: uint32 (4 bytes) = 1
+ *   version: uint32 (4 bytes) = 2
  *   methodCount: uint32 (4 bytes)
- *   records: CodeItemRecord[methodCount] (每条 12 bytes: classIdx(4) + methodIdx(4) + codeOffset(4) + codeSize(4))
+ *   records: CodeItemRecord[methodCount] (每条 20 bytes:
+ *     classIdx(4) + methodIdx(4) + originalCodeOff(4) + codeOffset(4) + codeSize(4))
  *   codeData: 原始 CodeItem 字节(连续存储)
  *
  * 整个表用 AES-256-GCM 加密后追加到壳 DEX 末尾。
  */
 const CODE_ITEM_TABLE_MAGIC = "DROIDSEAL_CI"
-const CODE_ITEM_RECORD_SIZE = 12 // 4+4+4+4
+const CODE_ITEM_RECORD_SIZE = 20 // 4+4+4+4+4
+const CODE_ITEM_TABLE_VERSION = 2
 
 /**
  * 将多个 CodeItemRecord + 原始 CodeItem 字节序列化为表。
@@ -56,7 +60,7 @@ export function serializeCodeItemTable(
   // magic
   result.set(new TextEncoder().encode(CODE_ITEM_TABLE_MAGIC), 0)
   // version
-  view.setUint32(12, 1, true)
+  view.setUint32(12, CODE_ITEM_TABLE_VERSION, true)
   // methodCount
   view.setUint32(16, records.length, true)
 
@@ -65,8 +69,9 @@ export function serializeCodeItemTable(
   for (const rec of records) {
     view.setUint32(pos, rec.classIdx, true)
     view.setUint32(pos + 4, rec.methodIdx, true)
-    view.setUint32(pos + 8, rec.codeOffset, true)
-    view.setUint16(pos + 12, rec.codeSize, true) // codeSize 用 uint16 (最大 64KB)
+    view.setUint32(pos + 8, rec.originalCodeOff, true)
+    view.setUint32(pos + 12, rec.codeOffset, true)
+    view.setUint32(pos + 16, rec.codeSize, true)
     pos += CODE_ITEM_RECORD_SIZE
   }
 
@@ -101,8 +106,9 @@ export function deserializeCodeItemTable(data: Uint8Array): {
     records.push({
       classIdx: view.getUint32(base, true),
       methodIdx: view.getUint32(base + 4, true),
-      codeOffset: view.getUint32(base + 8, true),
-      codeSize: view.getUint16(base + 12, true),
+      originalCodeOff: view.getUint32(base + 8, true),
+      codeOffset: view.getUint32(base + 12, true),
+      codeSize: view.getUint32(base + 16, true),
     })
   }
 
@@ -131,6 +137,7 @@ export function buildCodeItemTable(
     records.push({
       classIdx: stub.classIdx,
       methodIdx: stub.methodIdx,
+      originalCodeOff: stub.originalCodeOff,
       codeOffset: currentOffset,
       codeSize: codeBytes.length,
     })
@@ -300,8 +307,9 @@ export function generateCodeItemRestoreHeader(): string {
 typedef struct {
     uint32_t class_idx;
     uint32_t method_idx;
+    uint32_t original_code_off; // 原始 CodeItem 在 DEX 中的偏移(写回位置)
     uint32_t code_offset;   // 在 codeData 中的偏移
-    uint16_t code_size;     // CodeItem 大小
+    uint32_t code_size;     // CodeItem 大小
 } CodeItemRecord;
 
 typedef struct {

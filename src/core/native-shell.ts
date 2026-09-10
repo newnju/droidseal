@@ -105,13 +105,14 @@ export function generateArtHookC(packageName: string): string {
 // ── CodeItem 表格式（与 codeitem-table.ts 对齐）──────────────────────
 #define TABLE_MAGIC "DROIDSEAL_CITABLE"
 #define TABLE_MAGIC_LEN 16
-#define RECORD_SIZE 12  // class_idx(4) + method_idx(4) + code_offset(4) + code_size(2+2pad)
+#define RECORD_SIZE 20  // class_idx(4) + method_idx(4) + original_code_off(4) + code_offset(4) + code_size(4)
 
 typedef struct {
     uint32_t class_idx;
     uint32_t method_idx;
+    uint32_t original_code_off; // 原始 CodeItem 在 DEX 中的偏移(写回位置)
     uint32_t code_offset;  // 在 codeData 中的偏移
-    uint16_t code_size;    // CodeItem 大小
+    uint32_t code_size;    // CodeItem 大小
 } MethodRecord;
 
 typedef struct {
