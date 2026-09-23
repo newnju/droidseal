@@ -26,7 +26,16 @@
 
 ### TaintBench
 - **口径修正(2026-09-23 复核)**:官方 release(TaintBenchSuite 标签)分发形态即 39 APK(TaintBench.zip 39 条目 / findings.zip 41 条目),官方 org 共 44 仓库——此前读官方 Suite 页面"203"误作 app 数,实为官方发布全集 39 app / 249 GT 流
+- **"203" 谜底(2026-09-23 查证)**:官方 Suite 页面表格 sum 行 = **Expected Flows 203 + Unexpected Flows 46 = 249**——203/46 是**流数**按预期方向的拆分,不是 app 数;本地 findings 逐条验证 `isNegative=true` 恰 46 条,与官方页面完全对应
 - 本地 39 app 与官方 release 逐 APK 名单双向差集为 0;10 个 app 的 findings.json MD5 与官方不同但**流级结构(key 六元组)完全一致**(仅序列化/元数据格式差异)——**本地即官方全集,100% 覆盖,无子集口径**
+
+### 评测口径影响(重要)
+- 官方对判语义:Expected Flow(应检出,检出=TP)与 Unexpected Flow(不应检出,检出=**FP**)是两个不同方向的题目;**此前 harness 把 249 条全部当 expected 计分,口径有误**
+- 按 `isNegative` 字段重算(官方正碗口径,分母=203 positive;harness 已修复 isNegative 分流并实跑复核):
+  - **端点级:TP=130 / FN=73 / FP=41**(负例 46 条中被端点命中的;召回 64%)
+  - **连通宽松档:TP=61(46.9%)**;严格档 0(不变)
+  - 旧混合口径的"端点 171"实为 130 positive + 41 negative 混计;"宽松档 85"同理混入负例命中
+- Rust 侧同款 `isNegative` 分流未实现,其 171/98 数字为旧混合口径——**双侧对拍与论文引用数字一律以正口径为准,混合口径数字已废弃**
 
 ## 声明
 - 对判器已与 Rust 同构(严格=类词干+行号±2;宽松=类词干对齐),双档并列呈现、宽松档不单独引用。

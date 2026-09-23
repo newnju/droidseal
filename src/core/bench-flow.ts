@@ -8,11 +8,13 @@ import path from "node:path"
 import { scanSourceDetectors } from "./source-detectors.ts"
 
 export interface GtPoint { class: string; line: number; target: string }
-export interface GtFlow { source: GtPoint; sink: GtPoint }
+export interface GtFlow { source: GtPoint; sink: GtPoint; negative: boolean }
 export interface FlowApp { name: string; dir: string; flows: GtFlow[] }
 
 export interface FlowVerdict {
   app: string; gtFlows: number; tp: number; fn: number
+  /** 负例流(unexpected,isNegative=true)被检出数——官方口径的 FP */
+  fpNegative: number
   /** 连通级 TP:两端识别且引擎流按行号(±2)连接(严格档) */
   tpConnected: number
   /** 连通级 TP(宽松档):两端类词干对齐即算,行号仅作参考——与 Rust 同口径 */
@@ -23,7 +25,7 @@ export interface FlowVerdict {
   unmatchedReports: number
 }
 
-/** 解析 *_findings.json → GT 流(轻量:直接 JSON.parse,结构已验证)。 */
+/** 解析 *_findings.json → GT 流(isNegative=true 为负例流:不应检出,检出计 FP)。 */
 export function parseFindings(json: string): GtFlow[] {
   const data = JSON.parse(json) as { findings?: any[] }
   const flows: GtFlow[] = []
@@ -33,6 +35,7 @@ export function parseFindings(json: string): GtFlow[] {
       flows.push({
         source: { class: String(s.className), line: Number(s.lineNo ?? 0), target: String(s.targetName ?? "") },
         sink: { class: String(k.className), line: Number(k.lineNo ?? 0), target: String(k.targetName ?? "") },
+        negative: f.isNegative === true,
       })
     }
   }
@@ -150,11 +153,11 @@ export async function engineFlows(appDir: string): Promise<EngineFlow[]> {
   return out
 }
 
-/** 对单 app 做流级(端点级 + 连通级双档)对判。 */
+/** 对单 app 做流级(端点级 + 连通级双档)对判。官方口径:positive 流检出=TP、未检出=FN;negative(isNegative)流检出=FP。 */
 export async function adjudicate(app: FlowApp): Promise<FlowVerdict> {
   const reports = await endpointReports(app.dir)
   const efs = await engineFlows(app.dir)
-  const v: FlowVerdict = { app: app.name, gtFlows: app.flows.length, tp: 0, fn: 0, tpConnected: 0, tpConnectedLenient: 0, fnSourceMiss: 0, fnSinkMiss: 0, fnBothMiss: 0, fnPropagationBreak: 0, unmatchedReports: 0 }
+  const v: FlowVerdict = { app: app.name, gtFlows: app.flows.length, tp: 0, fn: 0, fpNegative: 0, tpConnected: 0, tpConnectedLenient: 0, fnSourceMiss: 0, fnSinkMiss: 0, fnBothMiss: 0, fnPropagationBreak: 0, unmatchedReports: 0 }
   const hit = (pt: GtPoint): boolean => {
     const stem = pt.class.split(".").pop() ?? pt.class
     const apis = reports.get(stem)
@@ -164,6 +167,11 @@ export async function adjudicate(app: FlowApp): Promise<FlowVerdict> {
   }
   for (const f of app.flows) {
     const s = hit(f.source), k = hit(f.sink)
+    if (f.negative) {
+      // 负例流(unexpected):检出 = FP,不进 TP/FN 分母
+      if (s && k) v.fpNegative++
+      continue
+    }
     if (s && k) {
       v.tp++
       if (efs.some(ef => matchesStrict(ef, f.source) && matchesStrict(ef, f.sink))) v.tpConnected++
@@ -180,7 +188,7 @@ export async function adjudicate(app: FlowApp): Promise<FlowVerdict> {
 }
 
 /** 流级汇总。 */
-export async function summarizeFlow(root: string): Promise<{ total: number; tp: number; fn: number; tpConnected: number; tpConnectedLenient: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] } | null> {
+export async function summarizeFlow(root: string): Promise<{ total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] } | null> {
   const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
   const verdicts: FlowVerdict[] = []
   for (const e of entries) {
@@ -192,7 +200,7 @@ export async function summarizeFlow(root: string): Promise<{ total: number; tp: 
   if (verdicts.length === 0) return null
   const sum = (k: keyof FlowVerdict) => verdicts.reduce((a, v) => a + (v[k] as number), 0)
   return {
-    total: sum("gtFlows"), tp: sum("tp"), fn: sum("fn"),
+    total: sum("gtFlows"), tp: sum("tp"), fn: sum("fn"), fpNegative: sum("fpNegative"),
     tpConnected: sum("tpConnected"), tpConnectedLenient: sum("tpConnectedLenient"),
     fnSourceMiss: sum("fnSourceMiss"), fnSinkMiss: sum("fnSinkMiss"), fnBothMiss: sum("fnBothMiss"),
     fnPropagationBreak: sum("fnPropagationBreak"),
@@ -200,24 +208,24 @@ export async function summarizeFlow(root: string): Promise<{ total: number; tp: 
   }
 }
 
-/** 流级 Markdown 小节(与 Rust render_flow_md 同结构,含连通级双档)。 */
-export function renderFlowMd(s: { total: number; tp: number; fn: number; tpConnected: number; tpConnectedLenient: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] }): string {
+/** 流级 Markdown 小节(与 Rust render_flow_md 同结构,含连通级双档与负例 FP)。 */
+export function renderFlowMd(s: { total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] }): string {
   const recall = s.tp + s.fn > 0 ? Math.round((s.tp / (s.tp + s.fn)) * 1000) / 10 : 0
   const pct = (n: number) => s.tp > 0 ? Math.round((n / s.tp) * 1000) / 10 : 0
   const lines = [
     "", "## 流级判定(flow-level adjudication)", "",
-    `- GT 流:${s.total} · 端点级 TP:${s.tp} · **连通级 TP:${s.tpConnected}(${pct(s.tpConnected)}%)** · 连通级宽松档 TP:${s.tpConnectedLenient}(${pct(s.tpConnectedLenient)}%) · FN:${s.fn} · 流级召回 ${recall}%`,
-    "> 口径声明:严格档 = 两端类词干对齐且行号精确/±2;宽松档 = 两端类词干对齐(行号仅作参考,与端点级语义等价原则一致化)。双档并列呈现,宽松档不得单独引用。",
+    `- GT 流:${s.total}(positive ${s.tp + s.fn} + negative ${s.fpNegative + 0}) · 端点级 TP:${s.tp} · FN:${s.fn} · **负例 FP:${s.fpNegative}** · **连通级 TP:${s.tpConnected}(${pct(s.tpConnected)}%)** · 连通级宽松档 TP:${s.tpConnectedLenient}(${pct(s.tpConnectedLenient)}%) · 流级召回 ${recall}%`,
+    "> 口径声明:官方语义——Expected Flow 检出=TP、未检出=FN;Unexpected(isNegative)流检出=FP。严格档 = 两端类词干对齐且行号精确/±2;宽松档 = 两端类词干对齐(行号仅作参考)。双档并列呈现,宽松档不得单独引用。",
     "",
-    "### FN 病因归因(四类)", "",
+    "### FN 病因归因(三类,分母=positive 流)", "",
     "| 病因 | 条数 | 含义 |", "|---|---|---|",
     `| source 漏识别 | ${s.fnSourceMiss} | source 点 API 未被引擎表覆盖 |`,
     `| sink 侧断链 | ${s.fnSinkMiss} | source 已识别、sink 未识别(sink 表缺口或跨类) |`,
     `| 双端均漏 | ${s.fnBothMiss} | source 与 sink 均未识别 |`,
-    `| 传播断链 | ${s.fnPropagationBreak} | 两端均识别但引擎无流连接(过程间/跨类缺口) |`, "",
+    `| 传播断链 | ${s.fnPropagationBreak} | 两端均识别但引擎无流连接(计入连通级 FN) |`, "",
     "### 逐 app 明细", "",
-    "| app | GT 流 | TP | 连通TP | FN | source漏 | sink断 | 双漏 | 传播断 |", "|---|---|---|---|---|---|---|---|---|",
-    ...s.verdicts.map(v => `| ${v.app} | ${v.gtFlows} | ${v.tp} | ${v.tpConnectedLenient} | ${v.fn} | ${v.fnSourceMiss} | ${v.fnSinkMiss} | ${v.fnBothMiss} | ${v.fnPropagationBreak} |`), "",
+    "| app | GT 流 | TP | 连通TP | FN | FP(负例) | source漏 | sink断 | 双漏 | 传播断 |", "|---|---|---|---|---|---|---|---|---|---|",
+    ...s.verdicts.map(v => `| ${v.app} | ${v.gtFlows} | ${v.tp} | ${v.tpConnectedLenient} | ${v.fn} | ${v.fpNegative} | ${v.fnSourceMiss} | ${v.fnSinkMiss} | ${v.fnBothMiss} | ${v.fnPropagationBreak} |`), "",
   ]
   return lines.join("\n")
 }
