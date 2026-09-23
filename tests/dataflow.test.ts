@@ -64,6 +64,38 @@ public void onCreate(Bundle b) {
     expect(flows.every(f => !(f.source_line === 3 && f.sink_line === 5))).toBe(true)
   })
 
+  test("接口型回调分派:setOnClickListener 连通 onClick 内 sink(P2-4,与 Rust 同口径)", () => {
+    const src = `
+public void onCreate(Bundle b) {
+    final String dev = tm.getDeviceId();
+    btn.setOnClickListener(new View.OnClickListener() {
+        public void onClick(View v) {
+            Log.d(TAG, dev);
+        }
+    });
+}
+`
+    const flows = analyzeInterproc(src)
+    expect(flows.length).toBe(1)
+    expect(flows[0].source_line).toBe(3)
+    expect(flows[0].sink_line).toBe(6)
+  })
+
+  test("接口型回调:回调方法不存在时不建边(存在性兜底)", () => {
+    const src = `
+public void onCreate(Bundle b) {
+    final String dev = tm.getDeviceId();
+    btn.setOnItemSelectedListener(new Adapter() {
+        public void nothing() {
+            Log.d(TAG, dev);
+        }
+    });
+}
+`
+    const flows = analyzeInterproc(src)
+    expect(flows.every(f => f.sink_line !== 6)).toBe(true)
+  })
+
   test("反射常量方法名:invoke 连通目标方法 sink", () => {
     const src = `
 public void go() {
