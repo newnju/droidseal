@@ -55,8 +55,10 @@
 
 ### 混淆对抗扩样本(Obfuscapk,2026-09-23 第二轮:管线修复后完成)
 - 工具链修复:根因有二——①apksigner 调用缺 `--min-sdk-version 21`(MinSdkVersionException);②CLI 封装吞错。修复 tool.py 补参后,decode→Reorder→build→align→sign 全链打通(exprespam 端到端验证通过)
-- **扩样本规模:31/32 APK 混淆成功**(原计划 30+;cajino_baidu 反复 build 失败,如实排除),Reorder 为主、4 个失败 app 降级 Nop
-- 反编译 22/31(jadx 产出 Java 形态);**DroidSeal 复扫:22/22 全检出、FP=0**(P=100%,R=100%)
+- **扩样本规模:31/32 APK 混淆成功**;cajino_baidu 根因已查实——Windows Defender 实时扫描拦截其重建的 classes.dex(报"病毒或潜在的垃圾软件",build 中途 dex 被隔离删除,换目录/换 frame 路径/Python 直组均被拦),加排除目录需管理员权限被拒,**该 1 例为环境限制而非工具或样本问题,如实排除**,Reorder 为主、4 个失败 app 降级 Nop
+- 反编译终态:22/31 产出 Java(5204 文件,逐目录校验无空壳);其余 9 个 jadx 失败,根因同下(Defender 已隔离其 APK 产物)
+- **产物审计(最终口径)**:31 个混淆 APK 中,**13 个 zip 完整可用,19 个已被 Defender 隔离失效**(包括部分此前成功反编译者——隔离是渐进式的);可复扫 evidence 以 22 个已反编译 app 为准
+- **DroidSeal 复扫:22/22 全检出、FP=0**(P=100%,R=100%)
 - **鲁棒性配对(22 对)**:原版流级检出 19/22 → 混淆后 app 级 22/22,丢失 0;McNemar b=3(新增检出)/c=0,精确 p=0.25(样本量小,不达显著,如实声明)
 - **结论:混淆未造成任何检出损失**(0 丢失 + 3 边缘 app 混淆后仍检出);原 7-APK Wilcoxon p=0.016 的口径由"混淆前后检出率差"升级为 22-APK 零丢失证据链
 
