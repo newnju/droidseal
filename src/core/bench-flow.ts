@@ -74,6 +74,8 @@ const SINKS = [
   // 2026-09-19 GT 全量差集补齐(与 Rust taint.rs 同步)
   "append", "getOutputStream", "writeUTF", "exchange", "connect",
   "sendMessage", "writeBytes", "submit", "println", "RestTemplate", "call",
+  // 2026-09-23 官方 TB_SourcesAndSinks.txt 差集补齐(getInputStream 在官方表中同兼 source/sink)
+  "getInputStream",
 ]
 
 /** 扫描 app 全部源码,产出端点报告:类词干 → 行 → API 名。 */
@@ -122,8 +124,10 @@ function matchesLenient(ef: EngineFlow, gtSrc: GtPoint, gtSnk: GtPoint): boolean
     || (ef.sourceClass === ks && ef.sinkClass === ss)
 }
 
-/** 收集 app 全部源文件的引擎流(过程内 + 跨方法 + 跨类,与 Rust main.rs 同三表口径)。 */
-export async function engineFlows(appDir: string): Promise<EngineFlow[]> {
+/** 收集 app 全部源文件的引擎流(过程内 + 跨方法 + 跨类,与 Rust main.rs 同三表口径)。
+ *  @param opts.enableCrossclass 变异开关:false 时禁用跨类解析(变异基线,验证 harness 区分真实引擎能力)。 */
+export async function engineFlows(appDir: string, opts?: { enableCrossclass?: boolean }): Promise<EngineFlow[]> {
+  const enableCrossclass = opts?.enableCrossclass ?? true
   const { analyzeInterproc, analyzeCrossclass } = await import("./dataflow.ts")
   const files: Array<{ stem: string; path: string }> = []
   const walk = async (dir: string): Promise<void> => {
@@ -146,17 +150,20 @@ export async function engineFlows(appDir: string): Promise<EngineFlow[]> {
       out.push({ sourceClass: stem, sinkClass: stem, sourceLine: fl.source_line, sinkLine: fl.sink_line })
     }
   }
-  // 跨类联合分析:全量文件一次建图(类词干为 key;签名 Array<{cls, content}>)
-  for (const cf of analyzeCrossclass(contents.map(([cls, content]) => ({ cls, content })))) {
-    out.push({ sourceClass: cf.src_class, sinkClass: cf.sink_class, sourceLine: cf.source_line, sinkLine: cf.sink_line })
+  // 跨类联合分析:全量文件一次建图(类词干为 key;签名 Array<{cls, content}>)。变异开关:false 时跳过(基线)。
+  if (enableCrossclass) {
+    for (const cf of analyzeCrossclass(contents.map(([cls, content]) => ({ cls, content })))) {
+      out.push({ sourceClass: cf.src_class, sinkClass: cf.sink_class, sourceLine: cf.source_line, sinkLine: cf.sink_line })
+    }
   }
   return out
 }
 
-/** 对单 app 做流级(端点级 + 连通级双档)对判。官方口径:positive 流检出=TP、未检出=FN;negative(isNegative)流检出=FP。 */
-export async function adjudicate(app: FlowApp): Promise<FlowVerdict> {
+/** 对单 app 做流级(端点级 + 连通级双档)对判。官方口径:positive 流检出=TP、未检出=FN;negative(isNegative)流检出=FP。
+ *  @param opts.enableCrossclass 变异开关(透传 engineFlows,false = 变异基线)。 */
+export async function adjudicate(app: FlowApp, opts?: { enableCrossclass?: boolean }): Promise<FlowVerdict> {
   const reports = await endpointReports(app.dir)
-  const efs = await engineFlows(app.dir)
+  const efs = await engineFlows(app.dir, opts)
   const v: FlowVerdict = { app: app.name, gtFlows: app.flows.length, tp: 0, fn: 0, fpNegative: 0, tpConnected: 0, tpConnectedLenient: 0, fnSourceMiss: 0, fnSinkMiss: 0, fnBothMiss: 0, fnPropagationBreak: 0, unmatchedReports: 0 }
   const hit = (pt: GtPoint): boolean => {
     const stem = pt.class.split(".").pop() ?? pt.class
@@ -187,15 +194,15 @@ export async function adjudicate(app: FlowApp): Promise<FlowVerdict> {
   return v
 }
 
-/** 流级汇总。 */
-export async function summarizeFlow(root: string): Promise<{ total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] } | null> {
+/** 流级汇总。@param opts.enableCrossclass 变异开关(透传 adjudicate,false = 变异基线)。 */
+export async function summarizeFlow(root: string, opts?: { enableCrossclass?: boolean }): Promise<{ total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] } | null> {
   const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
   const verdicts: FlowVerdict[] = []
   for (const e of entries) {
     if (!e.isDirectory()) continue
     const app = await loadFlowApp(path.join(root, e.name))
     if (!app || app.flows.length === 0) continue
-    verdicts.push(await adjudicate(app))
+    verdicts.push(await adjudicate(app, opts))
   }
   if (verdicts.length === 0) return null
   const sum = (k: keyof FlowVerdict) => verdicts.reduce((a, v) => a + (v[k] as number), 0)
