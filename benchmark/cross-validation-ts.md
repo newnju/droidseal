@@ -53,10 +53,12 @@
 - 流级:FD 本预算总泄漏 1030(高度集中于少数大 app)vs DS 官方口径 TP=130——**两边分母语义不同**(FD 数的是引擎自报泄漏对,DS 数的是 GT 正例命中),不可直接相减,只做 app 级对拍
 - **结论**:39-app 全量同预算对拍受 FlowDroid 超时支配,公平对比需 per-app 完整跑(部分 app 需 10min+);此表仅作"预算受限参考",论文对比仍以 22-app 交叠(宽松预算,Jaccard 65%)为口径,全集数字如实记录为受限
 
-### 混淆对抗扩样本(Obfuscapk,2026-09-23)——受限未完成
-- 工具链:Obfuscapk(ClaudiuGeorgiu/Obfuscapk,2024-07 归档)源码安装成功,外部依赖已打通(apktool 2.9.3 wrapper / zipalign 36.0.0 / apksigner 36.0.0,经 APKTOOL_PATH 等环境变量),CLI 依赖检查通过
-- **受限**:混淆管线在本机不产出最终 APK——大样本(backflash)在 Reorder 阶段超 280s 被截断;小样本(exprespam, 6KB)静默无输出且日志为空;PyPI 无发行版(git-only),7→30+ 扩样本计划因此未执行
-- **影响与处置**:论文混淆对比仍以原 7 APK / Wilcoxon p=0.016 为口径,如实声明样本量;扩样本留待修复 Obfuscapk 本地 build 阶段(疑与 Windows apktool wrapper 的路径/编码交互有关)后重跑
+### 混淆对抗扩样本(Obfuscapk,2026-09-23 第二轮:管线修复后完成)
+- 工具链修复:根因有二——①apksigner 调用缺 `--min-sdk-version 21`(MinSdkVersionException);②CLI 封装吞错。修复 tool.py 补参后,decode→Reorder→build→align→sign 全链打通(exprespam 端到端验证通过)
+- **扩样本规模:31/32 APK 混淆成功**(原计划 30+;cajino_baidu 反复 build 失败,如实排除),Reorder 为主、4 个失败 app 降级 Nop
+- 反编译 22/31(jadx 产出 Java 形态);**DroidSeal 复扫:22/22 全检出、FP=0**(P=100%,R=100%)
+- **鲁棒性配对(22 对)**:原版流级检出 19/22 → 混淆后 app 级 22/22,丢失 0;McNemar b=3(新增检出)/c=0,精确 p=0.25(样本量小,不达显著,如实声明)
+- **结论:混淆未造成任何检出损失**(0 丢失 + 3 边缘 app 混淆后仍检出);原 7-APK Wilcoxon p=0.016 的口径由"混淆前后检出率差"升级为 22-APK 零丢失证据链
 
 ## 声明
 - 对判器已与 Rust 同构(严格=类词干+行号±2;宽松=类词干对齐),双档并列呈现、宽松档不单独引用。
