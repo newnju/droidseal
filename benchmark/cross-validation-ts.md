@@ -37,6 +37,27 @@
   - 旧混合口径的"端点 171"实为 130 positive + 41 negative 混计;"宽松档 85"同理混入负例命中
 - Rust 侧同款 `isNegative` 分流未实现,其 171/98 数字为旧混合口径——**双侧对拍与论文引用数字一律以正口径为准,混合口径数字已废弃**
 
+### FlowDroid 全量对拍(39 app,2026-09-23 补跑完成)
+
+- 跑法:FlowDroid 2.13.0 fat jar,官方 TB_SourcesAndSinks.txt 作 source/sink,`-a/-p/-s` 形态,单 app 超时 60–90s;**39/39 全部尝试**:12 app 产出流 XML,26 app 分析完成但 0 泄漏,1 app(slocker)无结果(超时崩溃,如实排除)
+- **⚠ 口径警示**:26 个 0 泄漏 app 中多数 log 显示分析在超时窗口内未完成(FlowDroid 在此批真实恶意样本上单 app 常需 >90s)——0 泄漏**不可解读为"FlowDroid 检不出"**,只能记录为"该超时预算下未产出"。此前 22-app 交叠子集(Jaccard 65%)用的是更宽松预算,数字更高;全集 90s 预算下数字大幅低移是预算差异所致
+
+| 口径(app 级,检出=流数>0) | DroidSeal(TP>0) | FlowDroid(本预算) |
+|---|---|---|
+| 双检出 | 12 | 12 |
+| 仅 DroidSeal | 23 | 0 |
+| 仅 FlowDroid | 0 | 0 |
+| 双未检出 | 4 | 4 |
+| 一致率 / Jaccard | **41.0% / 34.3%**(预算受限口径) | — |
+
+- 流级:FD 本预算总泄漏 1030(高度集中于少数大 app)vs DS 官方口径 TP=130——**两边分母语义不同**(FD 数的是引擎自报泄漏对,DS 数的是 GT 正例命中),不可直接相减,只做 app 级对拍
+- **结论**:39-app 全量同预算对拍受 FlowDroid 超时支配,公平对比需 per-app 完整跑(部分 app 需 10min+);此表仅作"预算受限参考",论文对比仍以 22-app 交叠(宽松预算,Jaccard 65%)为口径,全集数字如实记录为受限
+
+### 混淆对抗扩样本(Obfuscapk,2026-09-23)——受限未完成
+- 工具链:Obfuscapk(ClaudiuGeorgiu/Obfuscapk,2024-07 归档)源码安装成功,外部依赖已打通(apktool 2.9.3 wrapper / zipalign 36.0.0 / apksigner 36.0.0,经 APKTOOL_PATH 等环境变量),CLI 依赖检查通过
+- **受限**:混淆管线在本机不产出最终 APK——大样本(backflash)在 Reorder 阶段超 280s 被截断;小样本(exprespam, 6KB)静默无输出且日志为空;PyPI 无发行版(git-only),7→30+ 扩样本计划因此未执行
+- **影响与处置**:论文混淆对比仍以原 7 APK / Wilcoxon p=0.016 为口径,如实声明样本量;扩样本留待修复 Obfuscapk 本地 build 阶段(疑与 Windows apktool wrapper 的路径/编码交互有关)后重跑
+
 ## 声明
 - 对判器已与 Rust 同构(严格=类词干+行号±2;宽松=类词干对齐),双档并列呈现、宽松档不单独引用。
 - 宽松档数字级一致需先补齐 TS 引擎流收集层(后续工作);benign 子集历史对拍见 benign-fp.md。
