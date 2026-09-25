@@ -3,6 +3,7 @@
 // 纯 TypeScript，失败关闭。
 import { spawnSync } from "node:child_process"
 import { writeFile, readFile, mkdir, rm } from "node:fs/promises"
+import { readdirSync, existsSync } from "node:fs"
 import { deflateRawSync } from "node:zlib"
 import path from "node:path"
 import { createHash } from "node:crypto"
@@ -156,6 +157,48 @@ export function generateKeystore(
 }
 
 /**
+ * 定位 Android 构建工具(apksigner/zipalign):PATH → ANDROID_HOME/LOCALAPPDATA SDK build-tools(取最高版本)。
+ * Windows 下 apksigner 是 .bat,必须全路径调用,否则 spawnSync 静默失败退回 jarsigner(仅 v1)。
+ */
+export function findBuildTool(name: string): string {
+  const isWin = process.platform === "win32"
+  const exe = isWin ? `${name}.bat` : name
+  // 1) PATH
+  const pathProbe = spawnSync(isWin ? "where" : "which", [name], { timeout: 5000, stdio: "pipe" })
+  if (pathProbe.status === 0) {
+    const first = (pathProbe.stdout?.toString() ?? "").split(/\r?\n/)[0]?.trim()
+    if (first) return first
+  }
+  // 2) 常见 SDK 位置,取版本号最高的 build-tools
+  const sdkRoots = [
+    process.env.ANDROID_HOME,
+    process.env.ANDROID_SDK_ROOT,
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}/Android/Sdk` : undefined,
+  ].filter((p): p is string => Boolean(p))
+  for (const root of sdkRoots) {
+    try {
+      const btDir = `${root}/build-tools`
+      // 版本号数值化比较(字典序会把 9.x 排在 35.x 之后)
+      const versions = readdirSync(btDir).sort((a, b) => {
+        const pa = a.split(".").map(Number)
+        const pb = b.split(".").map(Number)
+        const len = Math.max(pa.length, pb.length)
+        for (let i = 0; i < len; i += 1) {
+          const d = (pa[i] ?? 0) - (pb[i] ?? 0)
+          if (d !== 0) return d
+        }
+        return 0
+      }).reverse()
+      for (const v of versions) {
+        const candidate = `${btDir}/${v}/${exe}`
+        if (existsSync(candidate)) return candidate
+      }
+    } catch { /* 目录不存在,继续 */ }
+  }
+  return name // 兜底:原样返回,spawnSync 会按 PATH 解析
+}
+
+/**
  * 使用 apksigner 签名 APK。
  */
 export function signApk(
@@ -170,7 +213,7 @@ export function signApk(
     "--key-pass", `pass:${config.keyPassword}`,
     apkPath,
   ]
-  const result = spawnSync("apksigner", args, { timeout: 60000, stdio: "pipe" })
+  const result = spawnSync(findBuildTool("apksigner"), args, { timeout: 120000, stdio: "pipe" })
   const output = (result.stdout?.toString() ?? "") + (result.stderr?.toString() ?? "")
   return { success: result.status === 0, output }
 }
