@@ -10,6 +10,7 @@ import { unpackApk, buildUnpackFindings } from "./apk-unpack.ts"
 import { extractManifestInfo, injectShellComponents, buildManifestInjectFindings, type ManifestInjectConfig } from "./manifest-inject.ts"
 import { flipDebuggableInAxml, manifestBytesAreDebuggable } from "./harden-manifest.ts"
 import { processAllDexFiles, type DexProcessConfig } from "./dex-process.ts"
+import { findStringNeighbors } from "./dex-codec.ts"
 import { generateKeyMaterial, splitKey, type KeyMaterial } from "./dex-protection-keys.ts"
 import { patchLoaderDexKeys } from "./loader-key-patch.ts"
 import { randomizeLoaderClassNames } from "./loader-class-rename.ts"
@@ -25,7 +26,7 @@ import { repackApk, type SigningConfig, type RepackConfig } from "./apk-repack.t
 import { generateResourceDecryptorSmali } from "./resource-string-protection.ts"
 import { generateNativeShellFiles, buildNativeShellFindings, type NativeShellConfig } from "./native-shell.ts"
 import { compileAndMergeSmali } from "./smali-merge.ts"
-import { buildPayloadContainer, decryptContainerEntry, encryptContainerEntryDerived, decryptContainerEntryDerived, CONTAINER_ASSET_NAME, type ContainerEntry } from "./payload-container.ts"
+import { buildPayloadContainer, decryptContainerEntry, encryptContainerEntryDerived, decryptContainerEntryDerived, chainSeed, CONTAINER_ASSET_NAME, type ContainerEntry } from "./payload-container.ts"
 import { generateSplitKeyInjectionData } from "./split-key-inject.ts"
 import { recompileAndInjectManifest } from "./axml-recompile.ts"
 import { injectRuntimeProtection, generateRuntimeInitCall } from "./runtime-inject.ts"
@@ -106,6 +107,11 @@ export interface HardenResult {
     runtimeProtected: boolean
     vmProtected: boolean
     totalFindings: number
+    /** 加固覆盖率指标(P2,报告一等指标):方法抽取覆盖(有代码路径背书,真实百分比);
+     *  dex2cWired 如实报桥接是否实际接线(当前 generateDex2cBridge 无调用点 → false,
+     *  与 stringProtected 同口径:summary 不虚报未接线的配置开关)。 */
+    methodHollow: { hollowed: number; total: number; pct: number; skipped: number }
+    dex2cWired: boolean
   }
 }
 
@@ -197,7 +203,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   } catch (readErr) {
     findings.push({ severity: "high", confidence: "high", code: "APK_READ_FAILED", title: "APK 文件读取失败", detail: String(readErr), recommendation: "确认 APK 路径正确且文件可读。", evidence: String(readErr).slice(0, 200) })
     await cleanupIntermediates()
-    return { success: false, findings, soResults: [], resourceResults: [], generatedFiles: [], summary: { dexProtected: false, soProtected: false, resourceProtected: false, stringProtected: false, runtimeProtected: false, vmProtected: false, totalFindings: findings.length } }
+    return { success: false, findings, soResults: [], resourceResults: [], generatedFiles: [], summary: { dexProtected: false, soProtected: false, resourceProtected: false, stringProtected: false, runtimeProtected: false, vmProtected: false, totalFindings: findings.length, methodHollow: { hollowed: 0, total: 0, pct: 0, skipped: 0 }, dex2cWired: false } }
   }
   const apkSha256 = createHash("sha256").update(apkBytes).digest("hex")
   // configHash:将密钥派生与本次加固配置绑定(恒空串的降级已移除;
@@ -227,7 +233,18 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   let identMetaShellSo = "droidseal.shell_so"
   if (existsSync(loaderDexPath)) {
     loaderDexRaw = new Uint8Array(await readFile(loaderDexPath))
-    const renameResult = randomizeLoaderClassNames(loaderDexRaw, config.enableRandomNames)
+    // 联合约束:stub DEX 中壳名点分形式的槽邻居——loader 改名生成的壳名必须同时
+    // 落进 stub 槽(stub 的 loadClass 引用与 manifest 都用点分名),否则 stub 侧
+    // 替换失败 → 壳引用错位 fail-closed。stub 不存在时无此约束。
+    let stubSlotForRename: ReturnType<typeof findStringNeighbors> | undefined
+    if (existsSync(stubDexPath)) {
+      try {
+        stubSlotForRename = findStringNeighbors(new Uint8Array(await readFile(stubDexPath)), "droidseal.runtime.ShellApplication")
+      } catch {
+        stubSlotForRename = undefined
+      }
+    }
+    const renameResult = randomizeLoaderClassNames(loaderDexRaw, config.enableRandomNames, stubSlotForRename)
     if (renameResult.renamed) {
       loaderDexRaw = renameResult.dex
       // newShellPath/newLoaderPath 是 "Lpkg/Class;" 形式 → JNI 需 "pkg/Class"
@@ -404,18 +421,22 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       })
     }
     // Step 4.5: payload 完整性验证(payload 现存于容器 blob,不再追加在壳 DEX 尾部)
+    // 哈希链尾声明在两个 Step 4.5 块之外:citable 条目要接续 dex 条目的链
+    let dexChainTail: Uint8Array | undefined // 条目 i 密钥混入条目 i-1 密文哈希(见 chainSeed)
     if (keyMaterial && dexResult?.encryptedDex && config.enableDexEncryption) {
       for (let i = 0; i < apkContents.dexFiles.length; i += 1) {
         const blob = dexResult.payloadBlobs[i]
         // per-entry 密钥派生:payload 上游用 master 加密,此处重组为 HKDF 派生密钥加密
-        // (master 破解单条不再蔓延;Java 端 deriveEntryKey 与此严格一致)
+        // (master 破解单条不再蔓延;Java 端 deriveEntryKey 与此严格一致,含条目哈希链)
         try {
           if (!blob) throw new Error(`dex[${i}] 无 payload blob`)
           const plain = decryptContainerEntry(blob, keyMaterial.encryptionKey)
           if (!plain) throw new Error("master 解密失败")
-          const entryBlob = encryptContainerEntryDerived(plain, keyMaterial.encryptionKey, "dex", i, integrityAnchor)
+          const chainHere = dexChainTail
+          const entryBlob = encryptContainerEntryDerived(plain, keyMaterial.encryptionKey, "dex", i, integrityAnchor, 0, chainHere)
+          dexChainTail = chainSeed(entryBlob)
           containerEntries.push({ kind: "dex", targetIndex: i, bytes: entryBlob })
-          const roundtrip = decryptContainerEntryDerived(entryBlob, keyMaterial.encryptionKey, "dex", i, integrityAnchor)
+          const roundtrip = decryptContainerEntryDerived(entryBlob, keyMaterial.encryptionKey, "dex", i, integrityAnchor, 0, chainHere)
           const verified = roundtrip !== undefined && roundtrip[0] === 0x64 && roundtrip[1] === 0x65 && roundtrip[2] === 0x78
           findings.push({
             severity: verified ? "info" : "high", confidence: "high",
@@ -443,8 +464,9 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       const { extractedCodeItems, stubMethods } = dexResult.hollowResult
       if (extractedCodeItems.size > 0) {
         const ciTable = buildCodeItemTable(extractedCodeItems, stubMethods)
-        // citable 条目同样走 per-entry HKDF 密钥(与 dex 条目隔离)
-        const ciEncrypted = encryptContainerEntryDerived(ciTable, keyMaterial.encryptionKey, "citable", 0, integrityAnchor)
+        // citable 条目同样走 per-entry HKDF 密钥(与 dex 条目隔离),并接续 dex 条目的
+        // 哈希链(前驱 = 最后一个 dex 条目密文的哈希)——删除/重排 dex 条目同样使 citable 解密失败
+        const ciEncrypted = encryptContainerEntryDerived(ciTable, keyMaterial.encryptionKey, "citable", 0, integrityAnchor, 0, dexChainTail)
         containerEntries.push({ kind: "citable", targetIndex: 0, bytes: ciEncrypted })
         findings.push({
           severity: "info",
@@ -908,6 +930,12 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     })
   }
 
+  // 覆盖率指标(P2,报告一等指标):方法抽取有代码路径背书(hollowResult 真实统计)→
+  // 报真实百分比;Dex2C 桥(generateDex2cBridge)仅有定义无调用点 → 如实报 not-wired,
+  // 与 stringProtected 同口径:summary 不虚报未接线的配置开关。
+  const hollowSummary = dexResult?.hollowResult?.summary
+  const mhTotal = hollowSummary?.totalMethods ?? 0
+  const mhHollowed = hollowSummary?.hollowedMethods ?? 0
   const summary = {
     dexProtected: config.enableDexEncryption || config.enableMethodHollow,
     soProtected: config.enableSoEncryption,
@@ -918,6 +946,13 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     runtimeProtected: config.enableRuntimeProtection,
     vmProtected: config.enableVmProtection,
     totalFindings: findings.length,
+    methodHollow: {
+      hollowed: mhHollowed,
+      total: mhTotal,
+      pct: mhTotal > 0 ? Math.round((mhHollowed / mhTotal) * 1000) / 10 : 0,
+      skipped: hollowSummary?.skippedMethods ?? 0,
+    },
+    dex2cWired: false, // generateDex2cBridge 尚无调用点——接线后置 true
   }
 
   // findings 去重:同 code+title+evidence 视为重复(流水线内多处构建 finding 可能撞车)
@@ -961,6 +996,10 @@ export function generateHardenReport(result: HardenResult): string {
     `  字符串保护: ${result.summary.stringProtected ? "✓ 已启用" : "✗ 未启用"}`,
     `  运行时保护: ${result.summary.runtimeProtected ? "✓ 已启用" : "✗ 未启用"}`,
     `  VMP 保护: ${result.summary.vmProtected ? "✓ 已启用" : "✗ 未启用"}`,
+    "",
+    "加固覆盖率:",
+    `  方法抽取: ${result.summary.methodHollow.hollowed}/${result.summary.methodHollow.total} (${result.summary.methodHollow.pct}%, 跳过 ${result.summary.methodHollow.skipped})`,
+    `  Dex2C 桥接: ${result.summary.dex2cWired ? "已接线" : "未接线(参考产物,不计入防护)"}`,
     "",
   ]
 

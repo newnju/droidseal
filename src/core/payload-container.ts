@@ -97,6 +97,7 @@ export function deriveEntryKey(
   targetIndex: number,
   anchor?: Uint8Array,
   envByte = 0,
+  chainPrev?: Uint8Array,
 ): Uint8Array {
   // extract: PRK = HMAC-SHA256(salt="", IKM=master)
   const prk = createHmac("sha256", new Uint8Array(32)).update(masterKey).digest()
@@ -106,10 +107,20 @@ export function deriveEntryKey(
   // GCM 校验静默失败,攻击者无从区分防御与 bug。anchor 缺省时兼容旧格式。
   // 环境门控(P0-B):envByte=运行时反分析投票(0=干净,1=篡改)。构建期恒 0(干净构建);
   // 运行时检测命中则派生错钥——动态分析(attach 即跑)拿到的全是解不开的密文。
+  // 条目哈希链(P0-A 扩展):chainPrev=前一加密条目密文的 SHA-256 前 16B。条目 i 的密钥
+  // 依赖条目 i-1 的密文——增/删/改/重排任何中间条目都会使后续全部条目派生错钥,
+  // "只改资源不碰 manifest"的局部篡改面被覆盖。首条目无前驱(缺省兼容)。
   const anchorSuffix = anchor && anchor.length > 0 ? `-a${Buffer.from(anchor).toString("hex")}` : ""
-  const info = Buffer.from(`droidseal-entry-${kind}-${targetIndex}${anchorSuffix}-e${envByte === 1 ? 1 : 0}`, "utf-8")
+  const chainSuffix = chainPrev && chainPrev.length > 0 ? `-c${Buffer.from(chainPrev).toString("hex")}` : ""
+  const info = Buffer.from(`droidseal-entry-${kind}-${targetIndex}${anchorSuffix}${chainSuffix}-e${envByte === 1 ? 1 : 0}`, "utf-8")
   const okm = createHmac("sha256", prk).update(info).update(Buffer.from([1])).digest()
   return new Uint8Array(okm)
+}
+
+/** 条目哈希链种子:前一加密条目密文的 SHA-256 前 16B(首条目传 undefined)。 */
+export function chainSeed(prevEntryCipher?: Uint8Array): Uint8Array | undefined {
+  if (!prevEntryCipher || prevEntryCipher.length === 0) return undefined
+  return new Uint8Array(createHash("sha256").update(prevEntryCipher).digest().subarray(0, 16))
 }
 
 // ── 容器条目加密/解密(与 dex-protection 的 payload 格式一致: nonce12+tag16+ct) ──
@@ -126,14 +137,14 @@ export function encryptContainerEntry(plain: Uint8Array, key: Uint8Array): Uint8
   return out
 }
 
-/** 一步完成:派生条目密钥 → AES-256-GCM 加密(anchor=完整性锚点,见 deriveEntryKey)。 */
-export function encryptContainerEntryDerived(plain: Uint8Array, masterKey: Uint8Array, kind: ContainerEntryKind, targetIndex: number, anchor?: Uint8Array): Uint8Array {
-  return encryptContainerEntry(plain, deriveEntryKey(masterKey, kind, targetIndex, anchor))
+/** 一步完成:派生条目密钥 → AES-256-GCM 加密(anchor=完整性锚点,chainPrev=哈希链前驱,见 deriveEntryKey)。 */
+export function encryptContainerEntryDerived(plain: Uint8Array, masterKey: Uint8Array, kind: ContainerEntryKind, targetIndex: number, anchor?: Uint8Array, envByte = 0, chainPrev?: Uint8Array): Uint8Array {
+  return encryptContainerEntry(plain, deriveEntryKey(masterKey, kind, targetIndex, anchor, envByte, chainPrev))
 }
 
 /** 一步完成:派生条目密钥 → AES-256-GCM 解密(roundtrip 验证用)。 */
-export function decryptContainerEntryDerived(entry: Uint8Array, masterKey: Uint8Array, kind: ContainerEntryKind, targetIndex: number, anchor?: Uint8Array): Uint8Array | undefined {
-  return decryptContainerEntry(entry, deriveEntryKey(masterKey, kind, targetIndex, anchor))
+export function decryptContainerEntryDerived(entry: Uint8Array, masterKey: Uint8Array, kind: ContainerEntryKind, targetIndex: number, anchor?: Uint8Array, envByte = 0, chainPrev?: Uint8Array): Uint8Array | undefined {
+  return decryptContainerEntry(entry, deriveEntryKey(masterKey, kind, targetIndex, anchor, envByte, chainPrev))
 }
 
 export function decryptContainerEntry(entry: Uint8Array, key: Uint8Array): Uint8Array | undefined {

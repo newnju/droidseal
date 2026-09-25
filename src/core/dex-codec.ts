@@ -317,7 +317,11 @@ export interface CascadeSlot {
  * 级联式批量槽内随机名:整批生成 + 整批相对序校验,失败整批重试。
  * 任一项失败或批内乱序无法收敛时返回 undefined(调用方放弃随机化,保留原名)。
  */
-export function genNamesInSlots(items: CascadeSlot[], slots: OrderedNameSlot[], batchAttempts = 8): string[] | undefined {
+export function genNamesInSlots(items: CascadeSlot[], slots: OrderedNameSlot[], batchAttempts = 64): string[] | undefined {
+  // 批量收敛是概率性的(槽区间与字母表约束下随机碰撞):8 次重试在 4 项批上仍有
+  // ~1% 量级的偶发全批失败(表现为随机化静默降级为保留原名)。提高重试次数把
+  // 失败概率压到可忽略,单次尝试仅字符串生成 + 相对序比较,纳秒级成本;
+  // 仍不收敛时返回 undefined,调用方如实保留原名(missed 标注),语义不变。
   if (items.length !== slots.length) return undefined
   for (let b = 0; b < batchAttempts; b += 1) {
     const out: (string | undefined)[] = new Array(items.length)
