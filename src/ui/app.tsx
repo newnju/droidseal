@@ -652,7 +652,9 @@ export function App() {
     enableVmProtection: currentDraft.enableVmProtection ?? false,
     enableSplitKey: currentDraft.enableSplitKey !== false,
     enableTripleEntry: currentDraft.enableTripleEntry !== false,
-    enableRandomNames: true,
+    enableRandomNames: currentDraft.enableRandomNames !== false,
+    enableKeystoreBinding: currentDraft.enableKeystoreBinding === true,
+    keepIntermediates: currentDraft.keepIntermediates === true,
     classExclusionPatterns: [] as string[],
     certSha256: currentDraft.certSha256,
     signingConfig: currentDraft.keystorePath ? {
@@ -680,6 +682,7 @@ export function App() {
         addMessage("success", "加固完成", [
           `输出: ${hardenResult.outputApk ?? hardenConfig.outputDir}`,
           `保护层: ${hardenResult.summary.dexProtected ? "DEX✓" : "DEX✗"} ${hardenResult.summary.soProtected ? "SO✓" : "SO✗"} ${hardenResult.summary.resourceProtected ? "资源✓" : "资源✗"}`,
+          `Keystore 绑定: ${hardenConfig.enableKeystoreBinding ? "✓ 一机一份(重装/换机即失效)" : "✗ 未启用(密钥随 APK 分发)"}`,
           `生成文件: ${hardenResult.generatedFiles.length} 个`,
         ])
         if (hardenResult.outputApk) setArtifactPath(hardenResult.outputApk)

@@ -64,6 +64,22 @@ const en = {
   // 底部栏
   bottomBar: "Interaction zoom {zoom}% · Ctrl± · secrets redacted",
 
+  // 加固向导:标识符随机化 / Keystore 设备绑定
+  wizardRandomNamesTitle: "Identifier Randomization",
+  wizardRandomNamesPrompt: "Enable fixed-identifier randomization? (container name/magic/meta keys/shell class names randomized per build)",
+  wizardRandomNamesDetail: "Removes fixed signature strings from the APK, defeating signature-based packer detection. Disable only to debug a specific build.",
+  wizardRandomNamesYes: "Yes (recommended)",
+  wizardRandomNamesYesDetail: "Fresh random identifiers per build; static signatures never reused",
+  wizardRandomNamesNo: "No",
+  wizardRandomNamesNoDetail: "Keep fixed identifiers (debugging only; weakens anti-analysis)",
+  wizardKsBindTitle: "Keystore Device Binding",
+  wizardKsBindPrompt: "Enable Android Keystore device binding? (keys sealed into hardware after first run)",
+  wizardKsBindDetail: "After the first successful decryption, a key part is sealed with an Android Keystore hardware key and the embedded value is wiped; copies or re-packages on other devices fail to decrypt. Note: reinstalling, clearing data or switching devices invalidates the key permanently — the APK then works only on that one device.",
+  wizardKsBindNo: "No (recommended)",
+  wizardKsBindNoDetail: "Keys ship with the APK; installs on any device, normal reinstall/upgrade",
+  wizardKsBindYes: "Yes (one device per copy)",
+  wizardKsBindYesDetail: "Blocks copy redistribution; reinstall/clear-data/device change voids the copy",
+
   // 欢迎页
   welcomeTitle: "Welcome to DroidSeal",
   welcomeDesc1: "DroidSeal runs the full audit + hardening pipeline locally: source audit, APK audit, DEX/SO/resource/string encryption, runtime protection, signing.",
@@ -469,6 +485,22 @@ const zh: Record<keyof typeof en, string> = {
   inputTitlePassive: "无需输入 · 使用上方操作",
 
   bottomBar: "交互区 {zoom}% · Ctrl± · 敏感信息已脱敏",
+
+  // 加固向导:标识符随机化 / Keystore 设备绑定
+  wizardRandomNamesTitle: "标识符随机化",
+  wizardRandomNamesPrompt: "启用固定标识符随机化?(容器名/magic/meta 键/壳类名逐构建随机)",
+  wizardRandomNamesDetail: "消除 APK 中的固定特征串,对抗按签名搜索定位壳。仅调试特定构建时关闭。",
+  wizardRandomNamesYes: "是(推荐)",
+  wizardRandomNamesYesDetail: "每次构建生成不同随机标识符,静态特征不可复用",
+  wizardRandomNamesNo: "否",
+  wizardRandomNamesNoDetail: "保留固定标识符(仅调试用,会降低抗分析强度)",
+  wizardKsBindTitle: "Keystore 设备绑定",
+  wizardKsBindPrompt: "启用 Android Keystore 设备绑定?(首次运行后密钥封存进硬件)",
+  wizardKsBindDetail: "首次成功解密后密钥片段封存进 Android Keystore 硬件密钥并抹掉内嵌值,拷贝/重打包到其他设备无法解密。注意:卸载重装、清除数据、换机后密钥失效且无法恢复——该 APK 将只能在这台设备上使用。",
+  wizardKsBindNo: "否(推荐)",
+  wizardKsBindNoDetail: "密钥随 APK 分发,任意设备安装即用,可正常重装升级",
+  wizardKsBindYes: "是(一机一份)",
+  wizardKsBindYesDetail: "防拷贝传播;重装/清数据/换机即失效,需重新分发",
 
   welcomeTitle: "欢迎使用 DroidSeal",
   welcomeDesc1: "DroidSeal 在本机完成审计+加固全流程：源码审计、APK 审计、DEX/SO/资源/字符串加密、运行时保护、签名验证。",
