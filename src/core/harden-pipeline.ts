@@ -11,6 +11,7 @@ import { extractManifestInfo, injectShellComponents, buildManifestInjectFindings
 import { flipDebuggableInAxml, manifestBytesAreDebuggable } from "./harden-manifest.ts"
 import { processAllDexFiles, type DexProcessConfig } from "./dex-process.ts"
 import { findStringNeighbors } from "./dex-codec.ts"
+import { gateSummaryClaims } from "./summary-gate.ts"
 import { generateKeyMaterial, splitKey, type KeyMaterial } from "./dex-protection-keys.ts"
 import { patchLoaderDexKeys } from "./loader-key-patch.ts"
 import { randomizeLoaderClassNames } from "./loader-class-rename.ts"
@@ -936,15 +937,35 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   const hollowSummary = dexResult?.hollowResult?.summary
   const mhTotal = hollowSummary?.totalMethods ?? 0
   const mhHollowed = hollowSummary?.hollowedMethods ?? 0
+  // 指标背书一致性门禁(如实降级机械化):每个 *Protected 指标必须有真实产物证据
+  // (加密条目数/写回标志),证据缺失即使配置开着也强制报 false + not-wired finding。
+  const gate = gateSummaryClaims([
+    { key: "dexProtected", configEnabled: config.enableDexEncryption || config.enableMethodHollow, evidenceCount: (dexResult?.encryptedDex?.length ?? 0) + mhHollowed },
+    { key: "soProtected", configEnabled: config.enableSoEncryption, evidenceCount: soResults?.length ?? 0 },
+    { key: "resourceProtected", configEnabled: config.enableResourceEncryption, evidenceCount: resourceResults?.length ?? 0 },
+    { key: "stringProtected", configEnabled: true, evidenceCount: stringWritebackApplied ? 1 : 0 },
+    { key: "runtimeProtected", configEnabled: config.enableRuntimeProtection, evidenceCount: stubDexRaw && loaderDexRaw ? 1 : 0 },
+    { key: "vmProtected", configEnabled: config.enableVmProtection, evidenceCount: 0 }, // vmp 生成器尚无调用点
+    { key: "dex2cWired", configEnabled: false, evidenceCount: 0 }, // generateDex2cBridge 尚无调用点——接线后置 true
+  ])
+  for (const v of gate.violations) {
+    findings.push({
+      severity: "medium", confidence: "high", code: "SUMMARY_CLAIM_NOT_WIRED",
+      title: `指标 ${v.key} 配置已启用但无产物证据(如实降级:报 false)`,
+      detail: "该保护开关已打开,但流水线中未检测到对应的真实产物(加密条目/写回标志/壳二进制)——按如实降级原则,summary 将其报为未生效而非防护能力。",
+      recommendation: "检查对应保护模块的执行日志定位未生效原因;修复前报告口径以 not-wired 为准。",
+      evidence: v.key,
+    })
+  }
   const summary = {
-    dexProtected: config.enableDexEncryption || config.enableMethodHollow,
-    soProtected: config.enableSoEncryption,
-    resourceProtected: config.enableResourceEncryption,
+    dexProtected: gate.effective.dexProtected ?? false,
+    soProtected: gate.effective.soProtected ?? false,
+    resourceProtected: gate.effective.resourceProtected ?? false,
     // 如实降级:encryptAndReplaceStrings 写回尚无调用点,字符串仅生成了解密器参考产物,
     // 未实际加密——summary 必须有代码路径背书,报 false 而非配置开关值
-    stringProtected: stringWritebackApplied,
-    runtimeProtected: config.enableRuntimeProtection,
-    vmProtected: config.enableVmProtection,
+    stringProtected: gate.effective.stringProtected ?? false,
+    runtimeProtected: gate.effective.runtimeProtected ?? false,
+    vmProtected: gate.effective.vmProtected ?? false,
     totalFindings: findings.length,
     methodHollow: {
       hollowed: mhHollowed,
@@ -952,7 +973,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       pct: mhTotal > 0 ? Math.round((mhHollowed / mhTotal) * 1000) / 10 : 0,
       skipped: hollowSummary?.skippedMethods ?? 0,
     },
-    dex2cWired: false, // generateDex2cBridge 尚无调用点——接线后置 true
+    dex2cWired: gate.effective.dex2cWired ?? false, // generateDex2cBridge 尚无调用点——接线后置 true
   }
 
   // findings 去重:同 code+title+evidence 视为重复(流水线内多处构建 finding 可能撞车)
