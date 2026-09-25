@@ -9,12 +9,15 @@
 // Java 端 BootstrapStub.hkdf/decryptGcm 与本模块严格一致。
 import { createHmac, createCipheriv, randomBytes } from "node:crypto"
 import { recomputeDexChecksums } from "./dex-model.ts"
-import { findStringNeighbors, genNameInSlot, genNamesInSlots, SLOT_ALPHABET_DEFAULT } from "./dex-codec.ts"
+import { findStringNeighbors, genNameInSlot, genNamesInSlots, nameFitsSlot, SLOT_ALPHABET_DEFAULT, type OrderedNameSlot } from "./dex-codec.ts"
 
 const STUB_CLASS = "droidseal/runtime/BootstrapStub" // 31(DEX 类型描述符内的斜杠形式)
 const STUB_SOURCE_FILE = "BootstrapStub.java" // 18(SourceFile 调试属性,泄露类名)
 const SHELL_CLASS_MARKER = "droidseal.runtime.ShellApplication" // 34(点分,loadClass 字符串常量)
 const META_KEY_MARKER = "ds_loader_asset_mk1" // 19
+// stub 自身类路径兜底模板(L 形式 33B:1+8+1+8+1+13+1;> prev 且 < next,
+// 点分形式分段合法——槽自由字母表含 '/',随机落位会产生空段/尾点,必须兜底)
+const STUB_PATH_TEMPLATE = "Ldroidtaa/cdefghij/Klmnopqrstuvw;"
 
 const LOWER = "abcdefghijklmnopqrstuvwxyz"
 
@@ -50,13 +53,15 @@ export interface StubRandomizeResult {
   dex: Uint8Array
   /** stub 类路径(dots 形式,manifest android:name 用) */
   stubClassPath: string
+  /** 实际写入 stub 的 loader asset meta 键(manifest 注入必须用这个值) */
+  metaKey: string
   changed: string[]
   missed: string[]
 }
 
 export function randomizeStubIdentifiers(stubDex: Uint8Array, opts: StubRandomizeOptions): StubRandomizeResult {
   if (!opts.enable) {
-    return { dex: stubDex, stubClassPath: STUB_CLASS.replace(/\//g, "."), changed: [], missed: [] }
+    return { dex: stubDex, stubClassPath: STUB_CLASS.replace(/\//g, "."), metaKey: META_KEY_MARKER, changed: [], missed: [] }
   }
   const out = stubDex.slice()
   const changed: string[] = []
@@ -71,8 +76,29 @@ export function randomizeStubIdentifiers(stubDex: Uint8Array, opts: StubRandomiz
   // 顺序错了校验本身就会全败)。
   const items: import("./dex-codec.ts").CascadeSlot[] = [
     { original: STUB_SOURCE_FILE },
-    { original: `L${STUB_CLASS};`, alphabet: SLOT_ALPHABET_DEFAULT },
-    { original: SHELL_CLASS_MARKER, alphabet: `${SLOT_ALPHABET_DEFAULT}.` },
+    // stub 自身类路径:槽自由字母表含 '/',随机落位会产生空段/尾点(59% 非法)——
+    // candidate 生成后校验点分分段合法,不合法退回固定模板(已验证两侧槽位 fit)。
+    {
+      original: `L${STUB_CLASS};`,
+      candidate: (slot: OrderedNameSlot) => {
+        const alphabet = SLOT_ALPHABET_DEFAULT
+        const lFormLen = `L${STUB_CLASS};`.length // 33:槽邻居是 L 形式,生成长度必须一致
+        for (let i = 0; i < 32; i += 1) {
+          const c = genNameInSlot(lFormLen, slot, alphabet)
+          if (c === undefined) break
+          const parts = c.slice(1, -1).replace(/\//g, ".").split(".")
+          // manifest android:name 要求点分 ≥2 段且每段合法(单段名 ART 拒绝)
+          if (parts.length >= 2 && parts.every((p) => /^[A-Za-z][A-Za-z0-9_]*$/.test(p))) return c
+        }
+        return nameFitsSlot(STUB_PATH_TEMPLATE, slot) ? STUB_PATH_TEMPLATE : undefined
+      },
+    },
+    // 壳类路径不是随机值:必须是流水线传入的 rename 结果(Java loadClass 与
+    // manifest 都指向它)——candidate 固定返回点分形式,本模块只做等长替换。
+    {
+      original: SHELL_CLASS_MARKER,
+      candidate: () => (opts.shellClassPath.includes(".") ? opts.shellClassPath : opts.shellClassPath.replace(/\//g, ".")),
+    },
     { original: META_KEY_MARKER, alphabet: `${SLOT_ALPHABET_DEFAULT}-_` },
   ]
   const slots = items.map((it) => findStringNeighbors(stubDex, it.original))
@@ -82,6 +108,7 @@ export function randomizeStubIdentifiers(stubDex: Uint8Array, opts: StubRandomiz
     return {
       dex: recomputeDexChecksums(out),
       stubClassPath: STUB_CLASS.replace(/\//g, "."),
+      metaKey: META_KEY_MARKER,
       changed: [],
       missed: [STUB_CLASS, STUB_SOURCE_FILE, SHELL_CLASS_MARKER, META_KEY_MARKER],
     }
@@ -110,6 +137,9 @@ export function randomizeStubIdentifiers(stubDex: Uint8Array, opts: StubRandomiz
   return {
     dex: recomputeDexChecksums(out),
     stubClassPath: (newStubPath ?? STUB_CLASS).replace(/\//g, "."),
+    // manifest 注入必须用实际写入 stub 的键:batch[3] 随机收敛成功是新键,
+    // 替换未命中(missed)时 stub 里仍是原标记 → 回传对应值,两侧恒一致
+    metaKey: changed.includes(META_KEY_MARKER) ? newMetaKey : META_KEY_MARKER,
     changed,
     missed,
   }

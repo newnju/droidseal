@@ -8,7 +8,7 @@
 // manifest 的 android:name 与 key_part2.c 的 JNI 导出名由流水线同步使用相同随机名。
 import { recomputeDexChecksums } from "./dex-model.ts"
 import { randomBytes } from "node:crypto"
-import { findStringNeighbors, nameFitsSlot, genNameInSlot } from "./dex-codec.ts"
+import { findStringNeighbors, nameFitsSlot, genNameInSlot, type OrderedNameSlot } from "./dex-codec.ts"
 
 const PKG_PREFIX = "droidseal/runtime/" // 18 字节
 const CLASS_SHELL = "ShellApplication" // 17 字节
@@ -62,8 +62,11 @@ function replaceAll(dex: Uint8Array, from: string, to: string): boolean {
 /**
  * 对 loader DEX 做壳类名等长随机化。
  * 任一名字未命中返回 renamed=false(调用方如实输出 finding;loader 保留原名可用)。
+ * stubSlot(可选):stub DEX 中壳名点分形式的槽邻居——loader 槽内生成的壳名,
+ * 其点分形式还须同时落进 stub 槽(stub 的 loadClass 引用与 manifest 都用点分名;
+ * 两表约束独立,只满足单侧会让 stub 侧替换失败 → 壳引用错位 fail-closed)。
  */
-export function randomizeLoaderClassNames(loaderDex: Uint8Array, enable: boolean): ClassRenameResult {
+export function randomizeLoaderClassNames(loaderDex: Uint8Array, enable: boolean, stubSlot?: OrderedNameSlot): ClassRenameResult {
   const oldShellPath = `L${PKG_PREFIX}${CLASS_SHELL};`
   const oldLoaderPath = `L${PKG_PREFIX}${CLASS_LOADER};`
   if (!enable) {
@@ -75,9 +78,25 @@ export function randomizeLoaderClassNames(loaderDex: Uint8Array, enable: boolean
   // (分开拼会破坏槽长度语义)。产物形如 Lxy12ab_cd/Wqrs…;,流水线按斜杠拆包/类。
   const slotShell = findStringNeighbors(loaderDex, oldShellPath)
   const slotLoader = findStringNeighbors(loaderDex, oldLoaderPath)
-  const newShellPath = slotShell.prev !== undefined || slotShell.next !== undefined
-    ? genNameInSlot(oldShellPath.length, slotShell)
-    : `L${randomPackagePath()}${randomClassName(CLASS_SHELL.length)};`
+  const fitsBoth = (p: string): boolean => {
+    if (!nameFitsSlot(p, slotShell)) return false
+    if (stubSlot) {
+      const dots = p.slice(1, -1).replace(/\//g, ".")
+      if (!nameFitsSlot(dots, stubSlot)) return false
+    }
+    return true
+  }
+  // 联合命中是概率性的(loader 槽自由度 × stub 槽窗口),重试后仍不收敛 → 放弃改名
+  let newShellPath: string | undefined
+  if (slotShell.prev !== undefined || slotShell.next !== undefined) {
+    for (let i = 0; i < 256 && newShellPath === undefined; i += 1) {
+      const c = genNameInSlot(oldShellPath.length, slotShell)
+      if (c !== undefined && fitsBoth(c)) newShellPath = c
+    }
+  } else {
+    const fallback = `L${randomPackagePath()}${randomClassName(CLASS_SHELL.length)};`
+    if (fitsBoth(fallback)) newShellPath = fallback
+  }
   const newLoaderPath = slotLoader.prev !== undefined || slotLoader.next !== undefined
     ? genNameInSlot(oldLoaderPath.length, slotLoader)
     : `L${randomPackagePath()}${randomClassName(CLASS_LOADER.length)};`

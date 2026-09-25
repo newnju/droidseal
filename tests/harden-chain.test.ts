@@ -8,6 +8,7 @@ import {
   buildPayloadContainer,
   parsePayloadContainer,
   deriveEntryKey,
+  chainSeed,
   encryptContainerEntryDerived,
   decryptContainerEntryDerived,
 } from "../src/core/payload-container.ts"
@@ -55,6 +56,30 @@ describe("per-entry HKDF 密钥派生", () => {
     const enc = encryptContainerEntryDerived(plain, master, "dex", 0)
     expect(decryptContainerEntryDerived(enc, master, "dex", 1)).toBeUndefined()
     expect(decryptContainerEntryDerived(enc, master, "citable", 0)).toBeUndefined()
+  })
+
+  test("条目哈希链:同链参数回环成功,链前驱错位解密失败", () => {
+    const master = randomBytes(32)
+    const plain = new Uint8Array([0x64, 0x65, 0x78, 0x0a, ...randomBytes(120)])
+    const seed1 = randomBytes(16)
+    const enc = encryptContainerEntryDerived(plain, master, "dex", 0, undefined, 0, seed1)
+    // 同链参数回环
+    const dec = decryptContainerEntryDerived(enc, master, "dex", 0, undefined, 0, seed1)
+    expect(dec).toBeDefined()
+    expect(Buffer.compare(dec!, plain)).toBe(0)
+    // 链前驱错位(条目被增/删/改/重排时运行时算出的 seed 不同)→ GCM 拒绝
+    const wrongSeed = randomBytes(16)
+    expect(decryptContainerEntryDerived(enc, master, "dex", 0, undefined, 0, wrongSeed)).toBeUndefined()
+    expect(decryptContainerEntryDerived(enc, master, "dex", 0, undefined, 0, undefined)).toBeUndefined()
+  })
+
+  test("chainSeed:密文哈希前 16B,不同密文种子不同", () => {
+    const a = chainSeed(randomBytes(64))!
+    const b = chainSeed(randomBytes(64))!
+    expect(a.length).toBe(16)
+    expect(Buffer.compare(a, b)).not.toBe(0)
+    expect(chainSeed(undefined)).toBeUndefined()
+    expect(chainSeed(new Uint8Array(0))).toBeUndefined()
   })
 })
 
@@ -119,7 +144,8 @@ describe("stub 标识符随机化", () => {
   test("四点标记全命中,stub 类路径合法且类名无残留", () => {
     const r = randomizeStubIdentifiers(stubDex(), {
       enable: true,
-      shellClassPath: "abcdefgh/ijklmnop/Xqzwkfmvbnucadxe", // 34B 斜杠形式
+      // 34B 斜杠形式,点分后落 stub 壳名槽 ("droidseal-loader-v1", "ds_loader_asset_mk1") 内
+      shellClassPath: "droidtaab/cdefghi/Jklmnopqrstuvwxy",
       metaKey: "qwzxkvnmbertplwoas1", // 19B
     })
     expect(r.changed.length).toBe(4)
