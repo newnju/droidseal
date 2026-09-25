@@ -70,6 +70,8 @@ export interface WizardDraft {
   enableSplitKey?: boolean
   enableTripleEntry?: boolean
   enableRandomNames?: boolean
+  // Android Keystore 设备绑定:首次运行后密钥片段封存进硬件 Keystore,卸载/重装/换机即失效(可选)
+  enableKeystoreBinding?: boolean
   hardenAlgorithm?: "aes-256-gcm" | "chacha20-poly1305"
   // 加固额外配置
   packageName?: string | undefined
@@ -108,6 +110,7 @@ export function createDraft(runMode: RunMode): WizardDraft {
     enableSplitKey: true,
     enableTripleEntry: true,
     enableRandomNames: true,
+    enableKeystoreBinding: false,
     hardenAlgorithm: "aes-256-gcm",
   }
 }
@@ -154,6 +157,7 @@ export function createOneClickDraft(inputPath: string): WizardDraft {
     enableSplitKey: true,
     enableTripleEntry: true,
     enableRandomNames: true,
+    enableKeystoreBinding: false,
     hardenAlgorithm: "aes-256-gcm",
   }
 }
@@ -569,6 +573,28 @@ export function questionsFor(draft: WizardDraft): WizardQuestion[] {
         ],
       },
       {
+        id: "enableRandomNames",
+        kind: "choice",
+        title: t("wizardRandomNamesTitle"),
+        prompt: t("wizardRandomNamesPrompt"),
+        detail: t("wizardRandomNamesDetail"),
+        choices: [
+          { value: "yes", label: t("wizardRandomNamesYes"), detail: t("wizardRandomNamesYesDetail"), shortcut: "1" },
+          { value: "no", label: t("wizardRandomNamesNo"), detail: t("wizardRandomNamesNoDetail"), shortcut: "2" },
+        ],
+      },
+      {
+        id: "enableKeystoreBinding",
+        kind: "choice",
+        title: t("wizardKsBindTitle"),
+        prompt: t("wizardKsBindPrompt"),
+        detail: t("wizardKsBindDetail"),
+        choices: [
+          { value: "no", label: t("wizardKsBindNo"), detail: t("wizardKsBindNoDetail"), shortcut: "1" },
+          { value: "yes", label: t("wizardKsBindYes"), detail: t("wizardKsBindYesDetail"), shortcut: "2" },
+        ],
+      },
+      {
         id: "hardenAlgorithm",
         kind: "choice",
         title: "加密算法",
@@ -732,6 +758,12 @@ export function applyAnswer(
     case "enableTripleEntry":
       next.enableTripleEntry = value === "yes"
       break
+    case "enableKeystoreBinding":
+      next.enableKeystoreBinding = value === "yes"
+      break
+    case "enableRandomNames":
+      next.enableRandomNames = value === "yes"
+      break
     case "hardenAlgorithm":
       if (value !== "aes-256-gcm" && value !== "chacha20-poly1305") throw new Error("无效算法")
       next.hardenAlgorithm = value
@@ -813,7 +845,8 @@ export function buildPipelineConfig(draft: WizardDraft): PipelineConfig {
       enableVmProtection: draft.enableVmProtection ?? false,
       enableSplitKey: draft.enableSplitKey ?? true,
       enableTripleEntry: draft.enableTripleEntry ?? true,
-      enableRandomNames: true,
+      enableRandomNames: draft.enableRandomNames ?? true,
+      enableKeystoreBinding: draft.enableKeystoreBinding ?? false,
       hardenAlgorithm: draft.hardenAlgorithm ?? "aes-256-gcm",
     } : {}),
   }
