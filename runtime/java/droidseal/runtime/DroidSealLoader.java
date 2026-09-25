@@ -67,27 +67,65 @@ public final class DroidSealLoader {
      * 运行时签名自校验:当前 APK 签名证书指纹与构建期嵌入值比对。
      * 不匹配 = 原始 APK 被解壳后重签名 → antiAnalysisDispose(true)(延迟销毁)。
      * 构建期未补丁(全零)或读取失败时跳过(失败关闭,不误伤)。
+     * 节流随机化(P1):启动后由两个守护调度器以随机间隔重复校验——固定周期的
+     * 校验可被攻击者摸清时序后在窗口内操作,随机间隔 + 调度器数量不固定消除该模式。
      */
     public static void verifyIntegrity(Context base) {
         if (integrityVerified) return;
         integrityVerified = true;
+        if (doVerifyIntegrity(base)) {
+            scheduleIntegrityRechecks(base);
+        }
+    }
+
+    /** 校验本体(供首检与调度器复用):返回 true=通过或跳过,false=确定性失配。 */
+    private static boolean doVerifyIntegrity(Context base) {
         try {
             // 未补丁判定:32B 全为 0xC3 标记(真实 SHA-256 摘要不可能 32 字节全同)
             boolean unpatched = true;
             for (byte b : EXPECTED_CERT_SHA256) { if (b != (byte) 0xC3) { unpatched = false; break; } }
-            if (unpatched) return;
+            if (unpatched) return true;
             android.content.pm.Signature[] sigs = base.getPackageManager()
                     .getPackageInfo(base.getPackageName(), android.content.pm.PackageManager.GET_SIGNATURES).signatures;
-            if (sigs == null || sigs.length == 0) return;
+            if (sigs == null || sigs.length == 0) return true;
             byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(sigs[0].toByteArray());
             if (!java.util.Arrays.equals(digest, EXPECTED_CERT_SHA256)) {
                 // 签名不匹配 = 被重打包(确定性证据,不受 keyUsed 门控):
                 // 置失配标记(init 入口拦截,中止解密链路)+ 延迟销毁退出
                 integrityFailed = true;
                 startDispose();
+                return false;
             }
+            return true;
         } catch (Throwable t) {
-            // 自校验自身失败不阻断启动;检测层仍有兜底
+            return true; // 读取失败不误伤
+        }
+    }
+
+    /** P1 节流随机化:两个守护调度器,随机初检延迟(45–180s)与随机复检间隔(20–90s),
+     *  各自独立计时——攻击者摸清一个调度器的周期,另一个仍在随机窗口内。
+     *  调度器数量/间隔不写入任何可观测常量;失败静默(不影响主流程)。 */
+    private static void scheduleIntegrityRechecks(final Context base) {
+        final Context app = base.getApplicationContext();
+        if (app == null) return;
+        for (int s = 0; s < 2; s++) {
+            Thread t = new Thread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        java.security.SecureRandom rnd = new java.security.SecureRandom();
+                        Thread.sleep(45_000 + rnd.nextInt(135_000)); // 初检 45–180s
+                        while (!disposed && !integrityFailed) {
+                            doVerifyIntegrity(app);
+                            Thread.sleep(20_000 + rnd.nextInt(70_000)); // 复检 20–90s
+                        }
+                    } catch (Throwable ignored) {
+                        // 调度失败保持静默
+                    }
+                }
+            });
+            t.setDaemon(true);
+            t.setName("ds-igchk-" + s);
+            t.start();
         }
     }
 
@@ -122,9 +160,14 @@ public final class DroidSealLoader {
         return vote;
     }
 
-    /** 标记密钥已真实使用;此后 antiAnalysis 命中才执行处置。 */
+    /** 标记密钥已真实使用;此后 antiAnalysis 命中才执行处置。
+     *  校验点 2(解密后重投票):解密前的投票可被"attach 前注入、投票后 hook"绕过;
+     *  密钥已使用的时刻再投一次——late-hook 场景在第二检查点命中。 */
     public static void markKeyUsed() {
         keyUsed = true;
+        try {
+            if (voteEnvironment()) startDispose();
+        } catch (Throwable ignored) {}
     }
 
     /**
@@ -313,6 +356,7 @@ public final class DroidSealLoader {
             // 临时合成、派生完立即清零。任意时刻内存无完整 master,hook/dump 单点
             // 快照拿不到可复用的密钥材料(effPart1/part2 各自只有一半,单独无意义)。
             int pos = 20;
+            byte[] chainPrev = null; // 条目哈希链:条目 i 密钥混入条目 i-1 密文哈希(与 TS 侧 chainSeed 一致)
             for (int i = 0; i < count; i++) {
                 if (pos + 12 > container.length) return;
                 int kind = intAt(container, pos);
@@ -325,14 +369,23 @@ public final class DroidSealLoader {
                 // 临时合成 master(32B XOR,纳秒级)→ 派生条目密钥 → 立即清零
                 byte[] key = xorKey(effPart1, part2);
                 if (key == null) return;
-                // per-entry 密钥:HKDF(master, info=kind+targetIndex+anchor+envVote)——单条破解不蔓延,
-                // manifest 被篡改(重打包必经)或环境被劫持(动态分析)均派生错钥
-                byte[] entryKey = deriveEntryKey(key, kind, targetIndex, anchor, envVote);
+                // per-entry 密钥:HKDF(master, info=kind+targetIndex+anchor+chain+envVote)——单条破解不蔓延,
+                // manifest 被篡改(重打包必经)、容器条目被增删改排(哈希链断裂)或环境被劫持均派生错钥
+                byte[] entryKey = deriveEntryKey(key, kind, targetIndex, anchor, envVote, chainPrev);
                 java.util.Arrays.fill(key, (byte) 0); // master 用后即清(分片化核心)
                 if (entryKey == null) return;
                 byte[] plain = decryptBlob(blob, entryKey);
                 java.util.Arrays.fill(entryKey, (byte) 0); // 条目密钥用后即清
                 if (plain == null) return;
+                // 链前驱推进:SHA-256(本条目密文)前 16B(下一条目的派生输入;用后随 blob 生命周期)
+                try {
+                    java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+                    byte[] full = md.digest(blob);
+                    byte[] seed = new byte[16];
+                    System.arraycopy(full, 0, seed, 0, 16);
+                    if (chainPrev != null) java.util.Arrays.fill(chainPrev, (byte) 0);
+                    chainPrev = seed;
+                } catch (Throwable t) { return; }
                 markKeyUsed(); // 密钥已真实使用:此后反分析命中可执行处置
                 if (kind == 1) dexList.add(plain);
                 else if (kind == 2) { ciTable = plain; ciTarget = targetIndex; }
@@ -582,20 +635,27 @@ public final class DroidSealLoader {
         return mac.doFinal();
     }
 
-    /** 条目密钥 = HKDF(master, info="droidseal-entry-<kind>-<targetIndex>[-a<manifest-sha256-hex>]-e<envVote>"),kind: 1=dex, 2=citable。
+    /** 条目密钥 = HKDF(master, info="droidseal-entry-<kind>-<targetIndex>[-a<manifest-sha256-hex>][-c<chain-hex>]-e<envVote>"),kind: 1=dex, 2=citable。
      *  anchor(P0-A):构建期嵌入最终 manifest 的 SHA-256,运行时从自身 APK 重算——
      *  重打包必改 manifest → 重算值不同 → 密钥错 → GCM 静默失败。anchor 为 null 时构建期也未用锚。
+     *  chainPrev(P0-A 扩展,条目哈希链):前一加密条目密文的 SHA-256 前 16B(首条目 null)。
+     *  条目 i 的密钥依赖条目 i-1 密文——增/删/改/重排任何中间条目使后续全部条目派生错钥,
+     *  "只改资源不碰 manifest"的局部篡改面被覆盖。与 TS 侧 chainSeed 严格一致。
      *  envVote(P0-B):运行时反分析投票(0=干净,1=检测命中)。构建期恒 0;运行时命中则
      *  派生错钥——动态分析(attach 即跑)拿到的全是解不开的密文,静默失败无从归因。 */
-    private static byte[] deriveEntryKey(byte[] master, int kind, int targetIndex, byte[] anchor, int envVote) {
+    private static byte[] deriveEntryKey(byte[] master, int kind, int targetIndex, byte[] anchor, int envVote, byte[] chainPrev) {
         try {
             byte[] prk = hkdfExtract(master);
             StringBuilder info = new StringBuilder("droidseal-entry-")
                     .append(kind == 1 ? "dex" : "citable").append("-").append(targetIndex);
+            final char[] HEX = "0123456789abcdef".toCharArray();
             if (anchor != null && anchor.length > 0) {
                 info.append("-a");
-                final char[] HEX = "0123456789abcdef".toCharArray();
                 for (byte b : anchor) { info.append(HEX[(b >> 4) & 0xf]).append(HEX[b & 0xf]); }
+            }
+            if (chainPrev != null && chainPrev.length > 0) {
+                info.append("-c");
+                for (byte b : chainPrev) { info.append(HEX[(b >> 4) & 0xf]).append(HEX[b & 0xf]); }
             }
             info.append("-e").append(envVote != 0 ? 1 : 0);
             return hkdfExpand(prk, info.toString().getBytes("UTF-8"));
