@@ -85,6 +85,11 @@ public final class ShellApplication extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        // 校验点 3(生命周期分散):attachBaseContext 的投票可被"hook 后再放行"绕过,
+        // onCreate 时刻再投一次——late-hook 在第三检查点命中(keyUsed 已由解密置位)。
+        try {
+            DroidSealLoader.antiAnalysisDispose(DroidSealGuard.detect());
+        } catch (Throwable ignored) {}
         DroidSealLoader.dispatchOnCreate();
     }
 

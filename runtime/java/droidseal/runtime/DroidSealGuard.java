@@ -19,6 +19,9 @@ public final class DroidSealGuard {
         try {
             if (detectTracer()) return true;
         } catch (Throwable ignored) {}
+        try {
+            if (detectTracerPerThread()) return true;
+        } catch (Throwable ignored) {}
         return false;
     }
 
@@ -52,6 +55,33 @@ public final class DroidSealGuard {
             }
         } finally {
             br.close();
+        }
+        return false;
+    }
+
+    /** TracerPid 第二读取路径(异构):逐线程扫 /proc/self/task/<tid>/status。
+     *  主线程 status 未被 attach 而**单线程被 ptrace**(针对性 hook 一个工作线程)时,
+     *  路径 1 漏报、本路径命中。目录枚举失败按未命中处理(不误报)。 */
+    private static boolean detectTracerPerThread() throws Exception {
+        java.io.File taskDir = new java.io.File("/proc/self/task");
+        String[] tids = taskDir.list();
+        if (tids == null) return false;
+        for (String tid : tids) {
+            BufferedReader br = null;
+            try {
+                br = new BufferedReader(new FileReader("/proc/self/task/" + tid + "/status"), 4096);
+                String line;
+                while ((line = br.readLine()) != null) {
+                    if (line.startsWith("TracerPid:")) {
+                        if (Integer.parseInt(line.substring(10).trim()) > 0) return true;
+                        break;
+                    }
+                }
+            } catch (Throwable ignored) {
+                // 单线程 status 读取失败不算命中(竞争下线程可能已退出)
+            } finally {
+                if (br != null) try { br.close(); } catch (Throwable ignored) {}
+            }
         }
         return false;
     }
