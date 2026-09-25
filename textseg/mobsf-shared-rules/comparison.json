@@ -1,0 +1,251 @@
+{
+  "rows": [
+    {
+      "sample": "ds-test-input",
+      "rules": {
+        "DEBUGGABLE": {
+          "msf": false,
+          "ds": false,
+          "gt": false
+        },
+        "ALLOW_BACKUP": {
+          "msf": false,
+          "ds": false,
+          "gt": false
+        },
+        "MIN_SDK_OUTDATED": {
+          "msf": true,
+          "ds": false,
+          "gt": false
+        },
+        "TARGET_SDK_OUTDATED": {
+          "msf": true,
+          "ds": false,
+          "gt": true
+        }
+      },
+      "msf_only": 3,
+      "ds_only": 20
+    },
+    {
+      "sample": "FlowSensitivity1",
+      "rules": {
+        "DEBUGGABLE": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "ALLOW_BACKUP": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "MIN_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "TARGET_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        }
+      },
+      "msf_only": 3,
+      "ds_only": 13
+    },
+    {
+      "sample": "ArrayAccess1",
+      "rules": {
+        "DEBUGGABLE": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "ALLOW_BACKUP": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "MIN_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "TARGET_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        }
+      },
+      "msf_only": 5,
+      "ds_only": 12
+    },
+    {
+      "sample": "Reflection1",
+      "rules": {
+        "DEBUGGABLE": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "ALLOW_BACKUP": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "MIN_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "TARGET_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        }
+      },
+      "msf_only": 5,
+      "ds_only": 12
+    },
+    {
+      "sample": "DirectLeak1",
+      "rules": {
+        "DEBUGGABLE": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "ALLOW_BACKUP": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "MIN_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "TARGET_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        }
+      },
+      "msf_only": 5,
+      "ds_only": 12
+    },
+    {
+      "sample": "Clone1",
+      "rules": {
+        "DEBUGGABLE": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "ALLOW_BACKUP": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "MIN_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "TARGET_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        }
+      },
+      "msf_only": 5,
+      "ds_only": 12
+    },
+    {
+      "sample": "Button1",
+      "rules": {
+        "DEBUGGABLE": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "ALLOW_BACKUP": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "MIN_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        },
+        "TARGET_SDK_OUTDATED": {
+          "msf": true,
+          "ds": true,
+          "gt": true
+        }
+      },
+      "msf_only": 5,
+      "ds_only": 12
+    }
+  ],
+  "agg": {
+    "DEBUGGABLE": {
+      "ds": {
+        "tp": 6,
+        "fp": 0,
+        "fn": 0
+      },
+      "msf": {
+        "tp": 6,
+        "fp": 0,
+        "fn": 0
+      },
+      "both": 6,
+      "n": 7
+    },
+    "ALLOW_BACKUP": {
+      "ds": {
+        "tp": 6,
+        "fp": 0,
+        "fn": 0
+      },
+      "msf": {
+        "tp": 6,
+        "fp": 0,
+        "fn": 0
+      },
+      "both": 6,
+      "n": 7
+    },
+    "MIN_SDK_OUTDATED": {
+      "ds": {
+        "tp": 6,
+        "fp": 0,
+        "fn": 0
+      },
+      "msf": {
+        "tp": 6,
+        "fp": 1,
+        "fn": 0
+      },
+      "both": 6,
+      "n": 7
+    },
+    "TARGET_SDK_OUTDATED": {
+      "ds": {
+        "tp": 6,
+        "fp": 0,
+        "fn": 1
+      },
+      "msf": {
+        "tp": 7,
+        "fp": 0,
+        "fn": 0
+      },
+      "both": 6,
+      "n": 7
+    }
+  }
+}
