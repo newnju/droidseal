@@ -1,0 +1,4 @@
+[frida] attached pid, hooking...
+[hook] ok: libc.so:openat
+[hook] ok: libc.so:read
+[result] {"openat":0,"read":61,"hooked":2}

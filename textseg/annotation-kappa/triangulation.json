@@ -1,0 +1,2846 @@
+{
+  "date": "2026-09-14T08:27:51.413Z",
+  "agreeRate": 97.1,
+  "posSinkCover": 96.5,
+  "negSinkFree": 0,
+  "totals": {
+    "rows": 177,
+    "agree": 166,
+    "conflict": 5,
+    "unobservable": 6,
+    "scorable": 171
+  },
+  "rows": [
+    {
+      "category": "Aliasing",
+      "name": "FlowSensitivity1",
+      "docLeak": true,
+      "desc": "Sensitive data is assigned to a heap object. Only after calling the sink, an alias between the leaked object and the tai",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Aliasing",
+      "name": "Merge1",
+      "docLeak": false,
+      "desc": "Sensitive data is assigned to a heap object which is then shuffled around. Only constant data is leaked.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": false,
+      "note": "code-capable(负例但具备源+汇点,需归因:常量合成/未污染值)"
+    },
+    {
+      "category": "Aliasing",
+      "name": "SimpleAliasing1",
+      "docLeak": true,
+      "desc": "Sensitive data is assigned to a heap object and leaked through an alias.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Aliasing",
+      "name": "StrongUpdate1",
+      "docLeak": true,
+      "desc": "Sensitive data is assigned to a heap object, but then overwritten before it is leaked.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "ApplicationModeling1",
+      "docLeak": true,
+      "desc": "Stores IMEI in Application's object and later leaks it in a different Activity.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "DirectLeak1",
+      "docLeak": true,
+      "desc": "The device id is read out and sent via SMS on the activity's `onCreate()` event.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "InactiveActivity",
+      "docLeak": true,
+      "desc": "Data leak in a disabled activity.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "Library1",
+      "docLeak": true,
+      "desc": "not a test case on its own, part of Library2.",
+      "sinks": [],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": null,
+      "note": "no-artifact(工件层不可观察,如纯反射/库间流)"
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "Library2",
+      "docLeak": true,
+      "desc": "The IMEI is read out inside a custom library and then leaked in the app.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "LogNoLeak",
+      "docLeak": true,
+      "desc": "Writes untainted data into a log file.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "Obfuscation1",
+      "docLeak": true,
+      "desc": "This APK contains an own implementation of android.telephony.TelephonyManager. However, on a real device the preloaded O",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PrivateDataLeak1",
+      "docLeak": true,
+      "desc": "Summary test case containing various challenges.",
+      "sinks": [
+        "sms",
+        "log"
+      ],
+      "sources": [],
+      "files": 3,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PrivateDataLeak2",
+      "docLeak": true,
+      "desc": "Leaks a value from a password field.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PrivateDataLeak3",
+      "docLeak": true,
+      "desc": "The IMEI is written into a file, read out again and then leaked.",
+      "sinks": [
+        "sms",
+        "file"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PublicAPIField1",
+      "docLeak": true,
+      "desc": "IMEI is obtained and converted to 2 floating point numbers as x and y of PointF.  Value of PointF is leaked.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PublicAPIField2",
+      "docLeak": true,
+      "desc": "IMEI is retrieved and stored to Intent.action as a data holder.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "View1",
+      "docLeak": true,
+      "desc": "The IMEI is leaked inside the draw event of a custom view.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess1",
+      "docLeak": true,
+      "desc": "Stores both a tainted and an untainted value in an array and then leaks the untainted one. Array indices are constants.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess2",
+      "docLeak": true,
+      "desc": "Stores both a tainted and an untainted value in an array and then leaks the untainted one. Array indices are calculated.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess3",
+      "docLeak": true,
+      "desc": "Sensitive data is written into an array, read back again, and leaked.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess4",
+      "docLeak": true,
+      "desc": "Sensitive data is written into a field of an object, this object is then stored in an array and read back again. The fie",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess5",
+      "docLeak": true,
+      "desc": "Sensitive data is written into an array, but only the constant size of the array is leaked, not the data itself.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayCopy1",
+      "docLeak": true,
+      "desc": "Stores a tainted value in an array and then uses System.arraycopy to copy the data to a new array which is then leaked t",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayToString1",
+      "docLeak": true,
+      "desc": "IMEI is stored in an array of String which is then converted back to String using Arrays.toString().",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "HashMapAccess1",
+      "docLeak": true,
+      "desc": "Stores both a tainted and an untainted value in a hash map and then leaks the untainted one. Map keys are constants.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "HashMapAccess2",
+      "docLeak": true,
+      "desc": "Stores both a tainted and an untainted value in a hash map and then leaks the tainted one. Map keys are constants.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ListAccess1",
+      "docLeak": false,
+      "desc": "Both a tainted and an untainted value are stored in a list. Only the untainted value is leaked.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": false,
+      "note": "code-capable(负例但具备源+汇点,需归因:常量合成/未污染值)"
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ListAccess2",
+      "docLeak": true,
+      "desc": "Both a tainted and an untainted value are stored in a list. The tainted value is leaked.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "MultidimensionalArray1",
+      "docLeak": true,
+      "desc": "Stores a tainted value in a 2-dimensional array and accesses it through a reference pointing to a slice containing the t",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "AnonymousClass1",
+      "docLeak": true,
+      "desc": "Registers a callback handler for location updates in an anonymous inner class and leaks the incoming location data insid",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "location"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button1",
+      "docLeak": true,
+      "desc": "The sink is called after the user clicks a button. The button handler is defined via XML.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button2",
+      "docLeak": true,
+      "desc": "Only clicking buttons in a specific order leads to a data leak.",
+      "sinks": [
+        "sms",
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button3",
+      "docLeak": true,
+      "desc": "A new callback is registered in another callback's handler. The second handler leaks the data obtained by the first hand",
+      "sinks": [
+        "log",
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button4",
+      "docLeak": true,
+      "desc": "The sink is called after the user clicks a button. The button handler is defined via XML using an include directive.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button5",
+      "docLeak": true,
+      "desc": "IMEI is obtained during Activity's onCreate() and is later leaked through onClick's callback defined in layout's xml. No",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "LocationLeak1",
+      "docLeak": true,
+      "desc": "Registers a listener for location updates, stores the value and leaks it later in the lifecycle.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "location"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "LocationLeak2",
+      "docLeak": true,
+      "desc": "Similar to LocationLeak1, but the activity class directly implements the callback interface.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "location"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "LocationLeak3",
+      "docLeak": true,
+      "desc": "Similar to LocationLeak1, but the callback handler is in a dedicated class decoupled from the activity using an interfac",
+      "sinks": [
+        "intent",
+        "log"
+      ],
+      "sources": [
+        "location"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "MethodOverride1",
+      "docLeak": true,
+      "desc": "Overwrites an internal Android method to hide a leak.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "MultiHandlers1",
+      "docLeak": false,
+      "desc": "Contains two activities and two handlers that do not leak any data if the correct activity is used with the correct hand",
+      "sinks": [
+        "intent",
+        "log"
+      ],
+      "sources": [
+        "location"
+      ],
+      "files": 5,
+      "codeLeakCapable": true,
+      "agree": false,
+      "note": "code-capable(负例但具备源+汇点,需归因:常量合成/未污染值)"
+    },
+    {
+      "category": "Callbacks",
+      "name": "Ordering1",
+      "docLeak": true,
+      "desc": "Leaks variable contents before the handler initializing them is even registered.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "location"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "RegisterGlobal1",
+      "docLeak": true,
+      "desc": "Both source and sink are part of a global (application-level) lifecycle handler.",
+      "sinks": [
+        "log",
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Callbacks",
+      "name": "Unregister1",
+      "docLeak": false,
+      "desc": "Registers and directly unregisters a callback before it can be invoked. The code in the callback can thus never leak any",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": false,
+      "note": "code-capable(负例但具备源+汇点,需归因:常量合成/未污染值)"
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "CommonLibrary1",
+      "docLeak": true,
+      "desc": "This is not a test case on its own. It is a shared library between app and its dynamically loaded code.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "DynamicBoth1",
+      "docLeak": true,
+      "desc": "Both source and sink are in a dynamically loaded class.",
+      "sinks": [
+        "file"
+      ],
+      "sources": [],
+      "files": 2,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "DynamicLoadingTarget1",
+      "docLeak": true,
+      "desc": "This is not a test case on its own. It is a library which will be dynamically loaded by other test cases.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "DynamicSink1",
+      "docLeak": true,
+      "desc": "Sensitive data is leaked by code in a dynamically loaded class.",
+      "sinks": [
+        "file"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "DynamicSource1",
+      "docLeak": true,
+      "desc": "Sensitive data is read by code in a dynamically loaded class.",
+      "sinks": [
+        "file",
+        "log"
+      ],
+      "sources": [],
+      "files": 2,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Battery1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking the battery status. For emulator the battery status is always 50% or ",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Bluetooth1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking the bluetooth. The non-presence of Bluetooth sensor identify the envi",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Build1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking the various Build properties like SDK, Board, Brand etc. This app sen",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Contacts1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking the number of contacts and calllogs both. Below value of 5 for both i",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId",
+        "contacts"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "ContentProvider1",
+      "docLeak": true,
+      "desc": "This test case detects the Android emulator by checking the IMEI in a content provider. The IMEI is only sent via SMS in",
+      "sinks": [
+        "sms",
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "DeviceId1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking the IMEI number using getDeviceId API. IMEI value of 16 0's identify ",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "File1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking the system files. Some files are specific to emulator while others ar",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "IMEI1",
+      "docLeak": true,
+      "desc": "This test case detects the Android emulator by truncating the secret data which is leaked at a position computed from th",
+      "sinks": [
+        "sms",
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "IP1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking the IP Address of environment. A value of 10.0.2.15 is the identifica",
+      "sinks": [
+        "sms",
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "PI1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by doing a large computation i.e calculating value of pi till n decimal places. A",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "PlayStore1",
+      "docLeak": true,
+      "desc": "This test case detects the Android emulator by whether the Play Store app is installed on the phone. The IMEI is only se",
+      "sinks": [
+        "sms",
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "PlayStore2",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking absense of Google Play Services. This app send IMEI number  via SMS i",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Sensors1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by counting the distinct sensors. A total of 13 different type of sensors is chec",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "SubscriberId1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking Subscriber Id which always start with 310260000000000 for emulators. ",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "VoiceMail1",
+      "docLeak": true,
+      "desc": "This test detects the Android emulator by checking VoiceMail number. A VoiceMail number with value +15552175049, identif",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "FieldSensitivity1",
+      "docLeak": true,
+      "desc": "Both tainted and untainted data is stored in a data object; the untainted value is leaked.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "FieldSensitivity2",
+      "docLeak": true,
+      "desc": "Similar to FieldSensitivity1, but source and sink calls are distributed across the lifecycle.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "FieldSensitivity3",
+      "docLeak": true,
+      "desc": "Both tainted and untainted data is stored in a data object; the tainted value is leaked. Source and sink calls are distr",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "FieldSensitivity4",
+      "docLeak": true,
+      "desc": "Field contents are sent before tainting the field.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "InheritedObjects1",
+      "docLeak": true,
+      "desc": "Chooses an object's actual type based on a conditional. Only one possible type leads to a leak.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 4,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "ObjectSensitivity1",
+      "docLeak": true,
+      "desc": "Writes a tainted value into an object and an untainted one into another object of the same type. Leaks the untainted val",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "ObjectSensitivity2",
+      "docLeak": true,
+      "desc": "Writes a tainted value into a field and then overwrites it with untainted data.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Clone1",
+      "docLeak": true,
+      "desc": "IMEI is added to a linkedlist, and the list is cloned to a new list, then the tainted member of the newlist is leaked.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions1",
+      "docLeak": true,
+      "desc": "Saves a tainted value into a local variable, raises an exception and sends the value out in the exception handler.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions2",
+      "docLeak": true,
+      "desc": "Saves a tainted value into a local variable, implicitly raises an exception (ArrayIndexOutOfBounds) and sends the data o",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions3",
+      "docLeak": true,
+      "desc": "Saves a tainted value into a local variable, but the exception handler which would send it out is never invoked.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions4",
+      "docLeak": true,
+      "desc": "Throws an exception containing a tainted value and sends it out in the exception handler.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions5",
+      "docLeak": true,
+      "desc": "Throws an exception containing tainted data inside a called method and catches it in the caller.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions6",
+      "docLeak": true,
+      "desc": "Throws an implicit exception inside a called method and catches and leaks data in the catch block inside the caller.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions7",
+      "docLeak": true,
+      "desc": "A leak happens inside an exception handler that can never be reached, because it",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "FactoryMethods1",
+      "docLeak": true,
+      "desc": "Obtains a LocationManager from a factory method contained in the Android operating system, reads out the location, and l",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "location"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Loop1",
+      "docLeak": true,
+      "desc": "Contains a simple loop and a data leak.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Loop2",
+      "docLeak": true,
+      "desc": "Retrieves location information through a callback and leaks it via nested loops.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Serialization1",
+      "docLeak": true,
+      "desc": "IMEI is obtained and serialized/deserialzed throught ObjectOutputStream and ObjectInputStream.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "SourceCodeSpecific1",
+      "docLeak": true,
+      "desc": "Uses unusual code construct `a = p ? b : c.`",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StartProcessWithSecret1",
+      "docLeak": true,
+      "desc": "IMEI is obtained and leaked through ProcessBuilder's start().",
+      "sinks": [],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": null,
+      "note": "no-artifact(工件层不可观察,如纯反射/库间流)"
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StaticInitialization1",
+      "docLeak": true,
+      "desc": "Passes a tainted value into a static initialization method.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StaticInitialization2",
+      "docLeak": true,
+      "desc": "Sensitive data is obtained during static initialization of a class and leaked in non-static code",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StaticInitialization3",
+      "docLeak": true,
+      "desc": "IMEI is obtained during static initializer and is stored and overriding in the Activity's field which was not tainted at",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StringFormatter1",
+      "docLeak": true,
+      "desc": "IMEI is passed to a formatter and then the formatted buffer is converted back to String before leaked to log.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StringPatternMatching1",
+      "docLeak": true,
+      "desc": "IMEI is matched against .* regular expression, and the matched group is leaked.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StringToCharArray1",
+      "docLeak": true,
+      "desc": "IMEI is obtained and stored in the char[]  which is then later converted to String before leaked to log.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StringToOutputStream1",
+      "docLeak": true,
+      "desc": "IMEI is obtained and passed through ByteArrayOutputStream as String bytes back to String.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "UnreachableCode",
+      "docLeak": true,
+      "desc": "Passes tainted data into a method that is never called.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "VirtualDispatch1",
+      "docLeak": true,
+      "desc": "Depending on a click counter, one class or another is instantiated. However, only one of the classes actually leaks data",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "VirtualDispatch2",
+      "docLeak": true,
+      "desc": "A method in the base class returns untainted information, the same method in one of the derived classes returns sensitiv",
+      "sinks": [
+        "sms",
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "VirtualDispatch3",
+      "docLeak": true,
+      "desc": "Two classes implement an interface, but only one of them returns sensitive data. The leak however happens on the other i",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "GeneralJava",
+      "name": "VirtualDispatch4",
+      "docLeak": true,
+      "desc": "Similar to VirtualDispatch3, but with slightly more type information.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow1",
+      "docLeak": true,
+      "desc": "A value from a source gets obfuscated by two different ways and is then written to the log.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow2",
+      "docLeak": true,
+      "desc": "Based on an input of a password field a log message is written.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow3",
+      "docLeak": true,
+      "desc": "This test cases checks the type of the object to determine which information to write to the log.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow4",
+      "docLeak": true,
+      "desc": "Several implicit flows exist in this test case.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow5",
+      "docLeak": true,
+      "desc": "Implicit control flow through exceptions. Only if the value is smaller than 43, an exception is thrown and then a leak h",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow6",
+      "docLeak": true,
+      "desc": "Implicit control flow, but leaked value is the same regardless of the sensitive value.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterAppCommunication",
+      "name": "Collector",
+      "docLeak": true,
+      "desc": "The data received through an intent is written into a file on the SD card.",
+      "sinks": [
+        "file"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "InterAppCommunication",
+      "name": "Echoer",
+      "docLeak": true,
+      "desc": "Receives data and echoes it back to the sender.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [],
+      "files": 2,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "InterAppCommunication",
+      "name": "SendSMS",
+      "docLeak": true,
+      "desc": "Reads the Device ID, passes it through Echoer, and then sends it in a text message.",
+      "sinks": [
+        "log",
+        "intent",
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterAppCommunication",
+      "name": "StartActivityForResult1",
+      "docLeak": true,
+      "desc": "Reads the user's geographical location (via GPS), passes it through Echoer, and then writes it to a file.",
+      "sinks": [
+        "log",
+        "intent",
+        "file"
+      ],
+      "sources": [
+        "location"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication1",
+      "docLeak": true,
+      "desc": "Contains two activities that communicate using static fields.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication2",
+      "docLeak": true,
+      "desc": "Data is obtained and sent through an implicit intent The intent is reflected. Source is getDeviceId and sink is Log.",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication3",
+      "docLeak": true,
+      "desc": "Another Activity is started using class name.  IEMI is leaked in the Activity to be started.",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication4",
+      "docLeak": true,
+      "desc": "An Intent for starting another Activity is created by concatenating two constant strings.  The Activity to be started le",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication5",
+      "docLeak": true,
+      "desc": "A Activity is started using constant component's Name and Intent.setComponent. The started Activity leaks the IMEI to lo",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication6",
+      "docLeak": true,
+      "desc": "An Intent to start another Activity is passed through LinkedList's add() and retrieved with LinkedList.get().  The retri",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication7",
+      "docLeak": true,
+      "desc": "An Activity class is created and its classname is retrieved using getClass() on the instance object.  The classname is t",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication8",
+      "docLeak": true,
+      "desc": "An action for the Intent to start another Activity is passed through and retrieved with LinkedList.get().  The retrieved",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "BroadcastTaintAndLeak1",
+      "docLeak": true,
+      "desc": "IMEI is obtained in an Activity and stored in the Intent's extra of the Intent to the BroadcastReceiver which was regist",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ComponentNotInManifest1",
+      "docLeak": false,
+      "desc": "IMEI is obtained in one Activity and is stored in the Intent's to start a leaking Activity which is not in the AndroidMa",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 4,
+      "codeLeakCapable": true,
+      "agree": false,
+      "note": "code-capable(负例但具备源+汇点,需归因:常量合成/未污染值)"
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "EventOrdering1",
+      "docLeak": true,
+      "desc": "IMEI is obtained the first time onLowMemory is called, and is leaked the second time onLowMemory is called, but only of ",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "IntentSink1",
+      "docLeak": true,
+      "desc": "A tainted value is leaked as the result of an activity.",
+      "sinks": [],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": null,
+      "note": "no-artifact(工件层不可观察,如纯反射/库间流)"
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "IntentSink2",
+      "docLeak": true,
+      "desc": "Similar to IntentSink, but the value is sent out in a callback method defined in XML.",
+      "sinks": [
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "IntentSource1",
+      "docLeak": true,
+      "desc": "Two tainted leaks: the first one is that a tainted value is leaked to another app using an intent by startActivityForRes",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ServiceCommunication1",
+      "docLeak": true,
+      "desc": "IMEI is obtained and sent to a Service which then leaks the info in the Messenger's Handler.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "SharedPreferences1",
+      "docLeak": true,
+      "desc": "Reflection in use of sharedpreference is done. Sink is Log",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "Singletons1",
+      "docLeak": true,
+      "desc": "IMEI is stored in a singleton object in one Activity and leaked in a different Activity.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "UnresolvableIntent1",
+      "docLeak": true,
+      "desc": "The app tries to start an Activity int an Intent that cannot be resolved statically.  One of the two Activities may be s",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityEventSequence1",
+      "docLeak": true,
+      "desc": "Source in Activity.onCreate(), sink in Activity.onResume().",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityEventSequence2",
+      "docLeak": true,
+      "desc": "Checks whether the analysis tool correctly handles events.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityEventSequence3",
+      "docLeak": true,
+      "desc": "Saves and restores state using the Activity's state callbacks.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityLifecycle1",
+      "docLeak": true,
+      "desc": "Calls to sources and sinks distributed across an activity lifecycle.",
+      "sinks": [
+        "net"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityLifecycle2",
+      "docLeak": true,
+      "desc": "Activity class inherited from a superclass containing the lifecycle method which leaks the tainted value.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityLifecycle3",
+      "docLeak": true,
+      "desc": "Calls to sources and sinks distributed across instance state handling methods.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityLifecycle4",
+      "docLeak": true,
+      "desc": "A tainted value is obtained on `onPause()` and leaked when the activity is restarted later.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivitySavedState1",
+      "docLeak": true,
+      "desc": "IMEI is saved during onSaveInstanceState() via bundle's persistence and leaked during the next onCreate()",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ApplicationLifecycle1",
+      "docLeak": true,
+      "desc": "Obtains a secret value when the application is launched and sends it out in the onResume() method of the main activity.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ApplicationLifecycle2",
+      "docLeak": true,
+      "desc": "Obtains a secret value when the application is launched and sends it out in the low memory callback of the application.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ApplicationLifecycle3",
+      "docLeak": true,
+      "desc": "Obtains a secret value when a content provider is initialized and leaks it in the onCreate() method of the application.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "AsynchronousEventOrdering1",
+      "docLeak": true,
+      "desc": "Obtains IMEI during onResume() and leaks it during onStop() with an overwrite in onLowMemory().",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "BroadcastReceiverLifecycle1",
+      "docLeak": true,
+      "desc": "Calls to sources and sinks distributed across a broadcast receiver lifecycle.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "BroadcastReceiverLifecycle2",
+      "docLeak": true,
+      "desc": "The sensitive data is read in onCreate() and sent out in a dynamically registered broadcast receiver.",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "BroadcastReceiverLifecycle3",
+      "docLeak": true,
+      "desc": "The sensitive data is read and leaked in a dynamically registered broadcast receiver.",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "EventOrdering1",
+      "docLeak": true,
+      "desc": "IMEI is obtained the first time onLowMemory is called, and is leaked the second time onLowMemory is called, but only of ",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "FragmentLifecycle1",
+      "docLeak": true,
+      "desc": "Calls to sources and sinks distributed across a fragment lifecycle.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ServiceLifecycle2",
+      "docLeak": true,
+      "desc": "IMEI is obtained at the end of onStartCommand and is stored to a service's field.  It is leaked the second time the serv",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Lifecycle",
+      "name": "SharedPreferenceChanged1",
+      "docLeak": true,
+      "desc": "onCreate(), IMEI is put into the SharedPreferences and it triggers onSharedPreferenceChanged() which then leaks the IMEI",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Native",
+      "name": "JavaIDFunction",
+      "docLeak": true,
+      "desc": "This test case sends tainted data from Java to Native to Java and back to native where it is leaked.",
+      "sinks": [],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": null,
+      "note": "no-artifact(工件层不可观察,如纯反射/库间流)"
+    },
+    {
+      "category": "Native",
+      "name": "NativeIDFunction",
+      "docLeak": true,
+      "desc": "This test case sends tainted data from Java to Native and back to Java where it is leaked.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Native",
+      "name": "SinkInNativeCode",
+      "docLeak": true,
+      "desc": "This test case obtains the IMEI in Java code and leaks it in native code by calling back to the Java-based Android API.",
+      "sinks": [],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": null,
+      "note": "no-artifact(工件层不可观察,如纯反射/库间流)"
+    },
+    {
+      "category": "Native",
+      "name": "SinkInNativeLibCode",
+      "docLeak": true,
+      "desc": "This test case obtains the IMEI in Java code and leaks it in native code using Linux sockets.",
+      "sinks": [],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": null,
+      "note": "no-artifact(工件层不可观察,如纯反射/库间流)"
+    },
+    {
+      "category": "Native",
+      "name": "SourceInNativeCode",
+      "docLeak": true,
+      "desc": "This test case obtains the IMEI in native code and leaks it in Java code.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [],
+      "files": 1,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection1",
+      "docLeak": true,
+      "desc": "Sensitive data is stored in a field of a reflective class and directly read out again and leaked.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection10",
+      "docLeak": true,
+      "desc": "Reads the telephone number, passes it to an AsyncTask, which uses reflection to store it in an object. Then uses reflect",
+      "sinks": [
+        "log"
+      ],
+      "sources": [],
+      "files": 4,
+      "codeLeakCapable": false,
+      "agree": true,
+      "note": "sink-only(隐式流或库内源,工件不完整)"
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection2",
+      "docLeak": true,
+      "desc": "Sensitive data is stored in a field of a reflective class, read out again using a method implemented in the \"unknown\" cl",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection3",
+      "docLeak": true,
+      "desc": "Sensitive data is stored using a setter in a reflective class, read back using a getter and then leaked. No type informa",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection4",
+      "docLeak": true,
+      "desc": "Sensitive data is read using a function in a reflective class and leaked using another function in the same reflective c",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection5",
+      "docLeak": true,
+      "desc": "Sensitive data is leaked using reflective invocation without using \"newInstance()\" to create a class instance.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection6",
+      "docLeak": true,
+      "desc": "Sensitive data is read using reflective invocation without using \"newInstance()\" to create a class instance.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection7",
+      "docLeak": true,
+      "desc": "Use a unusual way to get the class name for reflection calls.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection8",
+      "docLeak": true,
+      "desc": "The reflective class has two methods with the same name.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection9",
+      "docLeak": true,
+      "desc": "Names of reflective methods and parameters are not constant strings.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "ActivityCommunication2",
+      "docLeak": true,
+      "desc": "Data is obtained and sent through an implicit intent The intent is reflected. Source is getDeviceId and sink is Log.",
+      "sinks": [
+        "intent",
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 4,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "AllReflection",
+      "docLeak": true,
+      "desc": "Source, Sink, Intent(Explicit) all are reflected. Sink is SMS.",
+      "sinks": [
+        "intent",
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 5,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyIntent",
+      "docLeak": true,
+      "desc": "Intent itself is reflected during send. Intent is Explicit. Sink is SMS.",
+      "sinks": [
+        "sms",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyIntentReceive",
+      "docLeak": true,
+      "desc": "Intent Send is not reflected only its receive is reflected by passing intent as object. Intent is Explicit Intent.",
+      "sinks": [
+        "sms",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlySMS",
+      "docLeak": true,
+      "desc": "Data is obtained and sent to Activity2 where it is leaked. Sink is reflected. Sink is SMS.",
+      "sinks": [
+        "intent",
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 3,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyTelephony",
+      "docLeak": true,
+      "desc": "Source is getDeviceid and Reflection is used to call this Source API. The data is then transmitted to a second activity.",
+      "sinks": [
+        "sms",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyTelephony_Dynamic",
+      "docLeak": true,
+      "desc": "Source API is getDeviceId. The API is called using reflection along with concatenation to generate the string at run tim",
+      "sinks": [
+        "sms",
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyTelephony_Reverse",
+      "docLeak": true,
+      "desc": "Source API is getDeviceId which is obtained using reverse() function. The API is called using reflection. The data is th",
+      "sinks": [
+        "sms",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyTelephony_Substring",
+      "docLeak": true,
+      "desc": "Source API is getDeviceId which is obtained using substring() function. The API is called using reflection. The data is ",
+      "sinks": [
+        "sms",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "SharedPreferences1",
+      "docLeak": true,
+      "desc": "Reflection in use of sharedpreference is done. Sink is Log",
+      "sinks": [
+        "log",
+        "intent"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 4,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Threading",
+      "name": "AsyncTask1",
+      "docLeak": true,
+      "desc": "Sensitive data is read in onCreate() and send out in a dedicated thread started using Android's AsyncTask mechanism.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Threading",
+      "name": "Executor1",
+      "docLeak": true,
+      "desc": "Sensitive data is read in onCreate() and send out in a dedicated thread started using Java's Executor mechanism.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Threading",
+      "name": "JavaThread1",
+      "docLeak": true,
+      "desc": "Sensitive data is read in onCreate() and send out in a dedicated thread started using Java's normal threading mechanism.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Threading",
+      "name": "JavaThread2",
+      "docLeak": true,
+      "desc": "Sensitive data is read in onCreate() and send out in a dedicated thread started using Java's Runnable mechanism.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Threading",
+      "name": "Looper1",
+      "docLeak": true,
+      "desc": "Sensitive data is read in onCreate() and enqueued for a custom thread hosting an Android Looper whose handler sends out ",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 2,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "Threading",
+      "name": "TimerTask1",
+      "docLeak": true,
+      "desc": "Sensitive data is read in onCreate() and enqeued to be sent out 2 seconds later using Java's TimerTask architecture.",
+      "sinks": [
+        "sms"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "UnreachableCode",
+      "name": "SimpleUnreachable1",
+      "docLeak": true,
+      "desc": "Both source and sink are in an unreachable branch guarded by a simple numeric comparison.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "UnreachableCode",
+      "name": "UnreachableSink1",
+      "docLeak": true,
+      "desc": "Sensitive data is leaked in a branch of \"switch\" instruction, which will never be executed.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    },
+    {
+      "category": "UnreachableCode",
+      "name": "UnreachableSource1",
+      "docLeak": true,
+      "desc": "Sensitive data is read in a branch of \"if\" instruction, which will never be executed.",
+      "sinks": [
+        "log"
+      ],
+      "sources": [
+        "deviceId"
+      ],
+      "files": 1,
+      "codeLeakCapable": true,
+      "agree": true,
+      "note": ""
+    }
+  ]
+}
