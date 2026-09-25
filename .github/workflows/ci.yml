@@ -1,60 +1,96 @@
-# DroidSeal CI/CD — GitHub Actions（#64）
-# 自动化:类型检查 + 测试 + 构建 + 发布
-name: CI
+# CI:tsc + 测试 + npm 白名单冒烟 + NDK native 编译路径
+# 触发:push/PR 到 main;手动触发可勾选 ndk job
+# 判据:tsc 0 错误、bun test 全绿、npm pack 产物含运行时必需文件、NDK 缺失时如实降级
+name: ci
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  check:
+  core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-      - run: bun install
-      - run: bun run check
-      - run: bun test
 
-  build:
-    runs-on: ubuntu-latest
-    needs: check
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
-      - run: bun install
-      - run: bun run build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: droidseal-linux
-          path: dist/
+          bun-version: "1.3.14"
 
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type check (tsc --noEmit)
+        run: bun run check
+
+      - name: Unit tests
+        run: bun test
+
+      # npm 白名单冒烟:pack 后的 tarball 必须含运行时必需文件
+      # (loader/stub DEX、challenge-server、README)——缺失任何一个,npm 包都无法构建壳
+      - name: npm pack whitelist smoke
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack.log
+          for f in runtime/droidseal-loader.dex runtime/droidseal-stub.dex scripts/challenge-server.ts README.md package.json; do
+            grep -q "$f" /tmp/pack.log || { echo "FAIL: npm 包白名单缺 $f"; exit 1; }
+          done
+          echo "npm 包白名单完整"
+
+  ndk:
+    # native 编译路径:SO 模板在真实 NDK 下必须可编译(guard_vote.c 等)
+    # 与 core 分开跑:NDK 缺失环境应走 fallback(如实 NDK_NOT_FOUND),不应阻塞主 CI
     runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+
+      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
-      - run: bun install
-      - run: bun run build
-      - run: bun run verify
-      - uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          bun-version: "1.3.14"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
         with:
-          tag_name: ${{ github.ref }}
-          release_name: DroidSeal ${{ github.ref }}
-      - run: npm publish
+          ndk-version: r27c
+
+      - name: Compile native SO via real NDK
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          bun -e "
+          import { mkdirSync } from 'node:fs'
+          import { writeFile } from 'node:fs/promises'
+          import { generateNativeShellFiles } from './src/core/native-shell.ts'
+          import { compileNativeSo } from './src/core/native-so-compile.ts'
+          mkdirSync('/tmp/so-src', { recursive: true })
+          mkdirSync('/tmp/so-out', { recursive: true })
+          // 生成整套 SO 源(含 guard_vote.c——C1 修复路径必须经真实 NDK 编译验证)
+          const files = generateNativeShellFiles({
+            packageName: 'com/ci/probe',
+            soName: 'libguard.so',
+            algorithm: 'aes-256-gcm',
+            enableAntiFrida: true,
+            enableAntiDump: true,
+            enableAntiDebug: true,
+            enableArtHook: true,
+            keyPart2Hex: 'ab'.repeat(32),
+            jniClassPath: 'droidseal/runtime/DroidSealLoader',
+          })
+          for (const f of files) await writeFile('/tmp/so-src/' + f.name, f.content)
+          const r = await compileNativeSo({
+            packageName: 'com.ci.probe',
+            soName: 'libguard.so',
+            sourceDir: '/tmp/so-src',
+            outputDir: '/tmp/so-out',
+            abi: ['arm64-v8a', 'x86_64'],
+            minSdk: 24,
+          })
+          if (!r.success) { console.error(r.findings); process.exit(1) }
+          console.log('SO compiled:', r.soFiles.map(s => s.abi + ':' + s.size + 'B').join(', '))
+          "

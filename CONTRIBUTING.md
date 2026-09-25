@@ -84,6 +84,8 @@ Not accepted:
 
 When a change touches process execution, argument parsing, path normalization, archive handling, automatic downloads, checksums, signing credentials, keystores, output redaction, network access, or permission changes, the PR must state the security impact, threat boundary, and verification approach, and be reviewed by CODEOWNERS.
 
+Security fixes additionally follow the [adversarial regression policy](SECURITY.md#adversarial-regression-policy): a `SEC-XX`-headed test reproducing the fix's trigger condition (old symptom + fix semantics documented in the test header) is mandatory, must be red on pre-fix code and green after, and lands in `tests/security-regression.test.ts` or the nearest existing suite. A fix without a trigger-condition regression is incomplete and will be sent back.
+
 ## Reporting ordinary bugs
 
 Use the Bug Report template and provide:
