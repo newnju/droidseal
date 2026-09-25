@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { readFile } from "node:fs/promises"
+import { readFile, writeFile, mkdir } from "node:fs/promises"
+import path from "node:path"
 import { VERSION } from "./brand.ts"
 import { createToolRecoveryPlan } from "./core/tool-installer.ts"
 import { discoverToolchain } from "./core/toolchain.ts"
@@ -11,13 +12,16 @@ const args = process.argv.slice(2)
 
 function getArg(flag: string): string | undefined {
   const idx = args.indexOf(flag)
-  return idx >= 0 && idx + 1 < args.length ? args[idx + 1] : undefined
+  // 下一个参数若仍是 flag(-- 开头)不当作值吞掉:防止 `--challenge-url --keystore-bind`
+  // 把开关名当 URL 补进 loader DEX(有 https:// 校验兜底,但提前判定才能触发警告)
+  if (idx < 0 || idx + 1 >= args.length || args[idx + 1]!.startsWith("--")) return undefined
+  return args[idx + 1]
 }
 function hasFlag(flag: string): boolean { return args.includes(flag) }
 function collectMulti(flag: string): string[] {
   const result: string[] = []
   for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === flag && args[i + 1]) result.push(args[i + 1]!)
+    if (args[i] === flag && args[i + 1] && !args[i + 1]!.startsWith("--")) result.push(args[i + 1]!)
   }
   return result
 }
@@ -72,6 +76,13 @@ function usage(): string {
   --ks-alias <alias>       密钥别名
   --ks-pass <password>     密钥库密码
   --key-pass <password>    密钥密码
+  --keystore-bind          Android Keystore 设备绑定(首次运行后密钥封存进硬件;
+                           卸载重装/清除数据/换机即失效且无法恢复——一机一份分发用)
+  --keep-intermediates     保留 native/smali 等中间产物(测试学习模式;默认经典模式
+                           流水线结束即清理,只留最终 APK)
+  --challenge-url <url>    服务端挑战(可选):密钥第三段 part3 不进 APK,构建产物旁生成
+                           server-challenge.json 部署到该 HTTPS URL;运行时联网取片,
+                           离线/被拒则解密失败。丢失 server-challenge.json 该构建永久无法解密
 
 通用选项:
   --json                   JSON 格式输出(适合 CI/CD)
@@ -98,6 +109,60 @@ TUI 内置命令:
 
 if (hasFlag("--help") || hasFlag("-h")) { console.log(usage()); process.exit(0) }
 if (hasFlag("--version") || hasFlag("-v")) { console.log(VERSION); process.exit(0) }
+
+// ── bench(一键基准评测,与 Rust 版同口径)────────────────────────────
+
+if (args[0] === "bench") {
+  const { loadSuite, runSuite, renderMd, renderJson } = await import("./core/bench.ts")
+  const spec = args[1]
+  if (!spec || spec.startsWith("--")) {
+    console.error("用法: droidseal bench <suite.json | 数据集目录> [--format md|json] [--max-fp N] [--min-recall X] [--out <file>]")
+    console.error("  语义 GT:数据集目录旁 droidbench-map.json(README 语义 map)或套件配置 gt_file(per-case expected)")
+    process.exit(1)
+  }
+  const flagVal = (name: string): string | undefined => {
+    const i = args.indexOf(name)
+    return i >= 0 ? args[i + 1] : undefined
+  }
+  const format = (flagVal("--format") ?? "md").toLowerCase()
+  const maxFp = flagVal("--max-fp") ? Number(flagVal("--max-fp")) : undefined
+  const minRecall = flagVal("--min-recall") ? Number(flagVal("--min-recall")) : undefined
+  const out = flagVal("--out")
+  try {
+    const suites = await loadSuite(spec)
+    let body = ""
+    const gateFails: string[] = []
+    for (const s of suites) {
+      const r = await runSuite(s)
+      if (maxFp !== undefined && r.fp > maxFp) gateFails.push(`套件 ${r.suite}: FP=${r.fp} 超上限 ${maxFp}`)
+      if (minRecall !== undefined && r.recall !== null && r.recall < minRecall) gateFails.push(`套件 ${r.suite}: Recall ${r.recall}% 低于下限 ${minRecall}%`)
+      body += format === "json" ? renderJson(r) : renderMd(r)
+      // 流级对判:generic 套件(带 *_findings.json 的真实样本)自动执行——与 Rust 版同口径
+      if (s.kind === "generic") {
+        const { summarizeFlow, renderFlowMd } = await import("./core/bench-flow.ts")
+        const fs_ = await summarizeFlow(s.projects_dir).catch(() => null)
+        if (fs_ && format !== "json") body += renderFlowMd(fs_)
+      } else if (format !== "json") {
+        body += "\n> **评分粒度声明**:该套件 GT 为 app 级(expected 标注,无官方流级 findings),仅 app 级评分;流级判定适用于自带 findings.json 的套件(如 TaintBench)。\n"
+      }
+    }
+    if (out) {
+      await mkdir(path.dirname(path.resolve(out)), { recursive: true }).catch(() => {})
+      await writeFile(out, body, "utf8")
+      console.log(`报告已写入 ${out}`)
+    } else {
+      console.log(body)
+    }
+    if (gateFails.length > 0) {
+      for (const g of gateFails) console.error(`✗ 门控不达标: ${g}`)
+      process.exit(1)
+    }
+  } catch (e) {
+    console.error(`✗ bench 失败: ${e instanceof Error ? e.message : e}`)
+    process.exit(1)
+  }
+  process.exit(0)
+}
 
 // ── doctor ──────────────────────────────────────────────────────────────
 
@@ -233,6 +298,11 @@ if (resolved && resolved.inputPath) {
 
     const { runHardenPipeline, generateHardenReport, DEFAULT_HARDEN_CONFIG } = await import("./core/harden-pipeline.ts")
     const excludePatterns = collectMulti("--exclude")
+    // P2 服务端挑战 URL(可选,--challenge-url)
+    const challengeUrl = getArg("--challenge-url")
+    if (hasFlag("--challenge-url") && !challengeUrl) {
+      console.warn("警告: --challenge-url 后未提供 URL——本次构建按纯本地模式执行(密钥完整进 APK)。")
+    }
     const hardenConfig = {
       ...DEFAULT_HARDEN_CONFIG,
       inputApk: inputPath,
@@ -251,6 +321,7 @@ if (resolved && resolved.inputPath) {
       enableSplitKey: !hasFlag("--no-split-key"),
       enableTripleEntry: !hasFlag("--no-triple-entry"),
       enableRandomNames: !hasFlag("--no-random-names"),
+      enableKeystoreBinding: hasFlag("--keystore-bind"),
       classExclusionPatterns: excludePatterns,
       signingConfig: getArg("--keystore") ? {
         mode: "keystore" as const,
@@ -259,13 +330,16 @@ if (resolved && resolved.inputPath) {
         storePassword: getArg("--ks-pass") ?? "droidseal123",
         keyPassword: getArg("--key-pass") ?? getArg("--ks-pass") ?? "droidseal123",
       } : undefined,
+      // 测试学习模式:保留 native/smali 等中间产物;经典模式(默认)流水线收尾会清理
+      keepIntermediates: hasFlag("--keep-intermediates"),
+      ...(challengeUrl ? { challengeUrl } : {}),
     }
 
     try {
       hardenResult = await runHardenPipeline(hardenConfig)
       if (!jsonOutput) {
         console.log(generateHardenReport(hardenResult))
-        if (hardenResult.generatedFiles.length > 0) {
+        if (hardenResult.generatedFiles.length > 0 && hasFlag("--keep-intermediates")) {
           const { mkdir: mkd, writeFile: wf } = await import("node:fs/promises")
           await mkd(hardenConfig.outputDir, { recursive: true })
           for (const file of hardenResult.generatedFiles) {

@@ -3,6 +3,7 @@
 // 类重命名/Goto 插入/方法重载混淆/基本块乱序/Reflection 包装/资源加密/Junk Code。
 // 纯 TypeScript，生成 Smali/Gradle 配置文件，失败关闭。
 import type { Finding } from "./types.ts"
+import { randomInt } from "node:crypto"
 
 // ── ASM 编译期垃圾代码注入(#48) ──────────────────────────────────────────
 
@@ -265,7 +266,7 @@ export function generateBasicBlockReorder(blocks: string[]): string[] {
   // Fisher-Yates shuffle
   const shuffled = [...blocks]
   for (let i = shuffled.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomInt(0, i + 1);
     [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!]
   }
   return shuffled

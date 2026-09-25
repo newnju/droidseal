@@ -301,7 +301,7 @@ export function generateStringDecryptorSmali(packageName: string, algorithm: str
  */
 export function generateNdkKeyHidingC(key: Uint8Array, variableName: string): string {
   // XOR 混淆:随机生成混淆字节
-  const xorByte = Math.floor(Math.random() * 256)
+  const xorByte = randomBytes(1)[0]!
   const obfuscated = Array.from(key).map((b) => b ^ xorByte)
 
   return `// DroidSeal 密钥隐藏 — ${variableName}

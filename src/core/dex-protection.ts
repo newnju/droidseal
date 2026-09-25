@@ -27,10 +27,12 @@ function parseDexHeader(bytes: Uint8Array): DexHeader {
 }
 
 function updateDexChecksum(bytes: Uint8Array): void {
+  // 顺序必须:先写 SHA-1 签名(覆盖 bytes[32..]),再算 adler32(覆盖 bytes[12..],含新签名)。
+  // 反过来先算校验和再写签名,签名一落盘校验和即失效,ART 报 Bad checksum 拒载(SEC-010)。
+  bytes.set(new Uint8Array(createHash("sha1").update(bytes.slice(32)).digest()), 12)
   let a = 1, b = 0
   for (let i = 12; i < bytes.length; i += 1) { a = (a + bytes[i]!) % 65521; b = (b + a) % 65521 }
-  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(8, (b << 16) | a, true)
-  bytes.set(new Uint8Array(createHash("sha1").update(bytes.slice(32)).digest()), 12)
+  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(8, ((b << 16) | a) >>> 0, true)
 }
 
 export interface EncryptedPayload { ciphertext: Uint8Array; nonce: Uint8Array; tag: Uint8Array }
@@ -86,9 +88,22 @@ function readDexString(b: Uint8Array, off: number): string {
   while (e < b.length && b[e] !== 0) e += 1
   return new TextDecoder("utf-8", { fatal: false }).decode(b.slice(p, e))
 }
-function generateReturnVoidStub(): Uint8Array {
-  const s = new Uint8Array(18); const v = new DataView(s.buffer)
-  v.setUint32(12, 1, true); v.setUint16(16, 0x000e, true); return s
+// SEC-011:足迹不变的抽取 stub。把原 code_item 的 insns_size 保留,指令区首 2 字节写
+// return-void(0x000e),其余写 nop(0x0000)填充。item 字节足迹与原始完全一致:
+// 后续 code_item 偏移/对齐不变,不留"节区前非零 padding"(ART 严格校验:
+// Non-zero padding before section start → 拒载),恢复逻辑(按 originalCodeSize 整块
+// 覆盖)也不需要改动。stubs 里的 originalCodeSize 仍为完整 item 尺寸(含 tries)。
+function writeFootprintPreservingStub(out: Uint8Array, codeOff: number, insnsSize: number): void {
+  const v = new DataView(out.buffer, out.byteOffset, out.byteLength)
+  // registers_size / ins_size / outs_size / tries_size(0x8..0xF)/ debug_info_off 保持原值?
+  // —— tries_size 必须清零:insns 区已不含 try/catch,若保留 tries_size,
+  // tries/ handler 数据会指向已被 nop 填充覆盖的旧位置,ART 校验 handler_off 失败。
+  v.setUint32(codeOff + 8, 0, true)          // tries_size = 0
+  v.setUint32(codeOff + 12, insnsSize, true) // insns_size 保持原值(足迹不变)
+  v.setUint16(codeOff + 16, 0x000e, true)    // return-void
+  for (let i = 1; i < insnsSize; i += 1) v.setUint16(codeOff + 16 + i * 2, 0x0000, true) // nop 填充
+  // padding 到 4 字节对齐(若 insnsSize 为奇数,DEX 规范要求补 2 字节 nop——原 item 已对齐,此处保持)
+  // padding 空间落在原 item 的 insns 区内(足迹不变),无需额外清零
 }
 
 export interface HollowedMethod { classIdx: number; methodIdx: number; originalCodeOff: number; originalCodeSize: number }
@@ -124,9 +139,13 @@ export function hollowMethods(dexBytes: Uint8Array, excludePatterns: RegExp[] = 
         const insnsSize = v.getUint32(code.value + 12, true); const sz = 16 + insnsSize * 2
         // 防护:code_item 越界或 insnsSize 为垃圾值(单方法指令区不超过 64K insns=128KB+16B 头)
         if (code.value + 16 > dexBytes.length || insnsSize > 0x10000 || code.value + sz > dexBytes.length) { skipped += 1; continue }
+        // SEC-011a:带 try/catch(tries_size>0)的方法跳过抽取——恢复时需完整重建
+        // tries/handler 表,当前恢复逻辑只整块覆盖 insns 区,恢复后方法会丢失异常表。
+        const triesSize = v.getUint32(code.value + 8, true)
+        if (triesSize > 0) { skipped += 1; continue }
         extracted.set(code.value, dexBytes.slice(code.value, code.value + sz)); extractedBytes += sz
-        out.set(generateReturnVoidStub(), code.value)
-        new DataView(out.buffer, out.byteOffset, out.byteLength).setUint32(code.value + 12, 1, true)
+        // SEC-011b:足迹不变 stub(保留 insns_size、nop 填充,不留非零 padding)
+        writeFootprintPreservingStub(out, code.value, insnsSize)
         stubs.push({ classIdx: v.getUint32(header.classDefsOff + c * 32, true), methodIdx: mIdx, originalCodeOff: code.value, originalCodeSize: sz }); hollowed += 1
       }
     }
@@ -174,10 +193,11 @@ export function parseClassExclusionRules(text: string): RegExp[] {
 // ── Finding 生成 ──────────────────────────────────────────────────────
 export function buildDexProtectionFindings(result: MethodHollowResult, encryptedDex?: EncryptedDex): Finding[] {
   const f: Finding[] = []; const s = result.summary
-  f.push({ severity: "info", confidence: "high", code: "DEX_METHOD_HOLLOW", title: `方法抽取完成:${s.hollowedMethods}/${s.totalMethods} 个方法已挖空`, detail: `提取 ${s.extractedBytes}B 原始 CodeItem;跳过 ${s.skippedMethods} 个 abstract/native。`, recommendation: "方法抽取是当前最强 DEX 静态保护——逆向需完整 ART hook 链。", evidence: `hollowed=${s.hollowedMethods} total=${s.totalMethods}` })
+  const coverage = s.totalMethods > 0 ? ((s.hollowedMethods / s.totalMethods) * 100).toFixed(1) : "0.0"
+  f.push({ severity: "info", confidence: "high", code: "DEX_METHOD_HOLLOW", title: `方法抽取完成:${s.hollowedMethods}/${s.totalMethods} 个方法已挖空(覆盖率 ${coverage}%)`, detail: `提取 ${s.extractedBytes}B 原始 CodeItem;跳过 ${s.skippedMethods} 个 abstract/native。覆盖率如实量化:未抽取的方法(排除 abstract/native 之外的跳过项)仍为明文,静态可读。`, recommendation: "方法抽取是当前最强 DEX 静态保护——逆向需完整 ART hook 链。", evidence: `hollowed=${s.hollowedMethods} total=${s.totalMethods} coverage=${coverage}%` })
   if (encryptedDex) f.push({ severity: "info", confidence: "high", code: "DEX_ENCRYPTED", title: `DEX 加密完成(${encryptedDex.algorithm}):${encryptedDex.originalSize}B→${encryptedDex.shellSize}B`, detail: `壳 DEX 包含 stub + 加密 payload。`, recommendation: "确认壳加载器兼容 Android 5~16。", evidence: `alg=${encryptedDex.algorithm}` })
   return f
 }
 
-function serializePayload(p: EncryptedPayload): Uint8Array { const r = new Uint8Array(28 + p.ciphertext.length); r.set(p.nonce, 0); r.set(p.tag, 12); r.set(p.ciphertext, 28); return r }
+export function serializePayload(p: EncryptedPayload): Uint8Array { const r = new Uint8Array(28 + p.ciphertext.length); r.set(p.nonce, 0); r.set(p.tag, 12); r.set(p.ciphertext, 28); return r }
 function deserializePayload(b: Uint8Array): EncryptedPayload { return { nonce: b.slice(0, 12), tag: b.slice(12, 28), ciphertext: b.slice(28) } }

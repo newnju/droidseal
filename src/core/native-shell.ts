@@ -5,6 +5,7 @@
 // 生成完整 C/CMake 源文件，可直接用 NDK 编译。
 // 纯 TypeScript，失败关闭。
 import type { Finding } from "./types.ts"
+import { randomBytes, randomInt } from "node:crypto"
 
 // ── ART DefineClass 钩子原理 ──────────────────────────────────────────
 // dpt-shell 的核心方法还原机制:
@@ -119,6 +120,7 @@ typedef struct {
     uint32_t count;
     MethodRecord* records;
     uint8_t* code_data;
+    uint32_t code_data_size;
 } CodeItemTable;
 
 // ── 全局状态 ──────────────────────────────────────────────────────────
@@ -126,7 +128,7 @@ static uint8_t* g_shell_dex = NULL;
 static uint32_t g_shell_dex_size = 0;
 static uint8_t* g_encryption_key = NULL;
 static uint32_t g_key_size = 0;
-static CodeItemTable g_code_table = {0, NULL, NULL};
+static CodeItemTable g_code_table = {0, NULL, NULL, 0};
 static int g_initialized = 0;
 
 // ── AES-256-GCM 解密（通过 JNI 回调 Java Cipher）─────────────────────────
@@ -266,10 +268,11 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* reserved) {
         g_code_table.records = NULL;
     }
     if (g_code_table.code_data) {
-        // 安全擦除
-        memset(g_code_table.code_data, 0, g_code_table.count * 100);
+        // 安全擦除:按实际分配大小清零(不能用 count*100 估算——分配大小与记录数无此固定关系)
+        memset(g_code_table.code_data, 0, g_code_table.code_data_size);
         free(g_code_table.code_data);
         g_code_table.code_data = NULL;
+        g_code_table.code_data_size = 0;
     }
 }
 `
@@ -280,7 +283,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* reserved) {
 /**
  * 生成 CMakeLists.txt 用于编译壳 SO。
  */
-export function generateCmakeLists(soName: string): string {
+export function generateCmakeLists(soName: string, includeKeyPart2 = false): string {
   return `cmake_minimum_required(VERSION 3.18)
 project(droidseal-shell C)
 
@@ -289,7 +292,7 @@ set(CMAKE_C_STANDARD 11)
 # 源文件
 add_library(${soName} SHARED
     crc32.c
-    art_hook.c
+    art_hook.c${includeKeyPart2 ? "\n    key_part2.c\n    guard_vote.c" : ""}
 )
 
 # Android 日志库
@@ -364,14 +367,177 @@ export interface NativeShellConfig {
   enableAntiDump: boolean
   enableAntiDebug: boolean
   enableArtHook: boolean
+  /** Split-Key 模式:part2 十六进制串(64 字符),注入 SO 内嵌数组 */
+  keyPart2Hex?: string | undefined
+  /** Split-Key 模式:JNI 方法所属类的完整路径(如 droidseal/runtime/DroidSealLoader) */
+  jniClassPath?: string | undefined
+}
+
+/**
+ * 生成 key_part2.c:Split-Key part2 运行时计算(非静态数组)。
+ *
+ * part2 的每个字节被构建期拆解为随机算术表达式:part2[i] = (XA[i] + C1[i]) ^ C2[i],
+ * 三组常量分存独立数组并整体乱序(位置映射 IND[i])——IDA 静态分析找不到任何
+ * 32 字节连续序列等于 part2,自动化签名扫描失效;必须理解表达式或动态执行才能重建。
+ * JNI 导出签名不变(DroidSealLoader.nativeKeyPart2 首次调用时求值并缓存)。
+ */
+export function generateKeyPart2C(jniClassPath: string, part2Hex: string): string {
+  const jniName = `Java_${jniClassPath.replace(/\//g, "_")}_nativeKeyPart2`
+  const target = Buffer.from(part2Hex, "hex")
+  if (target.length !== 32) throw new Error(`part2 必须 32B,实际 ${target.length}B`)
+
+  // 构建期:为每字节生成随机可逆表达式 target = (x + c1) ^ c2 → x = (target ^ c2) - c1
+  // (按 slot 对齐;拆解本身就消除连续 part2 明文,无需额外置换——置换反而会算错密钥)
+  const rnd = () => randomBytes(1)[0]!
+  const xa: number[] = []
+  const c1: number[] = []
+  const c2: number[] = []
+  for (let slot = 0; slot < 32; slot += 1) {
+    const b1 = rnd()
+    const b2 = rnd()
+    const x = ((target[slot]! ^ b2) - b1) & 0xff
+    xa.push(x)
+    c1.push(b1)
+    c2.push(b2)
+  }
+  const arr = (name: string, vals: number[]) =>
+    `static const unsigned char ${name}[32] = {${vals.map((v) => `0x${v.toString(16).padStart(2, "0")}`).join(",")}};`
+
+  return `// DroidSeal Split-Key Part2(构建期自动生成,勿手动修改)
+// part2 以随机算术表达式拆解存放,静态提取需重建表达式;运行时首次调用求值并缓存。
+#include <jni.h>
+#include <string.h>
+
+${arr("ds_xa", xa)}
+${arr("ds_c1", c1)}
+${arr("ds_c2", c2)}
+
+static unsigned char ds_part2[32];
+static int ds_ready = 0;
+
+static void ds_compute(void) {
+    for (int slot = 0; slot < 32; slot += 1) {
+        ds_part2[slot] = (unsigned char)((ds_xa[slot] + ds_c1[slot]) ^ ds_c2[slot]);
+    }
+    ds_ready = 1;
+}
+
+JNIEXPORT jbyteArray JNICALL
+${jniName}(JNIEnv *env, jclass clazz) {
+    if (!ds_ready) ds_compute();
+    jbyteArray arr = (*env)->NewByteArray(env, 32);
+    if (arr == NULL) return NULL;
+    (*env)->SetByteArrayRegion(env, arr, 0, 32, (const jbyte*)ds_part2);
+    return arr;
+}
+`
+}
+
+/**
+ * P1 异构检测投票 native 源:与 Java 源(DroidSealGuard,FileReader 读 maps/status)路径异构:
+ *  - fork 子进程跨进程读父进程 /proc/<ppid>/status 的 TracerPid(零副作用——
+ *    禁用 PTRACE_TRACEME 自检:它会把自身置为被 trace 状态,污染后续 Java 侧
+ *    detectTracer 读数,导致干净设备上每次启动误杀);
+ *  - Frida 默认端口 27042/27043 探测(connect 成功即有监听);
+ *  - native fopen 读 /proc/self/maps 扫 frida/gum 特征(与 Java 读同一文件但走 libc 缓冲路径)。
+ * 任一命中返回 1。所有失败按干净处理(不误伤);导出名与 DroidSealLoader.nativeGuardVote 对应。
+ */
+export function generateGuardVoteC(jniClassPath: string): string {
+  const jniName = `Java_${jniClassPath.replace(/\//g, "_")}_nativeGuardVote`
+  return `// DroidSeal native 反分析检测(构建期自动生成,勿手动修改)
+#include <jni.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <ctype.h>
+#include <string.h>
+#include <stdio.h>
+
+static int ds_probe_port(unsigned short port) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return 0;
+    struct sockaddr_in a;
+    memset(&a, 0, sizeof(a));
+    a.sin_family = AF_INET;
+    a.sin_port = htons(port);
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    int hit = connect(fd, (struct sockaddr*)&a, sizeof(a)) == 0;
+    close(fd);
+    return hit ? 1 : 0;
+}
+
+static int ds_maps_hit(void) {
+    FILE* f = fopen("/proc/self/maps", "r");
+    if (!f) return 0;
+    char line[512];
+    int hit = 0;
+    while (fgets(line, sizeof(line), f)) {
+        if (strstr(line, "frida") || strstr(line, "gum-js-loop") || strstr(line, "linjector")) {
+            hit = 1;
+            break;
+        }
+    }
+    fclose(f);
+    return hit;
+}
+
+/* 子进程跨进程读父进程 /proc/<ppid>/status 的 TracerPid(与 Java 读 /proc/self/status
+ * 路径异构;零副作用——不使用 PTRACE_TRACEME,避免污染自身 trace 状态)。
+ * 任何失败按干净返回 0(不误伤)。 */
+static int ds_parent_traced(void) {
+    pid_t ppid = getppid();
+    if (ppid <= 0) return 0;
+    char path[64];
+    snprintf(path, sizeof(path), "/proc/%d/status", (int) ppid);
+    FILE* f = fopen(path, "r");
+    if (!f) return 0;
+    char line[256];
+    int hit = 0;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "TracerPid:", 10) == 0) {
+            const char* p = line + 10;
+            while (*p && isspace((unsigned char) *p)) p++;
+            hit = atoi(p) > 0 ? 1 : 0;
+            break;
+        }
+    }
+    fclose(f);
+    return hit;
+}
+
+JNIEXPORT jint JNICALL
+${jniName}(JNIEnv *env, jclass clazz) {
+    // 源 A:fork 子进程跨进程读父进程 TracerPid(零副作用)
+    if (ds_parent_traced()) return 1;
+    // 源 B:Frida 默认端口监听探测
+    if (ds_probe_port(27042) || ds_probe_port(27043)) return 1;
+    // 源 C:maps 特征(native 读路径)
+    if (ds_maps_hit()) return 1;
+    return 0;
+}
+`
 }
 
 export function generateNativeShellFiles(config: NativeShellConfig): Array<{ name: string; content: string }> {
   const files: Array<{ name: string; content: string }> = []
   const dir = `native/${config.soName.replace("lib", "").replace(".so", "")}`
+  const withKeyPart2 = Boolean(config.keyPart2Hex && config.jniClassPath)
 
   // CRC32 实现
   files.push({ name: `${dir}/crc32.c`, content: generateCrc32C() })
+
+  // Split-Key part2 内嵌数组 + JNI 导出(异位存放:完整密钥不在任何单个 DEX 中)
+  if (withKeyPart2) {
+    files.push({ name: `${dir}/key_part2.c`, content: generateKeyPart2C(config.jniClassPath!, config.keyPart2Hex!) })
+  }
+
+  // P1 异构检测投票 native 源(与 Java 源读取路径异构,参与 envVote 派生污染)
+  if (withKeyPart2 && config.jniClassPath) {
+    files.push({ name: `${dir}/guard_vote.c`, content: generateGuardVoteC(config.jniClassPath) })
+  }
 
   // ART hook 主文件
   if (config.enableArtHook) {
@@ -379,7 +545,7 @@ export function generateNativeShellFiles(config: NativeShellConfig): Array<{ nam
   }
 
   // CMake 构建文件
-  files.push({ name: `${dir}/CMakeLists.txt`, content: generateCmakeLists(config.soName) })
+  files.push({ name: `${dir}/CMakeLists.txt`, content: generateCmakeLists(config.soName, withKeyPart2) })
 
   // 配置头文件
   files.push({

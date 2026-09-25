@@ -50,19 +50,19 @@ export function deserializePayload(bytes: Uint8Array): EncryptedPayload | undefi
 // ── DEX 校验和更新 ──────────────────────────────────────────────────────
 
 function updateDexChecksum(bytes: Uint8Array): void {
-  // Adler32 of bytes[12..fileSize]
+  // 顺序必须:先写 SHA-1 签名(覆盖 bytes[32..fileSize]),再算 adler32(覆盖 bytes[12..fileSize],含新签名)。
+  // 反过来先算校验和再写签名,签名一落盘校验和即失效,ART 报 Bad checksum 拒载(SEC-010)。
   const fileSize = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(DEX_FILE_SIZE_OFFSET, true)
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const { createHash } = require("node:crypto") as typeof import("node:crypto")
+  const sha1 = createHash("sha1").update(bytes.slice(32, fileSize)).digest()
+  bytes.set(new Uint8Array(sha1), DEX_SIGNATURE_OFFSET)
   let a = 1, b = 0
   for (let i = 12; i < fileSize; i += 1) {
     a = (a + bytes[i]!) % 65521
     b = (b + a) % 65521
   }
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  view.setUint32(DEX_CHECKSUM_OFFSET, (b << 16) | a, true)
-  // SHA-1 of bytes[32..fileSize]
-  const { createHash } = require("node:crypto") as typeof import("node:crypto")
-  const sha1 = createHash("sha1").update(bytes.slice(32, fileSize)).digest()
-  bytes.set(new Uint8Array(sha1), DEX_SIGNATURE_OFFSET)
+  view.setUint32(DEX_CHECKSUM_OFFSET, ((b << 16) | a) >>> 0, true)
 }
 
 // ── 加密 payload 注入 ──────────────────────────────────────────────────────
