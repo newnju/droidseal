@@ -34,32 +34,51 @@ public final class ShellApplication extends Application {
     // 原始 Application 类名:由构建期写入 AndroidManifest meta-data
     // "droidseal.original_app"(避免对 DEX 字符串表做变长补丁)
     private static final String META_ORIGINAL_APP = "droidseal.original_app";
+    // 壳 SO 的 loadLibrary 名(如 "droidseal_x7k"):构建期写入,part2 异位存于该 SO
+    private static final String META_SHELL_SO = "droidseal.shell_so";
 
-    private static String originalClassName(Context base) {
+    private static String metaString(Context base, String key) {
         try {
             ApplicationInfo info = base.getPackageManager()
                     .getApplicationInfo(base.getPackageName(), android.content.pm.PackageManager.GET_META_DATA);
             if (info.metaData != null) {
-                String n = info.metaData.getString(META_ORIGINAL_APP);
+                String n = info.metaData.getString(key);
                 if (n != null && n.length() > 0) return n;
             }
         } catch (Throwable t) {
-            // 读取失败 → 返回 null,跳过原始 Application 安装
+            // 读取失败 → 返回 null
         }
         return null;
+    }
+
+    private static String originalClassName(Context base) {
+        return metaString(base, META_ORIGINAL_APP);
     }
 
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
         try {
-            DroidSealLoader.init(KEY_PART1, KEY_PART2);
+            String soName = metaString(base, META_SHELL_SO);
+            DroidSealLoader.setAppContext(base); // 供 API<26 DexClassLoader 落盘降级
+            DroidSealLoader.applyKeystoreBindingFlag(); // --keystore-bind 构建期标记
+            // 签名自校验:重签名/重打包 → 延迟销毁(构建期嵌入期望指纹;未补丁则跳过)
+            DroidSealLoader.verifyIntegrity(base);
+            DroidSealLoader.init(KEY_PART1, KEY_PART2, soName);
             if (DroidSealLoader.getClassLoader() != null) {
                 String cls = originalClassName(base);
                 if (cls != null) DroidSealLoader.installOriginalApplication(base, cls);
             }
+            // 反分析处置:检测命中且密钥已使用 → 延迟销毁(检测层由壳 SO/smali 提供)
+            try {
+                Class<?> guard = Class.forName("droidseal.runtime.DroidSealGuard");
+                Object hit = guard.getMethod("detect").invoke(null);
+                DroidSealLoader.antiAnalysisDispose(Boolean.TRUE.equals(hit));
+            } catch (ClassNotFoundException notFound) {
+                // 检测层未打包(纯 Java 壳降级),跳过处置
+            }
         } catch (Throwable t) {
-            // 失败关闭:壳继续以自身身份运行(可加反分析处置)
+            // 失败关闭:壳继续以自身身份运行
         }
     }
 
