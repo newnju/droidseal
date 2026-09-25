@@ -1,0 +1,3 @@
+apktool 2.9.3
+flowdroid=soot-infoflow-cmd-2.13.0 (fat jar v2.13 release, sha256 20b1ded27e550bfd)
+jvm=20.0.1 mem=23GB platforms=android-34/35/36

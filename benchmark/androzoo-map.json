@@ -1,0 +1,254 @@
+{
+ "cases": [
+  {
+   "name": "0000511D5C2A99B303AFD14D2ACDE3EBBAD5C3426039679B25F24510A87B381C",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0000A6D452D58424A8B7613F175AF5937F590033616B808BF8C0445695F82541",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00010212C58DAC25E27496BF1BADAFBEABE2613C3D772EDAA97C2906A8DD8E6E",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000109A075DC3AFA88C45523A3EDF2039177386C58A48936FEAFEE9716F7BCBB",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0001A112E6FA954379B572D79C8FD77C14D2301266B9BA731445C5B82ADEC21D",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00022D057443AC60334E3DD676F30A3B4C2837DE54C09A4CB85A28D950C4E2A9",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00023BCFC14CE3027A542987394A97C64B6C1B9304090F9593E203587E1C2048",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0002D055361C7E032C57B1A2AC7098BD3ECCBEDBF74B9BCFA15B5313A8F1D212",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000447D7EBEC825293D013A4DB671AFBDB01618D46AE578241288A2FE746EB14",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0005348ED4D5C516E2823B96260B9B92569605B960358CACE919490C6F1E7F92",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0005ECEF50959BECC515BBDCB555C51981F369C05B767D221D6C349D5EC28D7F",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0005FAFA5FA61EA3FD6CAE8684ABE566B9F3513751AF5944066DA426CDCA02AE",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00060B80D3ED53B12DE0E6ABFAD139ACBC16D645BEA60720214CD7C3384E52CE",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00068591F0A80552C4C53BE6231FDF1A044316C067780B93B65E2F5686ECC83A",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00069CC26DC3490C8B1372B7584AAE36C3207C02F598EF71C89F65E34B878293",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00077F1A34CC84DADEB5E04964A6D0FC83BA6D64EF1FD79FF92CE238936F0C89",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0007F44CD054FC243E6D313584331EE513AB5F153EBE53B6BF130A66C10582D5",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000860964328B084A2A06A2A863A009D209244D9932834476E12C2EE6656D3B0",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0008AD471FEBC2BA04F07B2EE1D5BB28C1BF82858F29A6D02EF69EA6285C0D14",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000A79E4F57F2ADE51E09A1B094E9D8D08CC7B915A2AADD923207D4347E5B5EF",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000AA7AC8DE37606FCCD3EA00E5EF9238D550514D61CAD48AC6F47D1D13F86D8",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000BCD30B12CBA5ED7EC9FE0F457538580E046038B1E80DF9225239B46F2C569",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000DC1EA922C6E686D14646A605048D9466129C830E5F2F9931B7AB050BEC39D",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000E319AEA55740B88BCB732C677D30A416AA50118AAD2FD59A5771331BA3088",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000E3FDE625D57C9E738F7B8484A674606DB40CD19F47B8A4D3043D1E556A2AF",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000E99DE5F8752D26469E8E0EC58241ABD481190458F11A681C2EC6F510575F3",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "000F3E2AC829C6BFE34AF77FA183FA0CEA8C50AA7A046479B17A2525EA53871F",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0010430590BB670BCC860EC860096BF2E372537A59AA1ACEEF547BCF10BBE9E4",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00138D6C82EBE6BC473DE5904EB819935769F7D58CA374D525AB264FDCEB29FB",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0015BB469B65CEE0CC44F03DBD84659DBA0A7A7BDC808BB90EBCF090337555E8",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0016001A6EB255A5B923540A8851EA9186E5F4CE4BABCEFF274F935F75307D53",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0017D2F12C9B4EFF9ACEA3F4AD2A5CE1398F676E05F15B517DE7C3BE2BF0CEEF",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0017DE56AC0A11C2638934BBF438EC5008ACB3894D1246E9C53B7F5CEA559B71",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00185F2669B6A9AE384E84AEA975F0628CF73968B34B226E9A0F0F99A6ABDAFE",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0018925B0F91E9EF9C04DC0BFA56997F420B453EFC4AD874D8AF38265E4E3290",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0019620259C0819F37346FB2DE9306D1476150A78DAB55E58BF0D49EC261892B",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0019D7FB6ADDA0619C0BEFC8DE53E2E59139B3BC0DE62E30BB0E2AB5B2C6D79D",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "001A66A795D16FC7EA92DF975E68BC3031CABDA9C8B13B3785A14EA7BEE69A93",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "001AEFD8A1486CA38D29B2618F31DE810559D3907BB5DFD40E2A0D7618C18F21",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "001B154C29CAEF585F2B835AD353D495C7F6CDFDC84B36CB4CC754977B893713",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "001DC64D327D0F364F58B1BFD64FA66DF87B277816CF6BBFFD268E0718C822C0",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "001EDF58F3FAF0BBFB6E39438AC34BC5BC8261A0804231AB00CEA4B57CC50676",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "001EF40FE534081A4D588DAF842AEBDBB9945ABF64B613C9B018C560C1971426",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0020B2E47A714792877D1805FF2D95C06FA7F136A3E03285725E974B8F5B63ED",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "002405315987B3FF461D247B7B32D3FD4BD23D63166F5C1B41CFC21EEF2F291A",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0024330D6A5193B78A9CB3597C17E61B30F39D5E5CC7EFF1C80A5B60C5904BB0",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "0024FFF037CD886B370F610DD4FE0C38582B6C94011534256E314AAC34D6ACCC",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00250702C3880B1D4B1156CC3199BA1467F81D588072274F40BE7D920BC6F830",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "002557D37607615083739ABEB8D6FDC05CD27EC93C11045E61384DA35EC73D92",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  },
+  {
+   "name": "00258C14FAA88D0D3F32184DF06E620AF36A5FBF625A27DF4FC76CA58D1EA788",
+   "expected": true,
+   "source": "AndroZoo VT>=10 (weak GT); dex_date>=2016, apk<30MB"
+  }
+ ]
+}

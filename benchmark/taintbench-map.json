@@ -1,0 +1,171 @@
+{
+ "cases": [
+  {
+   "name": "cajino_baidu",
+   "expected": true,
+   "flows": 15
+  },
+  {
+   "name": "dsencrypt_samp",
+   "expected": true,
+   "flows": 1
+  },
+  {
+   "name": "fakebank_android_samp",
+   "expected": true,
+   "flows": 5
+  },
+  {
+   "name": "godwon_samp",
+   "expected": true,
+   "flows": 6
+  },
+  {
+   "name": "hummingbad_android_samp",
+   "expected": true,
+   "flows": 2
+  },
+  {
+   "name": "overlay_android_samp",
+   "expected": true,
+   "flows": 6
+  },
+  {
+   "name": "overlaylocker2_android_samp",
+   "expected": true,
+   "flows": 19
+  },
+  {
+   "name": "proxy_samp",
+   "expected": true,
+   "flows": 20
+  },
+  {
+   "name": "save_me",
+   "expected": true,
+   "flows": 31
+  },
+  {
+   "name": "slocker_android_samp",
+   "expected": true,
+   "flows": 5
+  },
+  {
+   "name": "smsstealer_kysn_assassincreed_android_samp",
+   "expected": true,
+   "flows": 5
+  },
+  {
+   "name": "vibleaker_android_samp",
+   "expected": true
+  },
+  {
+   "name": "xbot_android_samp",
+   "expected": true
+  },
+  {
+   "name": "backflash",
+   "expected": true
+  },
+  {
+   "name": "beita_com_beita_contact",
+   "expected": true
+  },
+  {
+   "name": "chat_hook",
+   "expected": true
+  },
+  {
+   "name": "chulia",
+   "expected": true
+  },
+  {
+   "name": "death_ring_materialflow",
+   "expected": true
+  },
+  {
+   "name": "exprespam",
+   "expected": true
+  },
+  {
+   "name": "fakeappstore",
+   "expected": true
+  },
+  {
+   "name": "fakedaum",
+   "expected": true
+  },
+  {
+   "name": "fakemart",
+   "expected": true
+  },
+  {
+   "name": "fakeplay",
+   "expected": true
+  },
+  {
+   "name": "faketaobao",
+   "expected": true
+  },
+  {
+   "name": "jollyserv",
+   "expected": true
+  },
+  {
+   "name": "phospy",
+   "expected": true
+  },
+  {
+   "name": "remote_control_smack",
+   "expected": true
+  },
+  {
+   "name": "repane",
+   "expected": true
+  },
+  {
+   "name": "roidsec",
+   "expected": true
+  },
+  {
+   "name": "samsapo",
+   "expected": true
+  },
+  {
+   "name": "scipiex",
+   "expected": true
+  },
+  {
+   "name": "sms_google",
+   "expected": true
+  },
+  {
+   "name": "sms_send_locker_qqmagic",
+   "expected": true
+  },
+  {
+   "name": "smssend_packageInstaller",
+   "expected": true
+  },
+  {
+   "name": "smssilience_fake_vertu",
+   "expected": true
+  },
+  {
+   "name": "stels_flashplayer_android_update",
+   "expected": true
+  },
+  {
+   "name": "tetus",
+   "expected": true
+  },
+  {
+   "name": "the_interview_movieshow",
+   "expected": true
+  },
+  {
+   "name": "threatjapan_uracto",
+   "expected": true
+  }
+ ]
+}

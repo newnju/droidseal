@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-09-11T12:43:27.636Z",
+  "target": "C:/Users/diamond/textseg/ds-audit-in",
+  "total": 1,
+  "success": 1,
+  "failed": 0,
+  "totalSeconds": 6.3,
+  "totalFindings": 20,
+  "outputDir": "C:/Users/diamond/textseg/ds-audit-test",
+  "results": [
+    {
+      "name": "ds-test-input.apk",
+      "inputPath": "C:\\Users\\diamond\\textseg\\ds-audit-in\\ds-test-input.apk",
+      "ok": true,
+      "seconds": 6.304,
+      "stepsOk": 6,
+      "stepsFailed": 0,
+      "findings": 20
+    }
+  ]
+}
