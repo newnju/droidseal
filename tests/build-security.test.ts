@@ -22,11 +22,16 @@ describe("release bundle hardening", () => {
     const launcher = await readFile(path.join(projectRoot, "bin/droidseal.cjs"), "utf8")
 
     expect(packageJson.bin?.droidseal).toBe("./bin/droidseal.cjs")
-    expect(packageJson.files).toContain("dist")
+    // 精确窄列发布:只发布确定的构建产物,不整目录发布(比含 "dist" 更严格)
+    expect(packageJson.files).toContain("dist/droidseal.mjs")
     expect(packageJson.files).toContain("bin/droidseal.cjs")
+    // 双 DEX 产物必须随包发布(loader + stub 缺一不可)
+    expect(packageJson.files).toContain("runtime/droidseal-loader.dex")
+    expect(packageJson.files).toContain("runtime/droidseal-stub.dex")
     expect(packageJson.files).not.toContain("src")
     expect(packageJson.files).not.toContain("scripts")
     expect(packageJson.files).not.toContain("docs")
+    expect(packageJson.files).not.toContain("dist")
     expect(packageJson.dependencies).toBeUndefined()
     expect(packageJson.devDependencies?.terser).toBe("5.49.0")
     expect(packageJson.engines?.node).toBe(">=18")
@@ -40,11 +45,14 @@ describe("release bundle hardening", () => {
     expect(buildScript).toContain('"--no-compile-autoload-dotenv"')
     expect(buildScript).toContain("droidseal.exe")
     expect(buildScript).toContain("sourceIncluded: false")
+    // OpenTUI 原生资产根指向可执行文件目录(prelude 注入)
+    expect(buildScript).toContain("OTUI_ASSET_ROOT")
 
     expect(launcher).toContain("metadata.artifact.sha256")
     expect(launcher).toContain("createHash")
-    expect(launcher).toContain("spawnSync")
-    expect(launcher).toContain("OTUI_ASSET_ROOT")
+    // launcher 不 spawn 子进程:哈希校验通过后以当前进程动态 import bundle
+    expect(launcher).toContain("await import(")
+    expect(launcher).not.toContain("spawnSync")
   })
 
   test("keeps license notices while mangling representative top-level names", async () => {
