@@ -41,7 +41,7 @@ const CRYPTO_ROUNDS = 8
 
 export function encryptBytes(data: Uint8Array, key: Uint8Array): Uint8Array {
   const nonce = new Uint8Array(4)
-  for (let i = 0; i < 4; i += 1) nonce[i] = Math.floor(Math.random() * 256)
+  crypto.getRandomValues(nonce)
   const out = new Uint8Array(4 + data.length)
   out.set(nonce, 0)
   for (let i = 0; i < data.length; i += 1) {
@@ -77,7 +77,7 @@ export function decryptBytes(data: Uint8Array, key: Uint8Array): Uint8Array {
 export function encryptBytesPermute(data: Uint8Array, key: Uint8Array): Uint8Array {
   const length = data.length
   const nonce = new Uint8Array(4)
-  for (let i = 0; i < 4; i += 1) nonce[i] = Math.floor(Math.random() * 256)
+  crypto.getRandomValues(nonce)
   // 伪随机置换索引表（按 key 派生——确定性但依赖密钥）
   const perm = Array.from({ length }, (_, i) => i)
   for (let i = length - 1; i > 0; i -= 1) {

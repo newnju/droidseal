@@ -71,8 +71,10 @@ function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
     const dataOffset = localHeaderOffset + 30 + localNameLen + localExtraLen
     const dataSize = compressionMethod === 0 ? uncompressedSize : compressedSize
 
-    // 防护：跳过大小异常的条目(dataOffset 超出 APK 或 dataSize 为0)
-    if (dataSize === 0 || dataOffset > bytes.length || dataOffset + dataSize > bytes.length) {
+    // 防护:跳过大小异常的条目(dataOffset 超出 APK)。dataSize===0 且 uncompressedSize===0
+    // 是合法空文件(如 cordova.js),不得丢弃——否则旧 MANIFEST.MF 引用悬空、v1 签名校验失败
+    const isEmptyFile = dataSize === 0 && uncompressedSize === 0
+    if ((!isEmptyFile && dataSize === 0) || dataOffset > bytes.length || (!isEmptyFile && dataOffset + dataSize > bytes.length)) {
       cursor += 46 + nameLen + extraLen + commentLen
       continue
     }
@@ -99,6 +101,11 @@ function extractRawZipEntries(bytes: Uint8Array): ApkEntry[] {
         // repack 侧 buildApkZip 对含 PK 头的字节不再二次 deflate(见 apk-repack.ts)
       }
     }
+    // 只过滤解析失败的条目;空文件(合法条目)保留——丢条目会让旧 v1 签名引用悬空
+    if (compressionMethod !== 0 && entryBytes.length === 0 && uncompressedSize > 0) {
+      cursor += 46 + nameLen + extraLen + commentLen
+      continue
+    }
     entries.push({
       name,
       bytes: entryBytes,
@@ -119,8 +126,9 @@ export async function unpackApk(apkPath: string): Promise<ApkContents> {
   const bytes = new Uint8Array(await readFile(apkPath))
   const rawEntries = extractRawZipEntries(bytes)
 
-  // 只过滤空条目;大条目合法(高压缩比 asset/SO),解压输出已由 maxOutputLength 截断防护
-  const entries = rawEntries.filter((e) => e.bytes.length > 0)
+  // 空文件是合法条目(如 cordova.js,method=8/usize=0)——解析失败的条目已在
+  // extractRawZipEntries 内跳过,这里不再按字节长度过滤,避免丢条目
+  const entries = rawEntries
 
   const dexFiles = entries.filter((e) => /^classes\d*\.dex$/.test(e.name))
   const soFiles = entries.filter((e) => e.name.startsWith("lib/") && e.name.endsWith(".so"))

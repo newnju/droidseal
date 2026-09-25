@@ -3,6 +3,7 @@
 // 运行时壳 Application 的 onCreate 还原 Split-Key → 解密 payload。
 // 纯 TypeScript，失败关闭。
 import type { Finding } from "./types.ts"
+import { randomBytes } from "node:crypto"
 
 /**
  * 将字节数组转为 Smali fill-array-data 块。
@@ -32,7 +33,7 @@ export function generateSplitKeySmali(
   // Split-Key: part2 随机生成，part1 = key XOR part2
   const part2 = new Uint8Array(encryptionKey.length)
   for (let i = 0; i < encryptionKey.length; i += 1) {
-    part2[i] = Math.floor(Math.random() * 256)
+    part2[i] = randomBytes(1)[0]!
   }
   const part1 = new Uint8Array(encryptionKey.length)
   for (let i = 0; i < encryptionKey.length; i += 1) {
@@ -277,7 +278,7 @@ export function generateSplitKeyInjectionData(
   // Split: part2 随机，part1 = key XOR part2
   const part2 = new Uint8Array(encryptionKey.length)
   for (let i = 0; i < encryptionKey.length; i += 1) {
-    part2[i] = Math.floor(Math.random() * 256)
+    part2[i] = randomBytes(1)[0]!
   }
   const part1 = new Uint8Array(encryptionKey.length)
   for (let i = 0; i < encryptionKey.length; i += 1) {

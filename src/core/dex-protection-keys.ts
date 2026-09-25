@@ -157,10 +157,11 @@ export function generateKeyMaterial(
   apkSha256: string,
   purpose: "dex" | "so" | "resource" | "string",
   useSplitKey: boolean = true,
+  configHash: string = "",
 ): KeyMaterial {
   const encryptionKey = certSha256
     ? deriveKeyFromCertificate(certSha256, purpose)
-    : deriveKeyFromApkHash(apkSha256, "", purpose)
+    : deriveKeyFromApkHash(apkSha256, configHash, purpose)
   const nonce = generateNonce()
   const splitKeyResult = useSplitKey ? splitKey(encryptionKey) : undefined
   return {

@@ -30,7 +30,7 @@ export interface ManifestInjectResult {
 /**
  * 从 AXML 二进制 Manifest 中提取包名和 Application 类名。
  */
-export function extractManifestInfo(manifestBytes: Uint8Array): { packageName: string; applicationName: string; targetSdk: number } {
+export function extractManifestInfo(manifestBytes: Uint8Array): { packageName: string; applicationName: string; targetSdk: number; minSdk: number } {
   try {
     const model = parseAxml(manifestBytes)
     const tree = parseAxmlTree(model)
@@ -50,13 +50,16 @@ export function extractManifestInfo(manifestBytes: Uint8Array): { packageName: s
     }
     findApplication(tree)
 
-    // 提取 targetSdkVersion
+    // 提取 targetSdkVersion / minSdkVersion
     let targetSdk = 0
+    let minSdk = 0
     const findSdk = (elements: AxmlElement[]): void => {
       for (const el of elements) {
         if (el.tag === "uses-sdk") {
           const ts = el.attributes.find((a) => a.name === "android:targetSdkVersion")?.value
           if (ts) targetSdk = parseInt(ts, 10) || 0
+          const ms = el.attributes.find((a) => a.name === "android:minSdkVersion")?.value
+          if (ms) minSdk = parseInt(ms, 10) || 0
           return
         }
         findSdk(el.children)
@@ -64,9 +67,9 @@ export function extractManifestInfo(manifestBytes: Uint8Array): { packageName: s
     }
     findSdk(tree)
 
-    return { packageName, applicationName, targetSdk }
+    return { packageName, applicationName, targetSdk, minSdk }
   } catch {
-    return { packageName: "", applicationName: "", targetSdk: 0 }
+    return { packageName: "", applicationName: "", targetSdk: 0, minSdk: 0 }
   }
 }
 
@@ -117,7 +120,19 @@ export function injectShellComponents(xml: string, config: ManifestInjectConfig)
     }
   }
 
-  // 4. 添加 extractNativeLibs="true"(SO 解密需要)
+  // 4. 注入原始 Application 类名 meta-data(壳 ShellApplication.attachBaseContext 读取)
+  if (config.originalApplication && config.originalApplication !== "android.app.Application") {
+    if (!/droidseal\.original_app/.test(modified)) {
+      modified = modified.replace(
+        /<\/application>/,
+        `    <meta-data android:name="droidseal.original_app" android:value="${config.originalApplication}" />\n` +
+        `    <meta-data android:name="droidseal.shell_so" android:value="${config.shellSoName.replace(/^lib/, "").replace(/\.so$/, "")}" />\n</application>`,
+      )
+      injected.push(`Meta-data: droidseal.original_app = ${config.originalApplication}`)
+    }
+  }
+
+  // 5. 添加 extractNativeLibs="true"(SO 解密需要)
   if (!/extractNativeLibs/.test(modified)) {
     modified = modified.replace(
       /<application(\s)/,

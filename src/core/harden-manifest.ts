@@ -118,7 +118,7 @@ export function inflateEntry(entry: RawZipEntry): Uint8Array {
 
 // Locate the resource-map index whose value equals DEBUGGABLE_RES_ID, then flip any
 // matching START_TAG boolean attribute from true to false in place. Length-preserving.
-function flipDebuggableInAxml(axml: Uint8Array): boolean {
+export function flipDebuggableInAxml(axml: Uint8Array): boolean {
   const view = new DataView(axml.buffer, axml.byteOffset, axml.byteLength)
   if (axml.byteLength < 8 || view.getUint16(0, true) !== CHUNK_XML) {
     throw zipError("AXML_INVALID", "AndroidManifest.xml 不是有效的二进制 XML", "文件头 magic 不匹配。")

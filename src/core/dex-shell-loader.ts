@@ -3,6 +3,7 @@
 // 生成壳 Application + ContentProvider + AppComponentFactory 的 Smali 代码。
 // 纯 TypeScript，失败关闭。
 import type { Finding } from "./types.ts"
+import { randomBytes } from "node:crypto"
 
 // ── 三重入口 Smali 生成(#6) ──────────────────────────────────────────
 
@@ -223,8 +224,9 @@ export function generateTripleEntryManifestAttrs(config: TripleEntryPointConfig)
  */
 export function generateRandomPackageName(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz"
-  const rand = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
-  return `com.${rand(2 + Math.floor(Math.random() * 3))}.${rand(2 + Math.floor(Math.random() * 3))}.${rand(2 + Math.floor(Math.random() * 3))}`
+  const rand = (len: number) => Array.from(randomBytes(len), (b) => chars[b % chars.length]).join("")
+  const seg = () => rand(2 + (randomBytes(1)[0]! % 3))
+  return `com.${seg()}.${seg()}.${seg()}`
 }
 
 /**
@@ -233,8 +235,8 @@ export function generateRandomPackageName(): string {
  */
 export function generateRandomSoName(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz"
-  const len = 3 + Math.floor(Math.random() * 4)
-  const name = Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
+  const len = 3 + (randomBytes(1)[0]! % 4)
+  const name = Array.from(randomBytes(len), (b) => chars[b % chars.length]).join("")
   return `lib${name}.so`
 }
 

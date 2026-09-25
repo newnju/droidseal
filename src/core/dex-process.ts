@@ -3,7 +3,7 @@
 // 生成壳 DEX(加密 payload 追加到 file_size 边界外)。
 // 纯 TypeScript，失败关闭。
 import type { Finding } from "./types.ts"
-import { hollowMethods, encryptDex, parseClassExclusionRules, type MethodHollowResult, type EncryptedDex, buildDexProtectionFindings } from "./dex-protection.ts"
+import { hollowMethods, encryptDex, parseClassExclusionRules, serializePayload, type MethodHollowResult, type EncryptedDex, buildDexProtectionFindings } from "./dex-protection.ts"
 import { generateKeyMaterial, type KeyMaterial } from "./dex-protection-keys.ts"
 
 // ── DEX 处理配置 ──────────────────────────────────────────────────────
@@ -21,7 +21,8 @@ export interface DexProcessConfig {
 // ── DEX 处理结果 ──────────────────────────────────────────────────────
 
 export interface DexProcessResult {
-  processedDex: Uint8Array[]         // 处理后的 DEX 文件列表
+  processedDex: Uint8Array[]         // 处理后的 DEX 文件列表(不含 payload)
+  payloadBlobs: Array<Uint8Array | undefined> // 与 processedDex 对齐的加密 payload(nonce+tag+ct)
   keyMaterial: KeyMaterial
   hollowResult?: MethodHollowResult | undefined
   encryptedDex?: EncryptedDex | undefined
@@ -36,10 +37,11 @@ export function processDexFile(
   dexBytes: Uint8Array,
   config: DexProcessConfig,
   keyMaterial: KeyMaterial,
-): { processedDex: Uint8Array; hollowResult?: MethodHollowResult | undefined; encryptedDex?: EncryptedDex | undefined } {
+): { processedDex: Uint8Array; hollowResult?: MethodHollowResult | undefined; encryptedDex?: EncryptedDex | undefined; payloadBlob?: Uint8Array | undefined } {
   let processedBytes = dexBytes
   let hollowResult: MethodHollowResult | undefined
   let encryptedDex: EncryptedDex | undefined
+  let payloadBlob: Uint8Array | undefined
 
   // 1. 方法抽取(Method Hollowing)
   if (config.enableMethodHollow) {
@@ -50,17 +52,19 @@ export function processDexFile(
 
   // 2. DEX 整体加密
   if (config.enableDexEncryption) {
+    // 每文件独立随机 nonce:GCM 禁止同 key+nonce 重用(多 DEX 共用 keyMaterial.nonce
+    // 会泄露明文异或并危及认证)——nonce 已内嵌在 payload blob 头,Java 端按 blob 读取
     encryptedDex = encryptDex(
       processedBytes,
       keyMaterial.encryptionKey,
       config.algorithm,
-      keyMaterial.nonce,
     )
-    // 壳 DEX = 加密后的结果(shellDex 包含原始 stub + 加密 payload)
-    processedBytes = encryptedDex.shellDex
+    // payload 不再追加到壳 DEX(否则明文 DEX 仍留在 APK 中,且 ZIP deflate 压缩后
+    // 运行时扫 raw APK 找不到 magic)——由调用方写入 assets/droidseal.bin 容器
+    payloadBlob = serializePayload(encryptedDex.encryptedPayload)
   }
 
-  return { processedDex: processedBytes, hollowResult, encryptedDex }
+  return { processedDex: processedBytes, hollowResult, encryptedDex, payloadBlob }
 }
 
 /**
@@ -72,6 +76,7 @@ export function processAllDexFiles(
 ): DexProcessResult {
   const findings: Finding[] = []
   const processedDex: Uint8Array[] = []
+  const payloadBlobs: Array<Uint8Array | undefined> = []
 
   // 1. 生成密钥材料
   const keyMaterial = generateKeyMaterial(
@@ -88,6 +93,7 @@ export function processAllDexFiles(
   for (const dex of dexFiles) {
     const result = processDexFile(dex.bytes, config, keyMaterial)
     processedDex.push(result.processedDex)
+    payloadBlobs.push(result.payloadBlob)
     if (result.hollowResult) hollowResult = result.hollowResult
     if (result.encryptedDex) encryptedDex = result.encryptedDex
   }
@@ -108,5 +114,5 @@ export function processAllDexFiles(
     })
   }
 
-  return { processedDex, keyMaterial, hollowResult, encryptedDex, findings }
+  return { processedDex, payloadBlobs, keyMaterial, hollowResult, encryptedDex, findings }
 }
