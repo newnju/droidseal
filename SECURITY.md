@@ -13,7 +13,7 @@ DroidSeal processes Android application artifacts, invokes external tools, and h
 | Older versions | Not supported |
 | Development snapshots | No compatibility commitment |
 
-The project is currently in `0.x` Alpha. Security fixes are applied to the latest version first; the support scope will adjust as the project matures.
+The project is now at `1.0.1` stable — the CLI, output layout and report formats are stable. Security fixes are applied to the latest release first; the support scope will adjust as the project matures.
 
 ## Reporting vulnerabilities privately
 
@@ -64,6 +64,18 @@ Maintainers plan to:
 6. thank reporters after release unless they request anonymity.
 
 These are project goals and do not constitute a service level agreement.
+
+## Adversarial regression policy
+
+Every accepted security fix **must** come with a regression test that reproduces the fix's *trigger condition* — the specific input or state that set off the defect — not merely a test of the corrected behavior. The test lands in `tests/security-regression.test.ts` (or the nearest existing suite), is headed `SEC-XX`, and documents three things:
+
+1. **Trigger condition** — what input/state detonated the old defect;
+2. **Old symptom** — what went wrong before the fix;
+3. **Fix semantics** — what changed so it no longer does.
+
+The test must be red against the pre-fix code (verify locally by reverting the fix, not the test) and green after. This is the same discipline as the URL false-positive regression (C2): a patch-class bug passed E2E by returning `patchedUrl=true` while corrupting the DEX — only a byte-level test of the trigger caught it. Structural assertions against generated sources (e.g. no `PTRACE_TRACEME` call in `guard_vote.c`) are acceptable where runtime behavior needs a device; each such assertion must still encode the trigger, not just the desired shape.
+
+All accepted security fixes are tracked publicly in the [Security Ledger](docs/security-ledger.md) (SEC-001 onwards) — trigger condition, old symptom, fix semantics, and regression location for each. Artifact/build-time defects (e.g. SEC-009) may anchor their regression in the artifact acceptance baseline or a script check instead — the ledger entry must state the regression location, and a mismatch between entry and location is itself a regression defect.
 
 ## Coordinated disclosure and security research
 

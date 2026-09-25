@@ -34,16 +34,76 @@ droidseal doctor       # non-interactive environment diagnosis
 droidseal --version
 ```
 
+### APK hardening mode (opt-in)
+
+`droidseal <input.apk> --output <dir> --cert-sha256 <sha256> --keystore <jks> --ks-alias <alias> --ks-pass <pass> --key-pass <pass>`
+
+Runtime-hardens a release APK: DEX payload encryption (AES-256-GCM, per-entry HKDF-derived keys), a randomized bootstrap shell (dual-DEX: a plaintext stub loads an encrypted loader from assets), shell entry-class / container-magic / meta-key randomization per build, method code-item extraction, and optional NDK split-key part2 relocation into a native library. Every build emits an honest findings report — anything not implemented is reported as a finding, never claimed as protection.
+
+**AI-era hardening layers** (designed so tampering produces wrong keys, not warnings — nothing for a tool to "read and bypass"):
+
+- **Integrity anchor in key derivation**: the final binary `AndroidManifest.xml` SHA-256 is folded into every per-entry HKDF info. Re-packaging always edits the manifest → wrong keys → GCM silently fails (P0-A).
+- **Environment gate in key derivation**: runtime anti-analysis votes (Java detection + a native fork-based parent-TracerPid check / port probe / maps scan + the debuggable flag) are folded into the same HKDF info. Attach Frida and the derived keys are simply wrong — no signal to locate (P0-B).
+- **Key sharding**: the master key is recombined per-entry and wiped immediately; no complete key ever sits in memory, and decrypted DEX buffers are zeroed right after class loading (P0-C).
+- **Redundant heterogeneous detection**: three independent sources (Java / native C / system flags) with different read paths — bypassing one does not flip the vote (P1). Note: the native port probe tests localhost 27042/27043 (Frida defaults); another process legitimately listening on those ports on the same device (e.g. while instrumenting a *different* app) can produce a false positive.
+
+| Flag | Effect |
+|---|---|
+| `--cert-sha256 <hex>` | signing-cert fingerprint; keys derive from it — **re-signing with a different key breaks decryption by design** |
+| `--no-random-names` | keep fixed shell identifiers (debugging only) |
+| `--no-triple-entry` | skip extra shell entry hooks |
+| `--keystore-bind` | seal key part1 with Android Keystore after first run — reinstall/device change invalidates it |
+| `--challenge-url <url>` | server-side challenge (opt-in): key part3 is stripped from the APK and served from your HTTPS endpoint after verifying the caller's manifest hash; builds emit `server-challenge.json` for deployment — **losing that file makes the build permanently undecryptable**. Reference server: `scripts/challenge-server.ts`. **Honest caveat**: the manifest hash is publicly computable from the APK, so this check is *not* authentication — it only stops a *different* APK from grabbing this build's part3. Anyone holding both the APK and `server-challenge.json` can reconstruct the key offline; treat that file as key material (store offline, never commit it). |
+
+**Expectation management**: hardening raises reverse-engineering cost; it does not make reversing impossible. On rooted devices with Frida, in-memory DEX dumps cannot be fully prevented by any offline packer — the layers above shrink the window and poison tampered environments, but a sufficiently skilled attacker with sustained physical access still wins eventually. `minSdk < 26` falls back to a file-backed `DexClassLoader` (still works, slightly weaker isolation). The server challenge is rate-limitable but its endpoint availability becomes a runtime dependency (offline devices cannot decrypt). Real-device install is the only authoritative acceptance test.
+
 ## Platform & status
 
 - **Platform**: Windows x64 / Linux x64;
-- **Status**: 1.0.0 stable — the CLI, output layout and report formats are now stable;
+- **Status**: 1.0.1 stable — the CLI, output layout and report formats are now stable;
 - **Software**: an ANSI/Unicode-capable monospace terminal is required for the TUI; Bun 1.3+ to run from source; JDK/Gradle/Android Build Tools are auto-discovered or downloaded per flow (Node only for Capacitor web builds);
 - **Hardware (practical advice, not a hard floor)**: ~500 MB disk (100 MB executable + toolchain + artifacts), ≥2 GB RAM (more for large APKs — parsing is memory-sensitive with a fail-safe cap), x64 dual-core CPU.
+
+## Positioning
+
+Android security tooling splits into two tracks: **audit** (MobSF, AndroBugs, APKiD — analyze, never rewrite) and **hardening** (commercial: DexGuard / DexProtector / 360 Jiagu; open source: Jiagu, nmmp, dpt-shell, XopProtector — rewrite the APK). DroidSeal deliberately spans both, which no other open-source project does in one offline pipeline.
+
+| Track | Closest peers | What DroidSeal adds |
+|---|---|---|
+| Audit | MobSF (deepest analysis, ~19k★), AndroBugs, APKiD | Audit findings drive **fixes in the same toolchain**: audit → remediation report → R8 → hardening → re-sign → re-verify, with a CycloneDX SBOM and release-evidence chain (releaseDecision / remediation). MobSF stops at the report. No dynamic analysis / taint analysis / iOS — use MobSF for those. |
+| Hardening (open source) | dpt-shell (method-level), nmmp (VMP), XopProtector | **Keyed defenses**: integrity anchors and anti-analysis votes fold into per-entry key derivation (P0-A/B/C, P1) — patching detection code restores the *correct* key, but attaching Frida without patching derives *wrong* keys. Mainstream shells detect-and-warn; bypassing the check costs nothing. Also: key sharding (part2 → SO, optional part3 → server), Keystore device binding, honest findings. |
+| Hardening (commercial) | DexGuard, DexProtector, 360 加固保 | Fully **offline** (code never leaves your machine — the main reason teams pick open-source hardening over cloud services), auditable behavior, no per-app pricing. Trade-off: no VMP/white-box crypto, less battle-tested, no SLA. |
+
+**Where DroidSeal does NOT compete (honest boundaries)**:
+
+- Need VMP-grade protection that survives a memory dump of the master key? Use nmmp or DexGuard — DroidSeal explicitly does not invest in white-box AES or VM-based protection; on rooted devices with sustained physical access, a sufficiently skilled attacker eventually wins.
+- Doing malware triage or dynamic behavior analysis? Use MobSF + APKiD — DroidSeal only audits and hardens, it never sandboxes.
+- Need contractual support/SLA for a high-stakes product? The project is early (real-device acceptance, independent security review, and community size are all still ahead of it) — commercial vendors are the safer bet there.
+
+**One-line summary**: unmatched as an offline audit→harden→sign→verify pipeline; mid-pack on raw hardening strength; keyed defenses are the differentiator; maturity is the biggest gap.
+
+## Testing & acceptance
+
+Maturity here means *claimed capabilities are tested capabilities* — three layers, from cheapest to most expensive:
+
+| Layer | Tool | When it runs | What it proves |
+|---|---|---|---|
+| Unit + regression | `bun test` | every change (CI core job) | crypto layout, URL patching, container format invariants |
+| Security regression | `bun test tests/security-regression.test.ts` | mandatory per security fix | each accepted security fix ships a `SEC-XX` test reproducing its *trigger condition* (red on pre-fix code, green after; policy in [SECURITY.md](SECURITY.md#adversarial-regression-policy), full fix history in the [Security Ledger](docs/security-ledger.md)) — covers C1 (no PTRACE_TRACEME in generated native source), C3 (pre-XOR seal ordering), C4 (byte-length-preserving debuggable flip), C5 (whitelist smoke permanence), R2/R3 |
+| Artifact baseline | `bun scripts/verify-harden-artifact.ts <apk>` | after every harden build | encrypted loader present & stored (H1/H2), container stored with valid magic (H3/H4), no key material in plaintext DEX (H5), shell manifest present (H6); `--expect-plain` asserts a *non*-hardened APK |
+| Device acceptance | `bash scripts/device-test.sh <apk> <package> [--ks-relaunch]` | on real devices/emulators | install → 5s-alive decrypt-and-launch loop, no integrity/BadTag markers, Keystore-binding relaunch; full matrix and manual cases (re-sign must fail, offline challenge fail-closed, Frida) in `docs/device-testing.md`; threat surface & residual risks in the [threat model](docs/threat-model.md), build-level proof-of-attack in `scripts/attack-sample-resign.ts` (re-sign must fail, by construction) |
+
+CI (`.github/workflows/ci.yml`) runs `tsc --noEmit` + full tests + an npm-pack whitelist smoke on every push/PR, plus a separate NDK job that compiles the generated native shell sources (including `guard_vote.c`) with a real NDK — the native path is no longer paper-only. Releases: `bun scripts/release.ts <version> [--sync]` runs local verification and creates a local git tag only; uploading (git push / npm publish) is always a deliberate human step.
+
+**Honest boundary**: build-time green ≠ runtime correct. The device layer above is the only trustworthy acceptance, and it needs real hardware.
+
+**Emulator acceptance record (2026-09)**: the first full emulator run (API 26 x86_64) *crashed on launch* despite 264/264 tests and the H1–H6 artifact baseline all being green — and fixing the first defect exposed the second, then the third. Three build-level defects that no static check could catch were found and fixed ([SEC-010](docs/security-ledger.md#sec-010--patched-payload-dex-fails-art-checksum-verification-critical) checksum/signature ordering, [SEC-011](docs/security-ledger.md#sec-011--method-extraction-stub-leaves-non-zero-padding-at-section-boundary-critical) non-zero section padding from extraction stubs, [SEC-012](docs/security-ledger.md#sec-012--identifier-randomization-breaks-dex-string_ids-ordering-critical) out-of-order string_ids from identifier randomization). Re-test after all three fixes: install PASS, first launch PASS, second launch PASS, zero logcat failure markers, clean uninstall (D1/D2/D3/D5). This is the concrete proof behind the honest boundary above: the device layer is the only one that catches this defect class.
 
 ## Security boundary
 
 A defensive tool: by default it does not unpack, pack, or inject hooks / anti-debug code; it runs fully locally and never uploads APKs, paths or signing information.
+
+**Exception — APK hardening mode (explicit opt-in)**: when you pass an APK with the hardening flags above, DroidSeal *does* pack (DEX encryption + bootstrap shell injection into **your own release APK**) and embeds anti-analysis detection. This mode only ever modifies the APK you explicitly supply as input; the default audit/release flows keep the no-packing boundary.
 
 ## Architecture, innovation & self-developed parts
 

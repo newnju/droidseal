@@ -4,7 +4,45 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ## [Unreleased]
 
-（待发布）
+### Added
+
+- **AI 时代加固层（四层全部落地）**：
+  - P0-A 完整性锚点参与密钥派生——最终二进制 `AndroidManifest.xml` 的 SHA-256 折入每条目 HKDF info（Step 3 注入定稿后计算，规避整体 APK hash 循环依赖）；重打包必改 manifest → 派生错钥 → GCM 静默失败（fail-closed）。
+  - P0-B 环境门控参与密钥派生——运行时反分析投票折入 HKDF info `-e<vote>` 后缀；挂 Frida / 被调试 → 派生错钥，无信号可定位。
+  - P0-C 密钥分片化——master 密钥逐条目临时合成、用后即清，任意时刻内存无完整密钥；解密后 DEX 缓冲在类加载完成后即刻清零；minSdk<26 落盘降级保留不砍能力。
+  - P1 冗余异构检测——Java 检测 + native（fork 跨进程读父进程 TracerPid / Frida 端口 27042·27043 探测 / maps 扫描）+ debuggable 标志三源判定，读取路径异构。
+- **P2 服务端挑战（opt-in `--challenge-url`）**：密钥第三段 part3 从 APK 剥离，由 HTTPS 端点按调用方 manifest 哈希校验后发放；构建产物含 `server-challenge.json`（当密钥材料对待——丢失即永久无法解密）；参考服务器 `scripts/challenge-server.ts`（仅绑 127.0.0.1，进 npm 发布白名单）。
+- **Keystore 绑定（opt-in `--keystore-bind`）**：首次解密成功后用 Android Keystore 封存 pre-XOR part1′ 并抹掉嵌入值——卸载重装 / 清数据 / 换机即失效；与挑战模式组合兼容（封存值与 XOR 顺序严格一致）。
+- **TUI 加固向导补齐**：`--keystore-bind`（含「一机一份失效」警示）、标识符随机化开关、测试学习/经典模式（keepIntermediates）全部接入向导问答与配置流转，i18n 中英文案。
+- **签名失配中止初始化**：运行时证书指纹校验失配先置 `integrityFailed` 再延迟销毁，`init` 入口直接 return——失配 APK 密钥/明文 DEX 零暴露。
+- **输入 debug 包自动矫正**：加固流水线等长翻转 `debuggable=true → false`（置于锚点计算之前），发 `HARDEN_DEBUGGABLE_FORCED` finding——否则环境投票将 debuggable 视为污染，产物在所有设备解密失败。
+
+### Fixed
+
+- **补丁后 payload DEX 被ART 拒载——校验和/签名顺序颠倒（critical，SEC-010）**：`updateDexChecksum` 两份拷贝（`dex-protection.ts`、`dex-payload-inject.ts`）先算 Adler32 再写 SHA-1 签名——签名一落盘刚算好的校验和立即失效，真机/模拟器上 zygote 直接拒载（`Bad checksum` → `ClassNotFoundException` 静默崩溃）。构建期校验和测试全绿是因为测的是正确实现（`dex-model.recomputeDexChecksums`），不是实际使用的那份拷贝。修复为规范顺序：先签名、后校验和，两份拷贝统一并注释引用 SEC-010。
+- **方法抽取 stub 留下非零节区填充（critical，SEC-011）**：stub 把 `insns_size` 从 N 缩到 1，原指令区残留字节违反 ART「节区起点前必须为零」校验（`Non-zero padding … before section start` → 拒载）；`tries_size > 0` 方法恢复后还会丢异常表。修复为足迹不变 stub：保留 `insns_size`、写 `return-void` + `nop` 填充（item 字节足迹与原始一致）；带异常表方法跳过抽取，跳过数经 finding 如实报告（如实边界：抽取覆盖不含此类方法）。
+- **标识符随机化破坏 DEX string_ids 字典序（critical，SEC-012）**：等长随机改名未保持 `string_ids` 的 UTF-16 码点字典序（ART 严格校验 `Out-of-order string_ids` → 拒载），含三个子缺陷：槽邻居用裸类路径查询而表存 `L...;` 形式（二分永不命中）、多项槽区间重叠时各自合法但互相交错、可打印 ASCII 候选含类名非法字符。修复为保序槽内构造（合法字符集 = JLS 集 ∪ 原名字符）+ 多项按表序级联批量生成（批内相对序校验 + 整批重试）；槽无解保留原名并经 `missed` 如实报告（功能无损，静态签名仍在——已明示）。
+- **上述三缺陷的来源与验收闭环**：全部由模拟器真机验收挖出（构建期 264 测试 / H1–H6 基线全绿但首启即崩——「构建期全绿 ≠ 运行时正确」的实证）；三修齐备后复测：安装/首启/二次启动全 PASS、logcat 失败标记 0、卸载干净。回归断言锚定在产物基线字节级校验（SEC-010/011）与 `tests/harden-chain.test.ts` 全表有序断言（SEC-012），详见 [Security Ledger](docs/security-ledger.md)。
+- **URL 补丁三重缺陷（critical）**：Java `SERVER_URL` 常量 126B 与 TS 标记 128B 不一致 + `findMarker` 硬编码 32B 比对导致假阳性并越界覆盖 DEX 数据 + 运行时 `indexOf('#')` 判定被合法尾部填充误杀——挑战模式产物曾 100% 解密失败。现在两侧严格 128B、全长度匹配、按字节填充、非 ASCII（IDN）URL 构建期直接拒绝。
+- **native 检测源 PTRACE_TRACEME 自残（critical）**：TRACEME 成功后自身被 zygote trace → Java 侧 TracerPid 检测必命中 → 干净设备上每次启动被误杀。改为 fork 子进程跨进程读父进程 `/proc/<ppid>/status` 的 TracerPid（零副作用，检测力等强）。
+- **KS+挑战组合二次启动砖（high）**：封存值从「XOR 后真实 part1」改为 pre-XOR part1′，unseal → XOR part3 → 还原路径与首次启动一致。
+- **CLI 参数吞噬（high）**：`--challenge-url --keystore-bind` 等相邻 flag 不再被当作值解析；`--challenge-url` 缺值时明确警告回退纯本地模式。
+- **参考服务器网络暴露（high）**：`.listen(port)` 全网卡 → 显式绑定 `127.0.0.1`。
+- 多 DEX 共用 GCM nonce 的重用隐患——改为每文件独立随机 nonce（nonce 内嵌 payload blob 头）。
+- 容器 stored 判断跟随随机化 asset 名（固定名会导致容器被 deflate、虚报 stored）；`readContainerAsset` 优先用壳注入 appContext（attachBaseContext 阶段 ActivityThread 为 null）。
+- stub DEX SourceFile 调试属性泄露明文类名——纳入等长随机化；`sealPart1/unsealPart1` appContext 判空 fail-closed。
+- npm 发布白名单补 `runtime/droidseal-stub.dex`（缺失则 npm 包无法构建壳）与 `scripts/challenge-server.ts`。
+
+### Changed
+
+- **验证与工程成熟度建设**：
+  - 产物验收基线 `scripts/verify-harden-artifact.ts`(H1–H6:loader/容器 stored、magic 合法、DEX 无密钥泄露、壳 manifest;`--expect-plain` 反向断言)——基线挖出并修复 loader asset 未按 stored 写入的真实缺陷(ZIP 组装仅保留了容器条目的 stored,`.ldx` 被 deflate,运行时偏移直读会失败)。
+  - 真机验收套件 `scripts/device-test.sh`(D1–D5:安装/5 秒存活闭环/logcat 失败标记/KS 二次启动/卸载)+ `docs/device-testing.md`(最小设备矩阵 API 24/26+、重签必败、离线挑战 fail-closed、Frida 手动用例)。
+  - **对抗回归制度化**:新建 `tests/security-regression.test.ts`(SEC-001 至 SEC-008,8 用例)——每个历史安全修复的触发条件固化为用例(C1 native 源禁 PTRACE_TRACEME、C3 pre-XOR 封存顺序、C4 等长 debuggable 翻转、C5 白名单冒烟常驻、R2 回环绑定、R3 flag 吞噬);SECURITY 双语新增「对抗回归政策」(SEC-XX 三要素用例头 + 修复前红/修复后绿验证法),CONTRIBUTING 强制「无触发条件回归的安全修复视为不完整」;测试 256 → 264。
+  - CI 工作流 `.github/workflows/ci.yml`:tsc + 全量测试 + npm pack 白名单冒烟(core);独立 NDK job 用真实 NDK 编译生成的壳源码(含 `guard_vote.c`)——native 路径首次脱离"纸面验证"。
+  - 发布流程 `scripts/release.ts`(V1–V5:版本一致性、本地验证、npm 冒烟、工作区干净、仅本地 tag)——上传永远是人工显式步骤。
+  - README 双语新增「测试与验收」章节:三层验证(单元/产物基线/真机)与"构建期全绿 ≠ 运行时正确"边界。
+- 文档全面对齐当前实现：README 双语安全边界补「APK 加固模式例外」、P0-B 描述修正为 fork 读父进程 TracerPid、状态更新 1.0.1；SECURITY 双语版本状态由「0.x Alpha」更新为 1.0.1 stable。
 
 ## [1.0.1] - 2026-08-21
 

@@ -34,6 +34,8 @@
     "dist/droidseal-chunk-*.mjs",
     "dist/droidseal-node-build.json",
     "runtime/droidseal-loader.dex",
+    "runtime/droidseal-stub.dex",
+    "scripts/challenge-server.ts",
     "README.md",
     "README.zh-CN.md",
     "LICENSE",
