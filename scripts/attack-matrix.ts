@@ -224,6 +224,62 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
   else results.push({ id: "A5", name: "repack", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
 }
 
+// ── A6: 部分重打包(只改资源,不碰 manifest)+ 原 key 重签(隔离"资源篡改面")──
+// 场景:攻击者替换/注入资源(如 strings.xml 换钓鱼文案、注入 debuggable layout)但
+// 保留原 manifest——A2 已证明 manifest 锚点有效,本变体验证"manifest 不变时资源
+// 篡改是否漏网"。原 key 重签隔离单一变量。
+{
+  const dir = path.join(outDir, "A6-partial-repack"); mkdirSync(dir, { recursive: true })
+  const target = path.join(dir, "resource-tampered.apk")
+  const entries = origEntries.map(e => ({ ...e, bytes: Uint8Array.from(e.bytes) }))
+  // 只改资源:优先翻转 strings.arsc,否则任一非 manifest/非 dex/非容器资源;都无则改 PNG 字节
+  const resCandidates = entries.filter(e => /^(res\/|resources\.arsc)/.test(e.name) && !/\.dex$/.test(e.name))
+  const victim = resCandidates.find(e => e.name === "resources.arsc") ?? resCandidates[0] ?? entries.find(e => /\.(png|xml)$/.test(e.name))
+  if (!victim) { results.push({ id: "A6", name: "partial repack (resource only)", certChanged: null, baselinePass: null, note: "无可篡改资源条目" }) }
+  else {
+    const mid = Math.floor(victim.bytes.length / 2)
+    for (let i = 0; i < 16; i++) victim.bytes[mid + i] = victim.bytes[mid + i]! ^ 0xff
+    writeFileSync(target, buildApkZip(entries))
+    const sign = signOrigOrAttacker(target)
+    if (sign.success) finishVariant("A6", `resource-only tamper (${victim.name}, manifest untouched) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "manifest 未动 ⇒ 锚点不变;防御依赖密钥派生输入是否覆盖资源——A4 容器哈希链 + per-entry KDF 使资源篡改不影响容器密钥,但签名/安装层完整性由 v2 校验兜底;本变体测量资源篡改面是否需独立锚点", true)
+    else results.push({ id: "A6", name: "partial repack (resource only)", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+  }
+}
+
+// ── A7: ZIP 结构重排(条目顺序打乱)+ 原 key 重签(隔离"布局敏感面")──────────
+// 场景:重排不改任何条目字节,只改变 ZIP 内条目顺序/offset。manifest 条目内容不变
+// ⇒ 锚点不变;容器密文不变 ⇒ GCM 不败。检验运行时解析对布局的鲁棒性与基线判读。
+{
+  const dir = path.join(outDir, "A7-zip-reorder"); mkdirSync(dir, { recursive: true })
+  const target = path.join(dir, "zip-reordered.apk")
+  // 倒序重排(保持字节不变);确保 manifest 仍在(部分工具要求首个 local header,故反转后仍完整)
+  const reordered = [...origEntries.map(e => ({ ...e, bytes: Uint8Array.from(e.bytes) }))].reverse()
+  writeFileSync(target, buildApkZip(reordered))
+  const sign = signOrigOrAttacker(target)
+  if (sign.success) finishVariant("A7", `zip entry reorder (bytes unchanged) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "条目字节不变 ⇒ manifest 锚点/容器密文均不变;布局敏感面测量——基线通过 ⇒ 运行时解析与布局无关;若设备安装失败则暴露 ZIP 布局依赖(非密钥化防御范畴)", true)
+  else results.push({ id: "A7", name: "zip reorder", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+}
+
+// ── A8: 容器条目增删(向 assets 注入伪造容器/删除容器条目)+ 重签 ───────────
+// 场景:攻击者向容器追加伪造条目或删除某条目(如删掉 citable 令方法抽取不可还原),
+// 检验哈希链(P0-A 扩展)与运行时解析的 fail-closed 行为。
+{
+  const dir = path.join(outDir, "A8-container-edit"); mkdirSync(dir, { recursive: true })
+  const target = path.join(dir, "container-edited.apk")
+  const entries = origEntries.map(e => ({ ...e, bytes: Uint8Array.from(e.bytes) }))
+  const container = entries.filter(e => /^assets\//.test(e.name)).sort((a, b) => b.bytes.length - a.bytes.length)[0]
+  if (!container) { results.push({ id: "A8", name: "container entry edit", certChanged: null, baselinePass: null, note: "无容器条目" }) }
+  else {
+    // 解析容器 → 截断最后一个条目(伪造"删条目")→ 原样写回
+    const truncated = container.bytes.subarray(0, Math.floor(container.bytes.length * 0.9))
+    container.bytes = Uint8Array.from(truncated)
+    writeFileSync(target, buildApkZip(entries))
+    const sign = signOrigOrAttacker(target)
+    if (sign.success) finishVariant("A8", `container truncate (drop tail bytes) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "容器条目被删/改 ⇒ 哈希链断裂:被删条目后续所有条目派生错钥(即使 GCM 未先拒绝);解析端 count/length 不匹配 ⇒ fail-closed 返回,双保险", true)
+    else results.push({ id: "A8", name: "container entry edit", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+  }
+}
+
 // ── 汇总 ────────────────────────────────────────────────────────────────────
 const summaryMd = [
   "# 攻击矩阵(构建级可证部分)",

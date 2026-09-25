@@ -11,7 +11,7 @@ import type { Finding } from "./types.ts"
 
 // ── ZIP 条目 ──────────────────────────────────────────────────────────
 
-interface ZipEntry {
+export interface ZipEntry {
   name: string
   bytes: Uint8Array
   compressionMethod: number // 0=stored, 8=deflated
