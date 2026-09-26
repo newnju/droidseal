@@ -22,6 +22,8 @@ export interface MirrorOverride {
 export const CN_MIRROR_OVERRIDES: MirrorOverride[] = [
   // Android Command-line Tools / repository 归档(腾讯,路径与官方一致)
   { from: "https://dl.google.com/android/repository/", to: "https://mirrors.cloud.tencent.com/AndroidSDK/" },
+  // Gradle 发行版(南大 mirror.nju.edu.cn,2026-09 实测 200;排在最前优先尝试)
+  { from: "https://services.gradle.org/distributions/", to: "https://mirror.nju.edu.cn/gradle/" },
   // Gradle 发行版(腾讯)
   { from: "https://services.gradle.org/distributions/", to: "https://mirrors.cloud.tencent.com/gradle/" },
   // Gradle 发行版(华为,腾讯失败后的次选)
@@ -97,6 +99,45 @@ export function resolveDownloadUrl(url: string, config: MirrorConfig): string {
     if (url.startsWith(o.from)) return o.to + url.slice(o.from.length)
   }
   return url
+}
+
+/**
+ * 是否应提供"切换国内镜像"交互提示:
+ * 仅当 stdin 是交互式终端(TTY)时为 true——CI/管道环境(非 TTY)不询问,
+ * 维持纯自动回退行为,避免挂死无人值守流水线。
+ */
+export function isInteractiveStdin(): boolean {
+  try {
+    return Boolean(process.stdin?.isTTY)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 交互式询问是否切换国内镜像继续下载(仅在 TTY 下被调用)。
+ * 返回 true = 用户确认切换;false = 拒绝/无法读取(按拒绝处理,不阻塞)。
+ * 60s 无输入超时按拒绝处理——终端挂着不回应时流水线不应永久等待。
+ */
+export async function promptMirrorSwitch(fileName: string): Promise<boolean> {
+  if (!isInteractiveStdin()) return false
+  try {
+    const { createInterface } = await import("node:readline/promises")
+    const rl = createInterface({ input: process.stdin, output: process.stderr })
+    const timer = setTimeout(() => { try { rl.close() } catch { /* 忽略 */ } }, 60_000)
+    try {
+      const answer = await rl.question(
+        `下载受阻: ${fileName} 无法从官方源获取。是否切换国内镜像继续?(Y/n) `,
+      )
+      const v = answer.trim().toLowerCase()
+      return v === "" || v === "y" || v === "yes"
+    } finally {
+      clearTimeout(timer)
+      rl.close()
+    }
+  } catch {
+    return false
+  }
 }
 
 /**

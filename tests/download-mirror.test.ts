@@ -4,6 +4,8 @@ import {
   resolveMirrorConfig,
   resolveDownloadCandidates,
   resolveProxyArgs,
+  promptMirrorSwitch,
+  isInteractiveStdin,
   CN_MIRROR_OVERRIDES,
 } from "../src/core/download-mirror.ts"
 
@@ -37,12 +39,13 @@ describe("resolveDownloadCandidates 多源候选列表", () => {
     expect(c).toEqual([gradleUrl])
   })
 
-  test("cn + gradle → 腾讯、华为两镜像在前,官方兜底,去重保序", () => {
+  test("cn + gradle → 南大、腾讯、华为三镜像在前,官方兜底,去重保序", () => {
     const c = resolveDownloadCandidates(gradleUrl, resolveMirrorConfig("cn"))
-    expect(c.length).toBe(3)
-    expect(c[0]).toBe("https://mirrors.cloud.tencent.com/gradle/gradle-8.13-bin.zip")
-    expect(c[1]).toBe("https://mirrors.huaweicloud.com/gradle/gradle-8.13-bin.zip")
-    expect(c[2]).toBe(gradleUrl)
+    expect(c.length).toBe(4)
+    expect(c[0]).toBe("https://mirror.nju.edu.cn/gradle/gradle-8.13-bin.zip")
+    expect(c[1]).toBe("https://mirrors.cloud.tencent.com/gradle/gradle-8.13-bin.zip")
+    expect(c[2]).toBe("https://mirrors.huaweicloud.com/gradle/gradle-8.13-bin.zip")
+    expect(c[3]).toBe(gradleUrl)
   })
 
   test("cn + android → 只有腾讯命中(华为无该路径),官方兜底", () => {
@@ -67,6 +70,18 @@ describe("resolveDownloadCandidates 多源候选列表", () => {
   test("镜像预设:Gradle 至少两个国内源互备", () => {
     const gradleMirrors = CN_MIRROR_OVERRIDES.filter((o) => o.from === "https://services.gradle.org/distributions/")
     expect(gradleMirrors.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe("promptMirrorSwitch 交互切换提示", () => {
+  test("非 TTY(CI/管道)→ 直接 false,不询问不阻塞", async () => {
+    // 测试进程 stdin 非 TTY——这正是要保障的行为:无人值守环境自动拒绝
+    const r = await promptMirrorSwitch("gradle-8.13-bin.zip")
+    expect(r).toBe(false)
+  })
+
+  test("isInteractiveStdin 与 TTY 状态一致", () => {
+    expect(isInteractiveStdin()).toBe(Boolean(process.stdin?.isTTY))
   })
 })
 

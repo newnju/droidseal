@@ -4,7 +4,7 @@ import { homedir } from "node:os"
 import { sha256File } from "./apk-audit.ts"
 import { runProcess } from "./process.ts"
 import { discoverToolchain } from "./toolchain.ts"
-import { resolveMirrorConfig, resolveDownloadCandidates, resolveProxyArgs } from "./download-mirror.ts"
+import { resolveMirrorConfig, resolveDownloadCandidates, resolveProxyArgs, promptMirrorSwitch } from "./download-mirror.ts"
 import type { PipelineConfig, ToolLocation, Toolchain } from "./types.ts"
 
 export type ToolInstallGroup = "jdk" | "android-build-tools" | "gradle"
@@ -162,22 +162,35 @@ async function downloadVerified(
   // 多源容灾:候选列表 = 命中的镜像(按名单顺序) + 官方兜底,逐个尝试,
   // 任一成功即止;全部失败最后抛官方源的错误。镜像只加速不受信任——
   // SHA-256 校验照常执行,任何源返回被篡改的字节都会在校验层被拒。
+  // 交互增强:官方模式下全源失败且 stdin 为 TTY 时,询问是否切换国内镜像
+  // 重试(每轮安装至多提示一次);确认后按 cn 预设重试,拒绝则维持原错误。
+  // 非 TTY(CI/管道)不询问——无人值守环境靠环境变量显式配置。
   const mirror = resolveMirrorConfig(process.env.DROIDSEAL_MIRROR)
-  const candidates = resolveDownloadCandidates(asset.url, mirror)
+  let candidates = resolveDownloadCandidates(asset.url, mirror)
+  let mirrorPrompted = false
   let lastError: unknown
-  for (let i = 0; i < candidates.length; i += 1) {
-    const url = candidates[i]!
-    try {
-      const isMirror = mirror.mode !== "official" && i < candidates.length - 1
-      onProgress?.(`连接${isMirror ? "镜像源" : "官方源"}：${asset.fileName}`)
-      await downloadVerifiedFrom(url, asset, destination, onProgress)
-      return
-    } catch (error) {
-      lastError = error
-      if (i + 1 < candidates.length) {
-        onProgress?.(`下载失败,切换下一源重试：${asset.fileName}`)
+  while (true) {
+    for (let i = 0; i < candidates.length; i += 1) {
+      const url = candidates[i]!
+      try {
+        const isMirror = mirror.mode !== "official" && i < candidates.length - 1
+        onProgress?.(`连接${isMirror ? "镜像源" : "官方源"}：${asset.fileName}`)
+        await downloadVerifiedFrom(url, asset, destination, onProgress)
+        return
+      } catch (error) {
+        lastError = error
+        if (i + 1 < candidates.length) {
+          onProgress?.(`下载失败,切换下一源重试：${asset.fileName}`)
+        }
       }
     }
+    if (mirror.mode === "official" && !mirrorPrompted && (await promptMirrorSwitch(asset.fileName))) {
+      mirrorPrompted = true
+      candidates = resolveDownloadCandidates(asset.url, resolveMirrorConfig("cn"))
+      onProgress?.("已切换国内镜像,重试下载")
+      continue
+    }
+    break
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
