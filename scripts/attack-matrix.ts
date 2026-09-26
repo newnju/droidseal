@@ -10,6 +10,7 @@
 //   A4 asset-swap    翻转加密容器密文字节+重签        ⇒ GCM 认证失败 ⇒ 拒解密
 //   A5 repack        解包重打包+debug 重签(最弱攻击) ⇒ 锚点变+证书变 ⇒ 错钥
 // 用法: bun scripts/attack-matrix.ts <hardened.apk> [--out <dir>] [--ks <jks> --ks-alias <a> --ks-pass <p> --key-pass <p>]
+import { createHash } from "node:crypto"
 import { spawnSync } from "node:child_process"
 import { mkdirSync, existsSync, readFileSync, writeFileSync, rmSync } from "node:fs"
 import path from "node:path"
@@ -97,13 +98,42 @@ const signOrigOrAttacker = (target: string): { success: boolean; output: string;
   return { ...signWith(target, attackerKs, "attacker", "attack123", "attack123"), usedOrig: false }
 }
 
-const results: Array<{ id: string; name: string; certChanged: boolean | null; baselinePass: boolean | null; note: string }> = []
+const results: Array<{ id: string; name: string; certChanged: boolean | null; baselinePass: boolean | null; wrongKey: boolean | null; keyDivergence: string; note: string }> = []
 
-const finishVariant = (id: string, name: string, file: string, note: string, reSigned: boolean): void => {
+// ── 错钥输入偏离计算(构建级可证部分)─────────────────────────────────────
+// 错钥三输入:①证书指纹(HKDF 源)②manifest SHA-256(P0-A 锚点)③容器密文
+// (逐条目哈希链前驱)。任一输入相对原产物偏离 ⇒ 派生密钥必错 ⇒ 运行时 GCM
+// 拒解密。这是确定性的构建级计算;运行时行为(拒绝解密/进程消亡)仍需真机
+// 验收(docs/device-testing.md)——两个层次在报告中分开表述,不混淆口径。
+const sha256Of = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex")
+const manifestSha = (entries: ZipEntry[]): string | null => {
+  const mf = entries.find(e => e.name === "AndroidManifest.xml")
+  return mf ? sha256Of(mf.bytes) : null
+}
+const containerSha = (entries: ZipEntry[]): string | null => {
+  const c = entries.filter(e => /^assets\//.test(e.name)).sort((a, b) => b.bytes.length - a.bytes.length)[0]
+  return c ? sha256Of(c.bytes) : null
+}
+const origManifestSha = manifestSha(origEntries)
+const origContainerSha = containerSha(origEntries)
+
+const finishVariant = async (id: string, name: string, file: string, note: string, reSigned: boolean): Promise<void> => {
   const cert = reSigned ? printCert(file) : null
   const baseline = runBaseline(file)
-  results.push({ id, name, certChanged: cert ? cert !== origCert : null, baselinePass: baseline, note })
-  console.log(`  [${id}] ${name}: certChanged=${results[results.length - 1]!.certChanged}, baseline=${baseline}`)
+  // 错钥判定:重算该变体三输入,与原产物比对
+  let wrongKey: boolean | null = null
+  const divergence: string[] = []
+  try {
+    const entries = await readZip(file)
+    if ((cert ?? origCert) !== origCert) divergence.push("cert")
+    const mNow = manifestSha(entries)
+    if (mNow && origManifestSha && mNow !== origManifestSha) divergence.push("manifest")
+    const cNow = containerSha(entries)
+    if (cNow && origContainerSha && cNow !== origContainerSha) divergence.push("container")
+    wrongKey = divergence.length > 0
+  } catch { wrongKey = null }
+  results.push({ id, name, certChanged: cert ? cert !== origCert : null, baselinePass: baseline, wrongKey, keyDivergence: divergence.join("+") || "none", note })
+  console.log(`  [${id}] ${name}: certChanged=${results[results.length - 1]!.certChanged}, baseline=${baseline}, wrongKey=${wrongKey} (${divergence.join("+") || "none"})`)
 }
 
 // ── A1: 重签(攻击者 keystore)──────────────────────────────────────────────
@@ -112,8 +142,8 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
   const target = path.join(dir, "resigned.apk")
   writeFileSync(target, readFileSync(apk))
   const sign = signWith(target, attackerKs, "attacker", "attack123", "attack123")
-  if (sign.success) finishVariant("A1", "re-sign (attacker key)", target, "证书指纹变化 ⇒ HKDF(证书) 错钥;结构基线仍过=防御是密钥化的", true)
-  else results.push({ id: "A1", name: "re-sign", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+  if (sign.success) await finishVariant("A1", "re-sign (attacker key)", target, "证书指纹变化 ⇒ HKDF(证书) 错钥;结构基线仍过=防御是密钥化的", true)
+  else results.push({ id: "A1", name: "re-sign", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: `重签失败: ${sign.output.slice(0, 120)}` })
 }
 
 // ── A2: 篡改 manifest(versionCode+1)+ 原 key 重签(隔离"锚点"单一变量)────
@@ -122,7 +152,7 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
   const target = path.join(dir, "manifest-tampered.apk")
   const entries = origEntries.map(e => ({ ...e, bytes: Uint8Array.from(e.bytes) }))
   const mf = entries.find(e => e.name === "AndroidManifest.xml")
-  if (!mf) { results.push({ id: "A2", name: "manifest tamper", certChanged: null, baselinePass: null, note: "产物无 manifest(异常输入)" }) }
+  if (!mf) { results.push({ id: "A2", name: "manifest tamper", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: "产物无 manifest(异常输入)" }) }
   else {
     let patched = false
     const u8 = mf.bytes
@@ -172,8 +202,8 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
     else {
       writeFileSync(target, buildApkZip(entries))
       const sign = signOrigOrAttacker(target)
-      if (sign.success) finishVariant("A2", `manifest tamper (versionCode+1, re-sign w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, sign.usedOrig ? "P0-A 锚点=SHA-256(manifest) 折入派生 ⇒ 清单字节变 ⇒ 错钥(签名自洽,隔离锚点变量);基线仍过 ⇒ 防御在密钥派生" : "重打包必改清单 ⇒ 锚点变;攻击者 key ⇒ 证书也变(双重错钥)", true)
-      else results.push({ id: "A2", name: "manifest tamper", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+      if (sign.success) await finishVariant("A2", `manifest tamper (versionCode+1, re-sign w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, sign.usedOrig ? "P0-A 锚点=SHA-256(manifest) 折入派生 ⇒ 清单字节变 ⇒ 错钥(签名自洽,隔离锚点变量);基线仍过 ⇒ 防御在密钥派生" : "重打包必改清单 ⇒ 锚点变;攻击者 key ⇒ 证书也变(双重错钥)", true)
+      else results.push({ id: "A2", name: "manifest tamper", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: `重签失败: ${sign.output.slice(0, 120)}` })
     }
   }
 }
@@ -184,14 +214,14 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
   const target = path.join(dir, "dex-patched.apk")
   const entries = origEntries.map(e => ({ ...e, bytes: Uint8Array.from(e.bytes) }))
   const dex = entries.find(e => /\.dex$/.test(e.name))
-  if (!dex) { results.push({ id: "A3", name: "DEX patch", certChanged: null, baselinePass: null, note: "无 DEX 条目" }) }
+  if (!dex) { results.push({ id: "A3", name: "DEX patch", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: "无 DEX 条目" }) }
   else {
     const mid = Math.floor(dex.bytes.length / 2)
     for (let i = 0; i < 16; i++) dex.bytes[mid + i] = dex.bytes[mid + i]! ^ 0xff
     writeFileSync(target, buildApkZip(entries))
     const sign = signOrigOrAttacker(target)
-    if (sign.success) finishVariant("A3", `DEX byte patch (16B XOR) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "stub/loader DEX 内容参与锚点/加载 ⇒ 等长补丁布局不变但语义必损:运行时拒解密或拒载;基线测结构 ⇒ 视补丁点可能仍过", true)
-    else results.push({ id: "A3", name: "DEX patch", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+    if (sign.success) await finishVariant("A3", `DEX byte patch (16B XOR) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "stub/loader DEX 内容参与锚点/加载 ⇒ 等长补丁布局不变但语义必损:运行时拒解密或拒载;基线测结构 ⇒ 视补丁点可能仍过", true)
+    else results.push({ id: "A3", name: "DEX patch", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: `重签失败: ${sign.output.slice(0, 120)}` })
   }
 }
 
@@ -202,13 +232,13 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
   const entries = origEntries.map(e => ({ ...e, bytes: Uint8Array.from(e.bytes) }))
   // 加密容器=assets 下最大的条目(.0lH / .ldx)
   const container = entries.filter(e => /^assets\//.test(e.name)).sort((a, b) => b.bytes.length - a.bytes.length)[0]
-  if (!container) { results.push({ id: "A4", name: "ciphertext flip", certChanged: null, baselinePass: null, note: "无 assets 容器条目" }) }
+  if (!container) { results.push({ id: "A4", name: "ciphertext flip", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: "无 assets 容器条目" }) }
   else {
     container.bytes[40] = container.bytes[40]! ^ 0xff
     writeFileSync(target, buildApkZip(entries))
     const sign = signOrigOrAttacker(target)
-    if (sign.success) finishVariant("A4", `ciphertext bit-flip (${container.name} byte 40) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, sign.usedOrig ? "GCM 认证标签必失败 ⇒ 拒解密(fail-closed),与签名/锚点无关的独立密码学防御;结构基线不校验密文 ⇒ 仍过" : "GCM 认证标签必失败 ⇒ 拒解密;攻击者 key ⇒ 证书变(双重防御)", true)
-    else results.push({ id: "A4", name: "ciphertext flip", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+    if (sign.success) await finishVariant("A4", `ciphertext bit-flip (${container.name} byte 40) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, sign.usedOrig ? "GCM 认证标签必失败 ⇒ 拒解密(fail-closed),与签名/锚点无关的独立密码学防御;结构基线不校验密文 ⇒ 仍过" : "GCM 认证标签必失败 ⇒ 拒解密;攻击者 key ⇒ 证书变(双重防御)", true)
+    else results.push({ id: "A4", name: "ciphertext flip", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: `重签失败: ${sign.output.slice(0, 120)}` })
   }
 }
 
@@ -220,8 +250,8 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
   // 整包仍被重签为 debug key ⇒ 证书必变
   writeFileSync(target, buildApkZip(origEntries.map(e => ({ ...e }))))
   const sign = signWith(target, attackerKs, "attacker", "attack123", "attack123")
-  if (sign.success) finishVariant("A5", "unzip-repack + re-sign (attacker key)", target, "最弱攻击路径:条目未动仅重排重签 ⇒ 证书变 ⇒ 错钥;密钥化下同样失败", true)
-  else results.push({ id: "A5", name: "repack", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+  if (sign.success) await finishVariant("A5", "unzip-repack + re-sign (attacker key)", target, "最弱攻击路径:条目未动仅重排重签 ⇒ 证书变 ⇒ 错钥;密钥化下同样失败", true)
+  else results.push({ id: "A5", name: "repack", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: `重签失败: ${sign.output.slice(0, 120)}` })
 }
 
 // ── A6: 部分重打包(只改资源,不碰 manifest)+ 原 key 重签(隔离"资源篡改面")──
@@ -235,14 +265,14 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
   // 只改资源:优先翻转 strings.arsc,否则任一非 manifest/非 dex/非容器资源;都无则改 PNG 字节
   const resCandidates = entries.filter(e => /^(res\/|resources\.arsc)/.test(e.name) && !/\.dex$/.test(e.name))
   const victim = resCandidates.find(e => e.name === "resources.arsc") ?? resCandidates[0] ?? entries.find(e => /\.(png|xml)$/.test(e.name))
-  if (!victim) { results.push({ id: "A6", name: "partial repack (resource only)", certChanged: null, baselinePass: null, note: "无可篡改资源条目" }) }
+  if (!victim) { results.push({ id: "A6", name: "partial repack (resource only)", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: "无可篡改资源条目" }) }
   else {
     const mid = Math.floor(victim.bytes.length / 2)
     for (let i = 0; i < 16; i++) victim.bytes[mid + i] = victim.bytes[mid + i]! ^ 0xff
     writeFileSync(target, buildApkZip(entries))
     const sign = signOrigOrAttacker(target)
-    if (sign.success) finishVariant("A6", `resource-only tamper (${victim.name}, manifest untouched) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "manifest 未动 ⇒ 锚点不变;防御依赖密钥派生输入是否覆盖资源——A4 容器哈希链 + per-entry KDF 使资源篡改不影响容器密钥,但签名/安装层完整性由 v2 校验兜底;本变体测量资源篡改面是否需独立锚点", true)
-    else results.push({ id: "A6", name: "partial repack (resource only)", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+    if (sign.success) await finishVariant("A6", `resource-only tamper (${victim.name}, manifest untouched) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "manifest 未动 ⇒ 锚点不变;防御依赖密钥派生输入是否覆盖资源——A4 容器哈希链 + per-entry KDF 使资源篡改不影响容器密钥,但签名/安装层完整性由 v2 校验兜底;本变体测量资源篡改面是否需独立锚点", true)
+    else results.push({ id: "A6", name: "partial repack (resource only)", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: `重签失败: ${sign.output.slice(0, 120)}` })
   }
 }
 
@@ -256,8 +286,8 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
   const reordered = [...origEntries.map(e => ({ ...e, bytes: Uint8Array.from(e.bytes) }))].reverse()
   writeFileSync(target, buildApkZip(reordered))
   const sign = signOrigOrAttacker(target)
-  if (sign.success) finishVariant("A7", `zip entry reorder (bytes unchanged) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "条目字节不变 ⇒ manifest 锚点/容器密文均不变;布局敏感面测量——基线通过 ⇒ 运行时解析与布局无关;若设备安装失败则暴露 ZIP 布局依赖(非密钥化防御范畴)", true)
-  else results.push({ id: "A7", name: "zip reorder", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+  if (sign.success) await finishVariant("A7", `zip entry reorder (bytes unchanged) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "条目字节不变 ⇒ manifest 锚点/容器密文均不变;布局敏感面测量——基线通过 ⇒ 运行时解析与布局无关;若设备安装失败则暴露 ZIP 布局依赖(非密钥化防御范畴)", true)
+  else results.push({ id: "A7", name: "zip reorder", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: `重签失败: ${sign.output.slice(0, 120)}` })
 }
 
 // ── A8: 容器条目增删(向 assets 注入伪造容器/删除容器条目)+ 重签 ───────────
@@ -268,15 +298,15 @@ const finishVariant = (id: string, name: string, file: string, note: string, reS
   const target = path.join(dir, "container-edited.apk")
   const entries = origEntries.map(e => ({ ...e, bytes: Uint8Array.from(e.bytes) }))
   const container = entries.filter(e => /^assets\//.test(e.name)).sort((a, b) => b.bytes.length - a.bytes.length)[0]
-  if (!container) { results.push({ id: "A8", name: "container entry edit", certChanged: null, baselinePass: null, note: "无容器条目" }) }
+  if (!container) { results.push({ id: "A8", name: "container entry edit", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: "无容器条目" }) }
   else {
     // 解析容器 → 截断最后一个条目(伪造"删条目")→ 原样写回
     const truncated = container.bytes.subarray(0, Math.floor(container.bytes.length * 0.9))
     container.bytes = Uint8Array.from(truncated)
     writeFileSync(target, buildApkZip(entries))
     const sign = signOrigOrAttacker(target)
-    if (sign.success) finishVariant("A8", `container truncate (drop tail bytes) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "容器条目被删/改 ⇒ 哈希链断裂:被删条目后续所有条目派生错钥(即使 GCM 未先拒绝);解析端 count/length 不匹配 ⇒ fail-closed 返回,双保险", true)
-    else results.push({ id: "A8", name: "container entry edit", certChanged: null, baselinePass: null, note: `重签失败: ${sign.output.slice(0, 120)}` })
+    if (sign.success) await finishVariant("A8", `container truncate (drop tail bytes) + re-sign (w/ ${sign.usedOrig ? "orig" : "attacker"} key)`, target, "容器条目被删/改 ⇒ 哈希链断裂:被删条目后续所有条目派生错钥(即使 GCM 未先拒绝);解析端 count/length 不匹配 ⇒ fail-closed 返回,双保险", true)
+    else results.push({ id: "A8", name: "container entry edit", certChanged: null, baselinePass: null, wrongKey: null, keyDivergence: "unknown", note: `重签失败: ${sign.output.slice(0, 120)}` })
   }
 }
 
@@ -288,9 +318,15 @@ const summaryMd = [
   `- 原证书 SHA-256: \`${origCert.slice(0, 16)}…\``,
   `- 日期: ${new Date().toISOString().slice(0, 10)}`,
   "",
-  "| # | 攻击 | 证书变化 | 结构基线(H1–H6) | 构建级结论 |",
-  "|---|---|---|---|---|",
-  ...results.map(r => `| ${r.id} | ${r.name} | ${r.certChanged === null ? "—" : r.certChanged ? "是" : "否"} | ${r.baselinePass === null ? "—" : r.baselinePass ? "PASS" : "FAIL"} | ${r.note} |`),
+  "| # | 攻击 | 证书变化 | 结构基线(H1–H6) | 错钥输入偏离 | 构建级结论 |",
+  "|---|---|---|---|---|---|",
+  ...results.map(r => `| ${r.id} | ${r.name} | ${r.certChanged === null ? "—" : r.certChanged ? "是" : "否"} | ${r.baselinePass === null ? "—" : r.baselinePass ? "PASS" : "FAIL"} | ${r.wrongKey === null ? "—" : r.wrongKey ? `是(${r.keyDivergence})` : "否"} | ${r.note} |`),
+  "",
+  "## 错钥率实测(构建级)",
+  "",
+  `- **错误密钥率: ${results.filter(r => r.wrongKey).length}/${results.length}**——所有引发错钥输入偏离(证书指纹/manifest 锚点/容器密文)的攻击变体,派生密钥必错,运行时 GCM 拒解密(fail-closed)。`,
+  "- 错钥三输入:①证书指纹(HKDF 源)②manifest SHA-256(P0-A 锚点)③容器密文哈希链(P0-A 扩展)。任一偏离即错钥——确定性构建级计算。",
+  "- **如实分层**:本表为构建级可证部分(输入偏离 ⇒ 密钥必错);运行时行为(拒绝解密/进程消亡/D3 无标记)需真机验收,见 docs/device-testing.md——两个口径不混用。",
   "",
   "## 判读",
   "",

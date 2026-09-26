@@ -37,7 +37,7 @@ export interface ToolInstallOptions {
 // 非 TTY 直接 false,CI 不询问)。TUI 启动时 setActiveMirrorPrompt 注入对话框。
 let currentMirrorPrompt: ((fileName: string) => Promise<boolean>) | undefined
 
-export function setActiveMirrorPrompt(impl: (fileName: string) => Promise<boolean> | undefined): void {
+export function setActiveMirrorPrompt(impl: ((fileName: string) => Promise<boolean>) | undefined): void {
   currentMirrorPrompt = impl
 }
 

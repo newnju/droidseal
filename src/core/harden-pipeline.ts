@@ -945,8 +945,12 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     { key: "resourceProtected", configEnabled: config.enableResourceEncryption, evidenceCount: resourceResults?.length ?? 0 },
     { key: "stringProtected", configEnabled: true, evidenceCount: stringWritebackApplied ? 1 : 0 },
     { key: "runtimeProtected", configEnabled: config.enableRuntimeProtection, evidenceCount: stubDexRaw && loaderDexRaw ? 1 : 0 },
-    { key: "vmProtected", configEnabled: config.enableVmProtection, evidenceCount: 0 }, // vmp 生成器尚无调用点
-    { key: "dex2cWired", configEnabled: false, evidenceCount: 0 }, // generateDex2cBridge 尚无调用点——接线后置 true
+    { key: "vmProtected", configEnabled: config.enableVmProtection, evidenceCount: 0 }, // VMP 生成器只产出 smali 参考文件(generatedFiles),未注入 APK——参考产物不算生效,如实报 false
+    // dex2c 如实 not-wired(2026-09 评估结论):generateDex2cBridge 是 C 模板桩——
+    // 方法体为 TODO 占位(return NULL)、JNI 签名写死,无 Java→C 方法体转换能力。
+    // 接线将产出运行时必崩的空壳桥,却宣称防护已生效——违背如实降级,故不接线。
+    // 翻绿前置条件:实现真实 Dalvik 字节码→C 转换器(独立立项,非配置开关问题)。
+    { key: "dex2cWired", configEnabled: false, evidenceCount: 0 },
   ])
   for (const v of gate.violations) {
     findings.push({

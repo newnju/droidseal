@@ -542,8 +542,8 @@ export function questionsFor(draft: WizardDraft): WizardQuestion[] {
       {
         id: "enableVmProtection",
         kind: "choice",
-        title: "VMP 虚拟机保护",
-        prompt: "启用 VMP 虚拟机保护?(性能影响较大)",
+        title: "VMP 参考产物",
+        prompt: "生成 VM 解释器参考产物?(仅写入输出目录,不注入 APK,不构成生效防护)",
         detail: "25 条 VM 操作码 + dispatch loop + 寄存器/栈模拟。性能影响较大,默认关闭。",
         choices: [
           { value: "no", label: "否(推荐)", detail: "跳过 VMP(性能影响较大)", shortcut: "1" },

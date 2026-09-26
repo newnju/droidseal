@@ -307,10 +307,10 @@ export function buildVmpFindings(
   if (hasVmInterpreter) {
     findings.push({
       severity: "info", confidence: "high", code: "VMP_INTERPRETER_GENERATED",
-      title: "VM 解释器生成完成(Dalvik → VM 指令)",
-      detail: `自定义 VM 指令集 ${DEFAULT_VM_ISA.length} 条操作码;寄存器 ${DEFAULT_VM_CONFIG.registerCount} 个;栈 ${DEFAULT_VM_CONFIG.stackSize} 深度;dispatch loop 混淆: ${DEFAULT_VM_CONFIG.obfuscateDispatch ? "是" : "否"}。`,
-      recommendation: "VMP 保护的代码静态分析极困难——逆向需完整 VM 反编译器。",
-      evidence: `isa=${DEFAULT_VM_ISA.length} opcodes`,
+      title: "VM 解释器参考产物已生成(未注入 APK,不构成生效防护)",
+      detail: `自定义 VM 指令集 ${DEFAULT_VM_ISA.length} 条操作码;寄存器 ${DEFAULT_VM_CONFIG.registerCount} 个;栈 ${DEFAULT_VM_CONFIG.stackSize} 深度;dispatch loop 混淆: ${DEFAULT_VM_CONFIG.obfuscateDispatch ? "是" : "否"}。产物仅写入输出目录(smali/DroidSealVmInterpreter.smali),未进入加固 APK——summary 按如实降级报 vmProtected=false。`,
+      recommendation: "如需 VMP 级防护,当前版本请配合 Dex2C/native 路径使用;该解释器可用于研究定制,但不可依赖其为防护能力。",
+      evidence: `isa=${DEFAULT_VM_ISA.length} opcodes (reference-only)`,
     })
   }
   if (hasLlvmVm) {
