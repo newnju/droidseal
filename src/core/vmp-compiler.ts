@@ -352,6 +352,56 @@ export function serializeVmPayload(
   return result
 }
 
+// ── 方法级 VM 子集编译(P1-7 接线:方法抽取产物 → VM 字节码)──────────────
+
+export interface VmSubsetResult {
+  /** methodIdx → VM 字节码(仅收录翻译完整覆盖的方法;翻译中断/空体不收录) */
+  compiled: Array<{ methodIdx: number; vmCode: Uint8Array }>
+  skipped: number
+  /** 翻译后原始 Dalvik 尺寸(供覆盖率指标) */
+  translatedBytes: number
+}
+
+/**
+ * 对被抽取方法的原始 CodeItem 做方法级 VM 子集编译。
+ * 输入来自 hollowMethods 的 extractedCodeItems(原始 Dalvik 字节码),输出 VM 字节码表。
+ * 诚实边界:产物是数据 payload(可校验、可单测),解释器执行是另一回事——
+ * 生成器 smali 仍是参考产物,不假注入,summary 的 vmProtected 不因此翻绿。
+ * 翻译不完整(translateDalvikInstruction 提前 break)的方法如实跳过,不收录半成品。
+ */
+export function compileVmSubset(
+  extractedCodeItems: Map<number, Uint8Array>,
+  stubMethods: Array<{ methodIdx: number; originalCodeOff: number }>,
+  maxMethods = 50,
+): VmSubsetResult {
+  const compiled: VmSubsetResult["compiled"] = []
+  let skipped = 0
+  let translatedBytes = 0
+  for (const stub of stubMethods) {
+    if (compiled.length >= maxMethods) { skipped += 1; continue }
+    const dalvik = extractedCodeItems.get(stub.originalCodeOff)
+    if (!dalvik || dalvik.length === 0) { skipped += 1; continue }
+    // 完整性校验:逐条翻译必须覆盖整个 CodeItem(16 字节对齐尾部 padding 除外)
+    let offset = 0
+    let complete = true
+    const vmInstructions: Uint8Array[] = []
+    while (offset < dalvik.length) {
+      const result = translateDalvikInstruction(dalvik, offset, [])
+      if (!result) { complete = false; break }
+      vmInstructions.push(result.vmBytes)
+      offset += result.dalvikSize
+    }
+    if (!complete || vmInstructions.length === 0) { skipped += 1; continue }
+    const totalLen = vmInstructions.reduce((sum, inst) => sum + inst.length, 0)
+    const vmCode = new Uint8Array(totalLen)
+    let pos = 0
+    for (const inst of vmInstructions) { vmCode.set(inst, pos); pos += inst.length }
+    compiled.push({ methodIdx: stub.methodIdx, vmCode })
+    translatedBytes += dalvik.length
+  }
+  return { compiled, skipped, translatedBytes }
+}
+
 // ── Finding 生成 ──────────────────────────────────────────────────────
 
 export function buildVmpCompilerFindings(compiledCount: number, totalPayloadSize: number): Finding[] {
