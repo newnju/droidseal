@@ -50,7 +50,7 @@ for (const s of SAMPLES) {
     min_sdk: Number(msf.min_sdk ?? 99),
     target_sdk: Number(msf.target_sdk ?? 99),
   }
-  const row = { sample: s, rules: {} }
+  const row: Record<string, any> = { sample: s, rules: {} }
   for (const r of SHARED) {
     const msfFire = r.msf.some((frag) => msfTitles.some((t) => t.includes(frag)))
     const dsFire = dsCodes.has(r.ds)
@@ -61,12 +61,12 @@ for (const s of SAMPLES) {
   row.msf_only = msfTitles.filter((t) => t.includes("StrandHogg") || t.includes("signed")).length
   // DroidSeal 特有(共享集之外): 数据流/加固/密钥串等
   const sharedDsCodes = new Set(SHARED.map((r) => r.ds))
-  row.ds_only = [...dsCodes].filter((c) => !sharedDsCodes.has(c)).length
+  row.ds_only = [...dsCodes].filter((c: string) => !sharedDsCodes.has(c)).length
   rows.push(row)
 }
 
 // 汇总共享规则层
-const agg = {}
+const agg: Record<string, any> = {}
 for (const r of SHARED) agg[r.id] = { ds: { tp: 0, fp: 0, fn: 0 }, msf: { tp: 0, fp: 0, fn: 0 }, both: 0, n: 0 }
 for (const row of rows) {
   if (row.error) continue
@@ -82,8 +82,8 @@ for (const row of rows) {
     }
   }
 }
-const prec = (t) => t.tp + t.fp === 0 ? null : t.tp / (t.tp + t.fp)
-const rec = (t) => t.tp + t.fn === 0 ? null : t.tp / (t.tp + t.fn)
+const prec = (t: any) => t.tp + t.fp === 0 ? null : t.tp / (t.tp + t.fp)
+const rec = (t: any) => t.tp + t.fn === 0 ? null : t.tp / (t.tp + t.fn)
 
 let md = ["# MobSF 4.5.2 vs DroidSeal —— 共享规则集正面对比", "",
   `样本: ${SAMPLES.join(", ")}(n=7)`, "",
@@ -93,15 +93,15 @@ let md = ["# MobSF 4.5.2 vs DroidSeal —— 共享规则集正面对比", "",
   "|---|---|---|---|---|---|"]
 for (const r of SHARED) {
   const a = agg[r.id]
-  const fmt = (t) => t.tp === 0 && t.fp === 0 && t.fn === 0 ? "—" : `${t.tp}/${t.fp}/${t.fn}`
-  const pr = (t) => { const p = prec(t), q = rec(t); return p === null ? "—" : `${(p * 100).toFixed(0)}%/${(q * 100).toFixed(0)}%` }
+  const fmt = (t: any) => t.tp === 0 && t.fp === 0 && t.fn === 0 ? "—" : `${t.tp}/${t.fp}/${t.fn}`
+  const pr = (t: any) => { const p = prec(t), q = rec(t); return p === null ? "—" : `${(p * 100).toFixed(0)}%/${(q * 100).toFixed(0)}%` }
   md.push(`| ${r.id} | ${a.both}/${a.n} | ${fmt(a.msf)} | ${fmt(a.ds)} | ${pr(a.msf)} | ${pr(a.ds)} |`)
 }
 md.push("", "## 逐样本一致/分歧明细", "", "| 样本 | 一致规则 | MobSF 特有(未评分) | DroidSeal 特有(未评分) |", "|---|---|---|---|")
 for (const row of rows) {
   if (row.error) { md.push(`| ${row.sample} | ${row.error} | | |`); continue }
-  const agree = Object.entries(row.rules).filter(([, v]) => v.msf === v.ds).length
-  const dis = Object.entries(row.rules).filter(([, v]) => v.msf !== v.ds).map(([k, v]) => `${k}(M:${v.msf?1:0}/D:${v.ds?1:0}/T:${v.gt?1:0})`)
+  const agree = Object.entries(row.rules).filter(([, v]) => (v as any).msf === (v as any).ds).length
+  const dis = Object.entries(row.rules).filter(([, v]) => (v as any).msf !== (v as any).ds).map(([k, v]) => `${k}(M:${(v as any).msf?1:0}/D:${(v as any).ds?1:0}/T:${(v as any).gt?1:0})`)
   md.push(`| ${row.sample} | ${agree}/4 | ${row.msf_only} 条 | ${row.ds_only} 条 ${dis.length ? "⚠ " + dis.join(", ") : ""} |`)
 }
 writeFileSync("C:/Users/diamond/DroidSeal-GitHub/textseg/mobsf-shared-rules/comparison.md", md.join("\n"))

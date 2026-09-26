@@ -1265,7 +1265,7 @@ export class Pipeline {
         // Safety net: re-parse the stripped APK and confirm it is still structurally sound
         // (expected entry count, manifest present, DEX preserved). Abort on any mismatch.
         const after = await parseZipEntries(stripped).catch(() => undefined)
-        const afterNames = after ? new Set(after.map((entry) => entry.name)) : undefined
+        const afterNames: Set<string> | undefined = after ? new Set<string>(after.map((entry) => String(entry.name))) : undefined
         const originalHadDex = beforeEntries.some((entry) => /^classes(?:\d+)?\.dex$/.test(entry.name))
         const dexOk = !originalHadDex || (afterNames ? [...afterNames].some((name) => /^classes(?:\d+)?\.dex$/.test(name)) : false)
         const safe =

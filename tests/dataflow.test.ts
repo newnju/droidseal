@@ -16,7 +16,7 @@ public void store(String s) {
 `
     const flows = analyzeInterproc(src)
     expect(flows.length).toBe(1)
-    expect(flows[0].src_api).toBe("getDeviceId")
+    expect(flows[0]!.src_api).toBe("getDeviceId")
   })
 
   test("sanitizer 阻断跨方法流", () => {
@@ -48,8 +48,8 @@ public void onCreate(Bundle b) {
 `
     const flows = analyzeInterproc(src)
     expect(flows.length).toBe(1)
-    expect(flows[0].source_line).toBe(3)
-    expect(flows[0].sink_line).toBe(6)
+    expect(flows[0]!.source_line).toBe(3)
+    expect(flows[0]!.sink_line).toBe(6)
   })
 
   test("框架回调:无回调方法存在时不建边", () => {
@@ -77,8 +77,8 @@ public void onCreate(Bundle b) {
 `
     const flows = analyzeInterproc(src)
     expect(flows.length).toBe(1)
-    expect(flows[0].source_line).toBe(3)
-    expect(flows[0].sink_line).toBe(6)
+    expect(flows[0]!.source_line).toBe(3)
+    expect(flows[0]!.sink_line).toBe(6)
   })
 
   test("接口型回调:回调方法不存在时不建边(存在性兜底)", () => {
@@ -109,8 +109,8 @@ public void leak(String s) {
 `
     const flows = analyzeInterproc(src)
     expect(flows.length).toBe(1)
-    expect(flows[0].source_line).toBe(3)
-    expect(flows[0].sink_line).toBe(5)
+    expect(flows[0]!.source_line).toBe(3)
+    expect(flows[0]!.sink_line).toBe(5)
   })
 
   test("反射变量方法名:不猜不建边", () => {
@@ -141,8 +141,8 @@ public void other() {
 `
     const flows = analyzeInterproc(src)
     expect(flows.length).toBe(1)
-    expect(flows[0].source_line).toBe(3)
-    expect(flows[0].sink_line).toBe(6)
+    expect(flows[0]!.source_line).toBe(3)
+    expect(flows[0]!.sink_line).toBe(6)
   })
 
   test("ICC 键不匹配:不建流", () => {
@@ -177,9 +177,9 @@ public void send(String s) {
       { cls: "Helper", content: b },
     ])
     expect(flows.length).toBe(1)
-    expect(flows[0].src_class).toBe("A")
-    expect(flows[0].sink_class).toBe("Helper")
-    expect(flows[0].src_class).not.toBe(flows[0].sink_class)
+    expect(flows[0]!.src_class).toBe("A")
+    expect(flows[0]!.sink_class).toBe("Helper")
+    expect(flows[0]!.src_class).not.toBe(flows[0]!.sink_class)
   })
 
   test("多实现同名方法集合语义分发", () => {

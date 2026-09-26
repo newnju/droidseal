@@ -86,7 +86,7 @@ function stripStrings(line: string): string {
 }
 function lhsOf(line: string): string | null {
   const m = line.match(/^\s*[\w.$[\]]*\s*(?:this\.)?([A-Za-z_$][\w$]*)\s*=(?!=)/)
-  return m ? m[1] : null
+  return m ? (m[1] ?? null) : null
 }
 function rhsVars(line: string): string[] {
   const eq = line.indexOf("=")
@@ -182,13 +182,13 @@ function extractMethods(lines: string[], cls: string): Meth[] {
 function expandAnonymousMethods(meths: Meth[], lines: string[], cls: string): void {
   let i = 0
   while (i < lines.length) {
-    const t = lines[i].trimStart()
+    const t = (lines[i] ?? "").trimStart()
     if (t.startsWith("new ") && t.includes("{")) {
       let depth = 0
       let bodyStart = i
       let j = i
       while (j < lines.length) {
-        const clean = stripStrings(lines[j])
+        const clean = stripStrings(lines[j] ?? "")
         for (const c of clean) {
           if (c === "{") { depth++; if (depth === 1) bodyStart = j + 1 }
           else if (c === "}") depth--
@@ -241,7 +241,7 @@ function resolveCall(clean: string, lineno: number, has: (n: string) => boolean,
   let m: RegExpExecArray | null
   while ((m = re.exec(clean))) {
     const id = m[1]
-    if (!has(id)) continue
+    if (!id || !has(id)) continue
     const argsStr = clean.slice(m.index + m[0].length)
     const args = splitArgs(argsStr).map(a => {
       const info = emptyVal()
@@ -249,7 +249,7 @@ function resolveCall(clean: string, lineno: number, has: (n: string) => boolean,
       if (sourceApi(a)) info.srcs.add(lineno)
       return info
     })
-    return { callee: id, args }
+    return { callee: id!, args }
   }
   return null
 }
@@ -414,8 +414,9 @@ export function analyzeInterproc(content: string): TaintFlow[] {
       const ent = entry.get(m.name)
       for (const { callee, args } of s.calls) {
         for (let j = 0; j < args.length; j++) {
-          const add = new Set(args[j].srcs)
-          if (ent) for (const p of args[j].params) for (const st of ent.get(p) ?? []) add.add(st)
+          const arg = args[j]!
+          const add = new Set(arg.srcs)
+          if (ent) for (const p of arg.params) for (const st of ent.get(p) ?? []) add.add(st)
           if (add.size) {
             const dm = delta.get(callee) ?? new Map(); delta.set(callee, dm)
             const ds = dm.get(j) ?? new Set(); dm.set(j, ds)
@@ -582,7 +583,7 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
   const allSums = new Map<string, Sum>() // key: cls + "::" + meth
   for (const u of units) {
     const local = new Set(u.meths.map(m => m.name))
-    const uniqueGlobal = new Set([...nameIndex.entries()].filter(([k, v]) => v.length === 1 && v[0][0] !== u.cls).map(([k]) => k))
+    const uniqueGlobal = new Set([...nameIndex.entries()].filter(([k, v]) => v.length === 1 && v[0]![0] !== u.cls).map(([k]) => k))
     const has = (n: string) => local.has(n) || (uniqueGlobal.has(n) && !local.has(n))
     for (const m of u.meths) allSums.set(`${u.cls}::${m.name}`, summarize(m, u.lines, has))
   }
@@ -598,13 +599,15 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
     const delta = new Map<string, Map<number, Set<number>>>()
     for (const [key, s] of allSums) {
       const [owner, meth] = key.split("::")
+      if (!owner || !meth) continue
       const ent = entry.get(key)
       for (const { callee, args } of s.calls) {
         for (const target of resolveAll(owner, callee)) {
           const tkey = target.join("::")
           for (let j = 0; j < args.length; j++) {
-            const add = new Set(args[j].srcs)
-            if (ent) for (const p of args[j].params) for (const st of ent.get(p) ?? []) add.add(st)
+            const arg = args[j]!
+            const add = new Set(arg.srcs)
+            if (ent) for (const p of arg.params) for (const st of ent.get(p) ?? []) add.add(st)
             if (add.size) {
               const dm = delta.get(tkey) ?? new Map(); delta.set(tkey, dm)
               const ds = dm.get(j) ?? new Set(); dm.set(j, ds)
