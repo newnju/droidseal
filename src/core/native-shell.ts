@@ -292,6 +292,7 @@ set(CMAKE_C_STANDARD 11)
 # 源文件
 add_library(${soName} SHARED
     crc32.c
+    text_integrity.c
     art_hook.c${includeKeyPart2 ? "\n    key_part2.c\n    guard_vote.c" : ""}
 )
 
@@ -546,15 +547,17 @@ static int ds_parent_traced(void) {
 
 JNIEXPORT jint JNICALL
 ${jniName}(JNIEnv *env, jclass clazz) {
-    /* dispatch 状态机:轮询三个检测源(顺序经状态变量交织,单步跟踪看不出
-     * 优先级;任一命中即投 1,全部干净返回 0)。 */
+    /* dispatch 状态机:轮询四个检测源(顺序经状态变量交织,单步跟踪看不出
+     * 优先级;任一命中即投 1,全部干净返回 0。"无法核验"的源不投票)。 */
+    extern int ds_text_integrity_check(void); /* text_integrity.c */
     volatile int state = 0;
     int verdict = 0;
-    while (state < 3) {
+    while (state < 4) {
         switch (state) {
             case 0: verdict |= ds_parent_traced() ? 1 : 0; break;
             case 1: verdict |= (ds_probe_port(27042) || ds_probe_port(27043)) ? 1 : 0; break;
             case 2: verdict |= ds_maps_hit() ? 1 : 0; break;
+            case 3: { int ti = ds_text_integrity_check(); verdict |= (ti == 1) ? 1 : 0; break; } /* -1 无法核验 → 不投票 */
             default: break;
         }
         if (verdict) break;
@@ -565,6 +568,136 @@ ${jniName}(JNIEnv *env, jclass clazz) {
 `
 }
 
+// ── text 段完整性自检(构建期补丁 + 运行时比对)────────────────────────────
+
+export function generateTextIntegrityC(): string {
+  return `// DroidSeal .text 段完整性自检(构建期自动生成,勿手动修改)
+// 原理:构建流水线在编译完成后,对本文件内 "DSTC" 标记块原位补丁,写入
+// 可执行 PT_LOAD 段的 CRC32(LE)。运行时经 dladdr 定位加载基址,解析自身
+// phdr 重算比对——检测 inline hook(Frida Interceptor 等改写 .text 的手段)。
+// 语义:1=可执行段被改写(命中) 0=校验一致 -1=无法核验(如实降级:不投票、不误报)
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+#include <dlfcn.h>
+#include <elf.h>
+
+extern uint32_t droidseal_crc32(const uint8_t* data, size_t length);
+
+/* 标记块位于 .rodata(只读非可执行段)——构建期补丁写值不影响被校验的可执行段 */
+static volatile const unsigned char ds_tic[12] = {
+    'D', 'S', 'T', 'C', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+int ds_text_integrity_check(void) {
+    Dl_info info;
+    if (dladdr((const void*)&ds_tic, &info) == 0 || info.dli_fbase == NULL) return -1;
+    if (memcmp((const void*)ds_tic, "DSTC", 4) != 0) return -1; /* 未补丁:如实不核验 */
+    unsigned char tmp[4];
+    for (int i = 0; i < 4; i++) tmp[i] = ds_tic[4 + i];
+    uint32_t expected = 0;
+    memcpy(&expected, tmp, 4); /* LE:与构建期补丁同序 */
+    const unsigned char* base = (const unsigned char*)info.dli_fbase;
+    if (base[0] != 0x7f || base[1] != 'E' || base[2] != 'L' || base[3] != 'f') return -1;
+    if (base[4] != 2 || base[5] != 1) return -1; /* 仅支持 ELF64-LE(本壳构建目标) */
+    uint64_t phoff = 0;
+    uint16_t phentsize = 0, phnum = 0;
+    memcpy(&phoff, base + 0x20, sizeof(phoff));
+    memcpy(&phentsize, base + 0x36, sizeof(phentsize));
+    memcpy(&phnum, base + 0x38, sizeof(phnum));
+    if (phentsize < 56 || phnum == 0 || phnum > 96) return -1;
+    int found = 0;
+    uint32_t actual = 0;
+    for (uint16_t i = 0; i < phnum; i++) {
+        const unsigned char* ph = base + phoff + (size_t)i * phentsize;
+        uint32_t p_type = 0, p_flags = 0;
+        uint64_t p_vaddr = 0, p_filesz = 0;
+        memcpy(&p_type, ph, 4);
+        memcpy(&p_flags, ph + 4, 4);
+        memcpy(&p_vaddr, ph + 16, 8);
+        memcpy(&p_filesz, ph + 24, 8);
+        if (p_type != PT_LOAD || (p_flags & PF_X) == 0) continue;
+        if (found) return -1; /* 多可执行段:构建期未补丁,如实不核验 */
+        if (p_filesz == 0 || p_filesz > (1ull << 30)) return -1;
+        actual = droidseal_crc32(base + p_vaddr, (size_t)p_filesz);
+        found = 1;
+    }
+    if (!found) return -1;
+    return actual == expected ? 0 : 1;
+}
+`
+}
+
+// 构建期 .so 补丁:定位唯一可执行 PT_LOAD 段 → 占位清零 → 段字节 CRC32 →
+// 原位写回 "DSTC"+4B 标记块(text_integrity.c 的 ds_tic)。标记位于 .rodata,
+// 与可执行段分属不同 PT_LOAD——补丁不影响被校验字节,单次编译即可。
+// 零个/多个可执行段时如实不补丁(运行时返回"无法核验",不投票)。
+export interface SoTextCrcPatchResult {
+  bytes: Uint8Array
+  patched: boolean
+  /** 未补丁原因(patched=false 时) */
+  reason?: "no-marker" | "multi-x-seg" | "no-x-seg" | "bad-elf"
+  /** 补丁成功时:可执行段 CRC32(LE 已写入标记块) */
+  segmentCrc?: number
+  /** 补丁成功时:被校验段大小(字节) */
+  segmentSize?: number
+}
+
+function tsCrc32(data: Uint8Array, start: number, length: number): number {
+  let crc = 0xFFFFFFFF
+  for (let i = 0; i < length; i += 1) {
+    crc ^= data[start + i]!
+    for (let b = 0; b < 8; b += 1) {
+      crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1))
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0
+}
+
+export function patchSoTextCrc(soBytes: Uint8Array): SoTextCrcPatchResult {
+  const bytes = soBytes.slice() // 产物副本上原位写回
+  const fail = (reason: NonNullable<SoTextCrcPatchResult["reason"]>): SoTextCrcPatchResult => ({ bytes, patched: false, reason })
+  if (bytes.length < 64 || bytes[0] !== 0x7f || bytes[1] !== 0x45 || bytes[2] !== 0x4c || bytes[3] !== 0x46) return fail("bad-elf")
+  if (bytes[4] !== 2 || bytes[5] !== 1) return fail("bad-elf") // 仅 ELF64-LE(NDK 目标)
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const phoff = Number(view.getBigUint64(0x20, true))
+  const phentsize = view.getUint16(0x36, true)
+  const phnum = view.getUint16(0x38, true)
+  let xStart = -1
+  let xSize = 0
+  let xCount = 0
+  for (let i = 0; i < phnum; i += 1) {
+    const base = phoff + i * phentsize
+    if (base + 56 > bytes.length) return fail("bad-elf")
+    const pType = view.getUint32(base, true)
+    const pFlags = view.getUint32(base + 4, true)
+    const pOffset = Number(view.getBigUint64(base + 8, true))
+    const pFilesz = Number(view.getBigUint64(base + 24, true))
+    if (pType === 1 /* PT_LOAD */ && (pFlags & 1) !== 0 /* PF_X */) {
+      xCount += 1
+      xStart = pOffset
+      xSize = pFilesz
+    }
+  }
+  if (xCount === 0) return fail("no-x-seg")
+  if (xCount > 1) return fail("multi-x-seg")
+  if (xStart < 0 || xStart + xSize > bytes.length) return fail("bad-elf")
+  // 全文件扫描 DSTC 标记(跳过落在被校验段内的意外命中——标记应在 .rodata)
+  let marker = -1
+  for (let i = 0; i + 12 <= bytes.length; i += 1) {
+    if (bytes[i] === 0x44 && bytes[i + 1] === 0x53 && bytes[i + 2] === 0x54 && bytes[i + 3] === 0x43) {
+      if (i >= xStart && i < xStart + xSize) continue
+      marker = i
+      break
+    }
+  }
+  if (marker < 0) return fail("no-marker")
+  for (let i = 0; i < 8; i += 1) bytes[marker + 4 + i] = 0 // 占位清零(不影响 X 段字节)
+  const segmentCrc = tsCrc32(bytes, xStart, xSize)
+  view.setUint32(marker + 4, segmentCrc, true)
+  return { bytes, patched: true, segmentCrc, segmentSize: xSize }
+}
+
 export function generateNativeShellFiles(config: NativeShellConfig): Array<{ name: string; content: string }> {
   const files: Array<{ name: string; content: string }> = []
   const dir = `native/${config.soName.replace("lib", "").replace(".so", "")}`
@@ -572,6 +705,10 @@ export function generateNativeShellFiles(config: NativeShellConfig): Array<{ nam
 
   // CRC32 实现
   files.push({ name: `${dir}/crc32.c`, content: generateCrc32C() })
+
+  // text 段完整性自检(构建期补丁 + 运行时比对;检测 inline hook——
+  // 改名 gadget 可绕 maps 扫描,绕不过段校验)
+  files.push({ name: `${dir}/text_integrity.c`, content: generateTextIntegrityC() })
 
   // Split-Key part2 内嵌数组 + JNI 导出(异位存放:完整密钥不在任何单个 DEX 中)
   if (withKeyPart2) {
@@ -611,6 +748,7 @@ export function buildNativeShellFindings(config: NativeShellConfig, fileCount: n
   if (config.enableAntiFrida) features.push("反 Frida(CRC32 libc 完整性)")
   if (config.enableAntiDump) features.push("反 Dump(write hook)")
   if (config.enableAntiDebug) features.push("反调试(ptrace/TracerPid)")
+  features.push("text 段 CRC 自检(inline hook 检测,构建期补丁)")
 
   return [{
     severity: "info",

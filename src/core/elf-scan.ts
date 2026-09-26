@@ -36,6 +36,18 @@ export interface ElfHardening {
   debugInfo: boolean
   credentialMarkers: string[]
   packed?: string
+  /** 16KB 页对齐(Google Play 2025-11 起对 64 位库强制):所有 PT_LOAD 的 p_align ≥ 16384 */
+  pageAlign16k: boolean
+  /** PT_LOAD 段中最小的 p_align 字节值(0 = 无 PT_LOAD 段,无法判定) */
+  minLoadAlign: number
+  /** 需核对的 JNI 函数(动态注册隐藏入口/GC 阻塞 Critical 区)——命中标题 */
+  jniDangerousFunctions: string[]
+  /** 无边界检查 C 函数(缓冲区溢出向量)——命中标题 */
+  bufferOverflowFunctions: string[]
+  /** .rodata 内嵌 URL(排除 XML 命名空间噪声,去重封顶 16) */
+  embeddedUrls: string[]
+  /** 内嵌密钥格式命中(google-api-key/aws-access-key/jwt-token/hardcoded-assignment) */
+  embeddedKeyHits: string[]
 }
 
 // 凭据格式前缀(字节级扫描,与现有 bytesContainAscii 启发式一致)
@@ -113,15 +125,21 @@ export function analyzeElf(bytes: Uint8Array): ElfHardening {
   let hasRelro = false
   let dynamicOffset = -1
   let dynamicSize = 0
+  // 16KB 页对齐检查(Google Play 2025-11 起 64 位库强制):收集 PT_LOAD 的 p_align 最小值
+  let minLoadAlign = 0
 
   for (let i = 0; i < phnum; i += 1) {
     const base = phoff + i * phentsize
     if (base + phentsize > bytes.length) break
     const pType = readU32(base)
     if (is64) {
+      // Elf64_Phdr 布局(字节数 56):p_type@0 p_flags@4 p_offset@8 p_vaddr@16
+      // p_filesz@24 p_memsz@32 p_align@40
       const pFlags = readU32(base + 4)
       const pOffset = Number(view.getBigUint64(base + 8, little))
-      const pFilesz = Number(view.getBigUint64(base + 32, little))
+      const pFilesz = Number(view.getBigUint64(base + 24, little))
+      const pAlign = Number(view.getBigUint64(base + 40, little))
+      if (pType === PT_LOAD && pAlign > 0 && (minLoadAlign === 0 || pAlign < minLoadAlign)) minLoadAlign = pAlign
       if (pType === PT_GNU_STACK && (pFlags & PF_X) !== 0) executableStack = true
       if (pType === PT_GNU_RELRO) hasRelro = true
       if (pType === PT_DYNAMIC) {
@@ -129,9 +147,13 @@ export function analyzeElf(bytes: Uint8Array): ElfHardening {
         dynamicSize = pFilesz
       }
     } else {
+      // Elf32_Phdr 布局(字节数 32):p_type@0 p_offset@4 p_vaddr@8 p_filesz@12
+      // p_memsz@16 p_flags@20 p_align@24
       const pOffset = readU32(base + 4)
-      const pFilesz = readU32(base + 16)
-      const pFlags = readU32(base + 24)
+      const pFilesz = readU32(base + 12)
+      const pFlags = readU32(base + 20)
+      const pAlign = readU32(base + 24)
+      if (pType === PT_LOAD && pAlign > 0 && (minLoadAlign === 0 || pAlign < minLoadAlign)) minLoadAlign = pAlign
       if (pType === PT_GNU_STACK && (pFlags & PF_X) !== 0) executableStack = true
       if (pType === PT_GNU_RELRO) hasRelro = true
       if (pType === PT_DYNAMIC) {
@@ -173,6 +195,30 @@ export function analyzeElf(bytes: Uint8Array): ElfHardening {
   const credentialMarkers = CREDENTIAL_MARKERS.filter((marker) => bytesContainAscii(bytes, marker))
   const packed = detectPacked(bytes)
 
+  // 危险导入符号(字节级——与既有启发式同口径):常量表此前定义未接线,现在真实接入
+  const jniDangerousFunctions = JNI_DANGEROUS_FUNCTIONS
+    .filter((entry) => bytesContainAscii(bytes, entry.marker))
+    .map((entry) => entry.title)
+  const bufferOverflowFunctions = BUFFER_OVERFLOW_FUNCTIONS
+    .filter((entry) => bytesContainAscii(bytes, entry.marker))
+    .map((entry) => entry.title)
+
+  // .rodata 内嵌 URL:提取 http(s):// 字面量,排除 XML 命名空间/架构噪声,去重封顶 16
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes)
+  const urlMatches = text.match(/https?:\/\/[A-Za-z0-9._~:/?#[\]@!$&'()*+,;=%-]{4,200}/g) ?? []
+  const embeddedUrls = [...new Set(urlMatches
+    .filter((u) => !u.includes("schemas.android.com") && !u.includes("apache.org") && !u.includes("w3.org"))
+    .map((u) => u.replace(/[.,;)\]]+$/, "")))].slice(0, 16)
+
+  // 内嵌密钥格式(结构化特征——比 credentialMarkers 前缀扫描更具体)
+  const keyPatterns: ReadonlyArray<{ name: string; re: RegExp }> = [
+    { name: "google-api-key", re: /AIza[0-9A-Za-z_-]{35}/ },
+    { name: "aws-access-key", re: /AKIA[0-9A-Z]{16}/ },
+    { name: "jwt-token", re: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ },
+    { name: "hardcoded-assignment", re: /(?:api[_-]?key|secret|token|passwd|password)\s*[=:]\s*["'][A-Za-z0-9+/]{16,}["']/i },
+  ]
+  const embeddedKeyHits = keyPatterns.filter((p) => p.re.test(text)).map((p) => p.name)
+
   return {
     bits: is64 ? 64 : 32,
     executableStack,
@@ -184,6 +230,13 @@ export function analyzeElf(bytes: Uint8Array): ElfHardening {
     debugInfo,
     credentialMarkers,
     ...(packed ? { packed } : {}),
+    // 无 PT_LOAD 段(极异常)时无从判定违规,按未观察到违规处理;minLoadAlign 保留判据
+    pageAlign16k: minLoadAlign === 0 ? true : minLoadAlign >= 16384,
+    minLoadAlign,
+    jniDangerousFunctions,
+    bufferOverflowFunctions,
+    embeddedUrls,
+    embeddedKeyHits,
   }
 }
 
@@ -267,6 +320,17 @@ export function buildSoFindings(library: string, hardening: ElfHardening): Findi
       evidence: library,
     })
   }
+  // 16KB 页对齐(Google Play 2025-11 起 64 位库强制——未适配的库在新设备上加载失败且商店拒收)
+  if (!hardening.pageAlign16k) {
+    findings.push({
+      severity: "high",
+      code: "SO_PAGE_ALIGN_16K",
+      title: "Native 库 16KB 页对齐不达标（Google Play 2025-11 强制）",
+      detail: `${library} 的 PT_LOAD 段最小 p_align 为 ${hardening.minLoadAlign}B（< 16384）。Google Play 自 2025-11 起对 64 位库强制 16KB 页对齐——未适配的库在 16KB 页设备（Pixel 8+ 等）上 System.loadLibrary 直接失败，商店提交被拒。`,
+      recommendation: "NDK r27+ 编译（默认 16KB 对齐），或链接时加 -Wl,-z,max-page-size=16384；产物用 verify-16KB 工具复核。",
+      evidence: `${library} minAlign=${hardening.minLoadAlign}`,
+    })
+  }
   if (hardening.unstripped) {
     findings.push({
       severity: "low",
@@ -304,6 +368,50 @@ export function buildSoFindings(library: string, hardening: ElfHardening): Findi
       detail: `${library} 字节中发现 ${marker} 开头的凭据格式串（AKIA/AIza/ghp_/私钥块等）。可能是真实密钥，也可能是测试样例。`,
       recommendation: "确认 .so 内是否存在真实凭据；真实密钥应移入服务端或安全存储，勿编译进客户端。",
       evidence: `${library} marker=${marker}`,
+    })
+  }
+
+  // 危险导入符号(此前常表未接线,现真实输出)
+  for (const title of hardening.jniDangerousFunctions) {
+    findings.push({
+      severity: title.includes("RegisterNatives") ? "medium" : "low",
+      code: "SO_JNI_DANGEROUS",
+      title: `Native 库使用需核对的 JNI 函数：${title}`,
+      detail: `${library} 引用 ${title}。动态注册可隐藏入口点、Critical 区调用阻塞 GC——需人工核实用法是否正当。`,
+      recommendation: "核对调用场景：RegisterNatives 的注册表是否含未公开逻辑；Critical 区是否极短且严格配对释放。",
+      evidence: `${library} ${title}`,
+    })
+  }
+  for (const title of hardening.bufferOverflowFunctions) {
+    findings.push({
+      severity: "medium",
+      code: "SO_BUFFER_OVERFLOW_RISK",
+      title: `Native 库引用无边界检查函数：${title}`,
+      detail: `${library} 引用 ${title}——经典缓冲区溢出向量。引用可能是误报(编译器优化替代)，需结合调用点核实。`,
+      recommendation: "替换为带边界版本(strncpy/snprintf/fgets)；无法替换处审计输入长度约束。",
+      evidence: `${library} ${title}`,
+    })
+  }
+
+  // 内嵌 URL/密钥(结构化特征)
+  if (hardening.embeddedUrls.length > 0) {
+    findings.push({
+      severity: "info",
+      code: "SO_EMBEDDED_URL",
+      title: `Native 库内嵌 ${hardening.embeddedUrls.length} 个 URL`,
+      detail: `${library} 字节中发现: ${hardening.embeddedUrls.slice(0, 6).join(", ")}${hardening.embeddedUrls.length > 6 ? " 等" : ""}。可能是 SDK 端点，也可能是硬编码后门/C2 通道。`,
+      recommendation: "核对每个 URL 归属：未知域名的硬编码端点需排查；正常端点建议改为可配置。",
+      evidence: `${library} urls=${hardening.embeddedUrls.length}`,
+    })
+  }
+  for (const hit of hardening.embeddedKeyHits) {
+    findings.push({
+      severity: "high",
+      code: "SO_EMBEDDED_KEY_FORMAT",
+      title: `Native 库内嵌结构化密钥格式(${hit})`,
+      detail: `${library} 字节匹配 ${hit} 格式。结构化密钥(完整 API key/JWT/AKIA)误报率远低于随机串——大概率是真实凭据编译进了二进制。`,
+      recommendation: "立即轮换该密钥并移出客户端(服务端代理或安全存储)；已提交仓库/发布的密钥视为已泄露。",
+      evidence: `${library} format=${hit}`,
     })
   }
 
