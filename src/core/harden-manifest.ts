@@ -3,6 +3,8 @@ import { DroidSealError } from "./errors.ts"
 
 // Android binary AndroidManifest.xml (AXML) attribute resource id for android:debuggable.
 const DEBUGGABLE_RES_ID = 0x0101000f
+// android:allowBackup resource id (framework attribute).
+const ALLOW_BACKUP_RES_ID = 0x01010280
 // Compact resource types used in AXML typed values.
 const TYPE_INT_BOOLEAN = 0x12
 const BOOL_TRUE = 0xffffffff
@@ -165,6 +167,54 @@ export function flipDebuggableInAxml(axml: Uint8Array): boolean {
     cursor += chunkSize
   }
   return false
+}
+
+// Locate the resource-map index whose value equals the given attribute resId, then flip
+// any matching START_TAG boolean attribute from true to false in place. Length-preserving.
+function flipBooleanAttrInAxml(axml: Uint8Array, resId: number): boolean {
+  const view = new DataView(axml.buffer, axml.byteOffset, axml.byteLength)
+  if (axml.byteLength < 8 || view.getUint16(0, true) !== CHUNK_XML) {
+    throw zipError("AXML_INVALID", "AndroidManifest.xml 不是有效的二进制 XML", "文件头 magic 不匹配。")
+  }
+
+  let attrIndex = -1
+  let cursor = 8 // skip XML chunk header (type + headerSize + fileSize)
+  const end = axml.byteLength
+
+  while (cursor + 8 <= end) {
+    const type = view.getUint16(cursor, true)
+    const chunkSize = view.getUint32(cursor + 4, true)
+    if (chunkSize < 8 || cursor + chunkSize > end) break
+
+    if (type === CHUNK_RESOURCE_MAP) {
+      const count = (chunkSize - 8) / 4
+      for (let i = 0; i < count; i += 1) {
+        if (view.getUint32(cursor + 8 + i * 4, true) === resId) {
+          attrIndex = i
+          break
+        }
+      }
+    } else if (type === CHUNK_START_TAG && attrIndex >= 0) {
+      const attrStart = view.getUint16(cursor + 24, true)
+      const attrCount = view.getUint16(cursor + 28, true)
+      const attrBase = cursor + 16 + attrStart
+      for (let a = 0; a < attrCount; a += 1) {
+        const attr = attrBase + a * 20
+        if (attr + 20 > end) break
+        if (view.getUint32(attr + 4, true) !== attrIndex) continue
+        if (view.getUint8(attr + 15) === TYPE_INT_BOOLEAN && view.getUint32(attr + 16, true) === BOOL_TRUE) {
+          view.setUint32(attr + 16, BOOL_FALSE, true)
+          return true
+        }
+      }
+    }
+    cursor += chunkSize
+  }
+  return false
+}
+
+export function flipAllowBackupInAxml(axml: Uint8Array): boolean {
+  return flipBooleanAttrInAxml(axml, ALLOW_BACKUP_RES_ID)
 }
 
 export function crc32Of(bytes: Uint8Array): number {
@@ -369,4 +419,69 @@ export async function flipDebuggableFalse(
 
   await Bun.write(outputApk, buildZip(out))
   return { changed: true }
+}
+
+// Shared APK-level rewrite: apply an in-place AXML edit to AndroidManifest.xml and
+// rebuild the ZIP (entry order, methods, flags preserved).
+async function rewriteManifestApk(
+  inputApk: string,
+  outputApk: string,
+  edit: (axml: Uint8Array) => boolean,
+): Promise<{ changed: boolean }> {
+  const bytes = await readWholeFile(inputApk)
+  const entries = parseRawZip(bytes)
+  const manifest = entries.find((entry) => entry.name === MANIFEST_NAME)
+  if (!manifest) {
+    throw zipError("MANIFEST_MISSING", "APK 内缺少 AndroidManifest.xml", "该文件可能不是标准 APK。")
+  }
+
+  const axml = inflateEntry(manifest)
+  if (!edit(axml)) return { changed: false }
+
+  const out: OutEntry[] = entries.map((entry) => {
+    if (entry.name !== MANIFEST_NAME) {
+      return {
+        name: entry.name,
+        method: entry.method,
+        crc32: entry.crc32,
+        compressedSize: entry.compressedSize,
+        uncompressedSize: entry.uncompressedSize,
+        flags: entry.flags,
+        data: entry.data,
+      }
+    }
+    if (entry.method === 8) {
+      const deflated = new Uint8Array(deflateRawSync(axml, { level: 9 }))
+      return {
+        name: entry.name,
+        method: 8,
+        crc32: crc32Of(axml),
+        compressedSize: deflated.byteLength,
+        uncompressedSize: axml.byteLength,
+        flags: entry.flags,
+        data: deflated,
+      }
+    }
+    return {
+      name: entry.name,
+      method: 0,
+      crc32: crc32Of(axml),
+      compressedSize: axml.byteLength,
+      uncompressedSize: axml.byteLength,
+      flags: entry.flags,
+      data: axml,
+    }
+  })
+
+  await Bun.write(outputApk, buildZip(out))
+  return { changed: true }
+}
+
+// Flip android:allowBackup from true to false in the APK's binary manifest and write a new APK.
+// Returns { changed:false } when the attribute is absent or already false.
+export async function flipAllowBackupFalse(
+  inputApk: string,
+  outputApk: string,
+): Promise<{ changed: boolean }> {
+  return rewriteManifestApk(inputApk, outputApk, flipAllowBackupInAxml)
 }
