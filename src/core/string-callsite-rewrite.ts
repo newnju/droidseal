@@ -177,7 +177,9 @@ export async function rewriteStringCallsites(
       if (i === undefined) return whole
       rewrittenCallsites += 1
       fileTouched = true
-      return `invoke-static {${reg}}, L${packageName.replace(/\./g, "/")}/DroidSealStringDecryptor;->decrypt(I)Ljava/lang/String;\n    move-result-object ${reg}`
+      // decrypt(I) 收索引:先 const/16 装载索引再 invoke,结果存回同寄存器
+      // (索引上限 maxEncrypt=200 < 32768,const/16 安全)
+      return `const/16 ${reg}, ${i}\n    invoke-static {${reg}}, L${packageName.replace(/\./g, "/")}/DroidSealStringDecryptor;->decrypt(I)Ljava/lang/String;\n    move-result-object ${reg}`
     })
     if (fileTouched) {
       await writeFile(file, out, "utf8")

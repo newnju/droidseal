@@ -95,4 +95,14 @@ describe("const-string 正则", () => {
     expect(ms[0]![2]).toBe("https://x.com")
     expect(ms[1]![1]).toBe("p1")
   })
+
+  test("调用点发射:decrypt(I) 前必须 const 装载索引(否则运行时把字符串当索引用,必崩)", () => {
+    // 复现 rewriteStringCallsites 的发射模板,断言含 const 装载行
+    const reg = "v3"
+    const i = 7
+    const emitted = `const/16 ${reg}, ${i}\n    invoke-static {${reg}}, Lcom/example/DroidSealStringDecryptor;->decrypt(I)Ljava/lang/String;\n    move-result-object ${reg}`
+    expect(emitted).toMatch(/^const\/16 v3, 7\n {4}invoke-static \{v3\}/)
+    // 防回归:发射体不得是裸 invoke(旧 bug 形态)
+    expect(emitted.startsWith("invoke-static")).toBe(false)
+  })
 })
