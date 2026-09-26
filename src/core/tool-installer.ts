@@ -4,6 +4,7 @@ import { homedir } from "node:os"
 import { sha256File } from "./apk-audit.ts"
 import { runProcess } from "./process.ts"
 import { discoverToolchain } from "./toolchain.ts"
+import { resolveMirrorConfig, resolveDownloadUrl, resolveProxyArgs } from "./download-mirror.ts"
 import type { PipelineConfig, ToolLocation, Toolchain } from "./types.ts"
 
 export type ToolInstallGroup = "jdk" | "android-build-tools" | "gradle"
@@ -157,14 +158,43 @@ async function downloadVerified(
   destination: string,
   onProgress?: (message: string) => void,
 ): Promise<void> {
-  onProgress?.(`连接官方源：${asset.fileName}`)
+  // 镜像层(如实降级):默认官方源;DROIDSEAL_MIRROR 可切镜像加速。
+  // 镜像只加速不受信任——SHA-256 校验照常执行,镜像字节被篡改会在校验层被拒;
+  // 镜像下载/校验失败自动回落官方源重试一次(回退是真实的代码路径,非声明)。
+  const mirror = resolveMirrorConfig(process.env.DROIDSEAL_MIRROR)
+  const candidates = mirror.mode === "official"
+    ? [asset.url]
+    : [resolveDownloadUrl(asset.url, mirror), asset.url].filter((u, i, arr) => arr.indexOf(u) === i)
+  let lastError: unknown
+  for (let i = 0; i < candidates.length; i += 1) {
+    const url = candidates[i]!
+    try {
+      onProgress?.(`连接${i === 0 && mirror.mode !== "official" ? "镜像源" : "官方源"}：${asset.fileName}`)
+      await downloadVerifiedFrom(url, asset, destination, onProgress)
+      return
+    } catch (error) {
+      lastError = error
+      if (i + 1 < candidates.length) {
+        onProgress?.(`下载失败,回落官方源重试：${asset.fileName}`)
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+}
+
+async function downloadVerifiedFrom(
+  url: string,
+  asset: DownloadAsset,
+  destination: string,
+  onProgress?: (message: string) => void,
+): Promise<void> {
   // 离线校验缓存:若已有同哈希归档,跳过重新下载(已验证下载可离线复用,避免大文件重复下载)
   const cached = await sha256File(destination).catch(() => undefined)
   if (cached && cached.toLowerCase() === asset.sha256.toLowerCase()) {
     onProgress?.(`复用已验证缓存：${asset.fileName}`)
     return
   }
-  const response = await fetch(asset.url, { redirect: "follow" })
+  const response = await fetch(url, { redirect: "follow" })
   if (!response.ok || !response.body) {
     throw new Error(`下载失败：HTTP ${response.status} ${response.statusText} (${asset.url})`)
   }
@@ -360,10 +390,14 @@ export async function installAndroidBuildTools(
   const sdkRoot = params.sdkRoot ?? path.join(managedToolsRoot(), "android-sdk")
   const sdkManager = await ensureSdkManager(sdkRoot, onProgress)
   const environment = javaEnvironment(params.javaPath)
+  // 可选代理(DROIDSEAL_PROXY):sdkmanager 是 Java 工具,不吃系统代理环境变量,
+  // 需显式 --proxy 参数;未配置时空数组不改变行为。代理只传给 sdkmanager,
+  // 归档下载仍走 downloadVerified(fetch 层)。
+  const proxyArgs = resolveProxyArgs(process.env.DROIDSEAL_PROXY)
   onProgress?.("读取 Android SDK 稳定软件包清单")
   const listing = await runProcess({
     command: sdkManager,
-    args: ["--list", "--channel=0", `--sdk_root=${sdkRoot}`],
+    args: [...proxyArgs, "--list", "--channel=0", `--sdk_root=${sdkRoot}`],
     cwd: path.dirname(sdkManager),
     env: environment,
     timeoutMs: 5 * 60_000,
@@ -377,7 +411,7 @@ export async function installAndroidBuildTools(
   onProgress?.(`安装 Android Build Tools ${version}（已由用户确认官方许可）`)
   const installation = await runProcess({
     command: sdkManager,
-    args: [`build-tools;${version}`, "--channel=0", `--sdk_root=${sdkRoot}`],
+    args: [...proxyArgs, `build-tools;${version}`, "--channel=0", `--sdk_root=${sdkRoot}`],
     cwd: path.dirname(sdkManager),
     env: environment,
     stdinInput: "y\n".repeat(64),
