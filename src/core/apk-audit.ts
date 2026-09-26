@@ -16,7 +16,7 @@ import { buildPermissionFindings, type CustomPermission } from "./permissions-ca
 import { buildPrivacyFindings } from "./privacy-collection.ts"
 import { buildPermissionRiskFindings, linkPermissionDataflow } from "./permission-risk.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey, type SecretPattern } from "./secret-scan.ts"
-import { extractDexStrings, scanDex, detectSdkPackages } from "./dex-scan.ts"
+import { extractDexStrings, scanDex, detectSdkPackages, detectSdkFingerprints } from "./dex-scan.ts"
 import { extractCalledMethods, extractCallGraph, callersOf } from "./dex-callgraph.ts"
 import { disassembleNamed } from "./dex-disassembler.ts"
 import { matchBehaviorRules, maliciousScore, buildBehaviorFindings, matchDeobfuscatedRules, type BehaviorRule, BUILTIN_BEHAVIOR_RULES, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
@@ -1058,13 +1058,23 @@ async function scanDexFiles(
   }
   const sdks = detectSdkPackages(combined)
   if (sdks.length > 0) {
+    // 指纹库 v2:带类别/采集注记的结构化明细(注记仅在指纹库有记录时输出)
+    const fps = detectSdkFingerprints(combined)
+    const withNotes = fps.filter((f) => f.note)
+    const catCounts = new Map<string, number>()
+    for (const f of fps) catCounts.set(f.category, (catCounts.get(f.category) ?? 0) + 1)
+    const catSummary = [...catCounts.entries()].sort((a, b) => b[1] - a[1]).map(([c, n]) => `${c}${n}`).join("/")
     findings.push({
       severity: "info",
       code: "SUPPLYCHAIN_SDK_INVENTORY",
-      title: "识别到的第三方 SDK（DEX 清单）",
+      title: `识别到的第三方 SDK(DEX 清单):${sdks.length} 个(${catSummary})`,
       detail:
-        `从 DEX 类型描述符识别到以下第三方 SDK（启发式，不做漏洞比对）：${sdks.join("、")}。用于供应链梳理，请自行核对版本与隐私合规。`,
-      recommendation: "维护第三方 SDK 清单，关注其权限/数据采集行为与已知漏洞公告，及时升级。",
+        `从 DEX 类型描述符识别到以下第三方 SDK(启发式,不做漏洞比对):${sdks.join("、")}。` +
+        (withNotes.length > 0
+          ? `其中需关注数据采集:${withNotes.map((f) => `${f.name}(${f.note})`).join(";")}。`
+          : "") +
+        `用于供应链梳理,请自行核对版本与隐私合规。`,
+      recommendation: "维护第三方 SDK 清单,关注其权限/数据采集行为与已知漏洞公告,及时升级;广告/统计类 SDK 是隐私合规审查重点。",
       evidence: sdks.join(", "),
     })
     findings.push(...compareKnownVulnerabilities(sdks))

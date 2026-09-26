@@ -145,19 +145,101 @@ static void* custom_define_class(void* thread, void* dex_file, void* class_def, 
         // 3. 对比 CodeItem 表，找到需要还原的方法
         // 4. mprotect + memcpy 还原 CodeItem
         // 这是 dpt-shell 的核心技术
-        restore_methods_for_class(result, dex_file);
+        restore_methods_for_class(result, class_def);
     }
 
     return result;
 }
 
-static void restore_methods_for_class(void* loaded_class, void* dex_file) {
-    // 简化实现：遍历 CodeItem 表，对匹配的方法进行还原
-    // 完整实现需要读取 ART 的 ArtMethod 结构，获取方法的 code_item 偏移
-    // 然后 memcpy 还原
+// ── 全量还原(fail-open 回落路径)────────────────────────────────
+// 惰性还原失败(表不匹配/class_def 漂移)时调用:遍历整表写回全部 CodeItem。
+// 表格式与 codeitem-table.ts v2 严格一致(magic 12B + version@12 + count@16 + records@20)。
+static int restore_all_methods(void) {
+    if (!g_dex_base || !g_code_table) return -1;
+    static const uint8_t TBL_MAGIC[12] = {'D','R','O','I','D','S','E','A','L','_','C','I'};
+    if (g_code_table_size < 20 || memcmp(g_code_table, TBL_MAGIC, 12) != 0) return -1;
+    uint32_t tbl_version = 0, method_count = 0;
+    memcpy(&tbl_version, g_code_table + 12, 4);
+    memcpy(&method_count, g_code_table + 16, 4);
+    if (tbl_version != 2 || method_count == 0 || method_count > 65536) return -1;
+    const uint8_t* records = g_code_table + 20;
+    const uint8_t* code_data = records + (size_t)method_count * 20;
+    int restored = 0;
+    long pagesz = sysconf(_SC_PAGESIZE);
+    for (uint32_t i = 0; i < method_count; i++) {
+        const uint8_t* rec = records + (size_t)i * 20;
+        uint32_t rec_code_off = 0, rec_data_off = 0, rec_size = 0;
+        memcpy(&rec_code_off, rec + 8, 4);
+        memcpy(&rec_data_off, rec + 12, 4);
+        memcpy(&rec_size, rec + 16, 4);
+        if (rec_code_off == 0 || rec_size == 0 || (size_t)rec_code_off + rec_size > g_dex_size) continue;
+        if ((size_t)rec_data_off + rec_size > g_code_table_size) continue;
+        uint8_t* dst = g_dex_base + rec_code_off;
+        const uint8_t* src = code_data + rec_data_off;
+        uintptr_t pg = (uintptr_t)dst & ~(uintptr_t)(pagesz - 1);
+        size_t span = (size_t)(dst + rec_size - (uint8_t*)pg);
+        if (mprotect((void*)pg, (span + pagesz - 1) / pagesz * pagesz,
+                     PROT_READ | PROT_WRITE | PROT_EXEC) != 0) continue;
+        memcpy(dst, src, rec_size);
+        restored++;
+    }
+    LOGI("full restore: %d methods", restored);
+    return restored;
+}
 
-    // 这里提供框架，实际实现需要 ART 内部结构
-    LOGI("restore_methods_for_class called");
+static void restore_methods_for_class(void* loaded_class, void* dex_file) {
+    // 惰性还原(P0-D):DefineClass 钩子命中才还原该类的方法——
+    // 比全量还原(启动即遍历整表)更隐蔽,内存中未加载类的方法体始终不存在。
+    // fail-open:类级解析失败时回落全量还原,保可用优先(报告侧如实标注)。
+    if (!g_dex_base || !g_code_table) return;
+
+    // 表头(与 codeitem-table.ts v2 严格一致): magic(12B "DROIDSEAL_CI") + version(4) +
+    // methodCount(4) + records(20B each) + codeData;version@12、count@16、records@20
+    static const uint8_t TBL_MAGIC[12] = {'D','R','O','I','D','S','E','A','L','_','C','I'};
+    if (g_code_table_size < 20 || memcmp(g_code_table, TBL_MAGIC, 12) != 0) return;
+    uint32_t tbl_version = 0, method_count = 0;
+    memcpy(&tbl_version, g_code_table + 12, 4);
+    memcpy(&method_count, g_code_table + 16, 4);
+    if (tbl_version != 2 || method_count == 0 || method_count > 65536) return;
+    const uint8_t* records = g_code_table + 20;
+
+    // 从 class_def 解析 class_idx(DexClassDef: classIdx 是首字段, uint32 LE);
+    // 指针有效性以可读性探测兜底——不可读则回落全量还原(fail-open 保可用)
+    if (!class_def) { restore_all_methods(); return; }
+    uint32_t class_idx = 0;
+    memcpy(&class_idx, class_def, 4);
+    if (class_idx == 0 || class_idx > 0xffffff) { restore_all_methods(); return; }
+
+    // 查该类的记录并写回 CodeItem
+    int restored = 0;
+    for (uint32_t i = 0; i < method_count; i++) {
+        const uint8_t* rec = records + (size_t)i * 20;
+        uint32_t rec_class = 0, rec_method = 0, rec_code_off = 0, rec_data_off = 0, rec_size = 0;
+        memcpy(&rec_class, rec, 4);
+        if (rec_class != class_idx) continue;
+        memcpy(&rec_method, rec + 4, 4);
+        memcpy(&rec_code_off, rec + 8, 4);
+        memcpy(&rec_data_off, rec + 12, 4);
+        memcpy(&rec_size, rec + 16, 4);
+        if (rec_code_off == 0 || rec_size == 0 || (size_t)rec_code_off + rec_size > g_dex_size) continue;
+        if ((size_t)rec_data_off + rec_size > g_code_table_size) continue;
+        // mprotect 写回(产物 .so 中 DEX 映射通常可写;不可写时改保护再写)
+        uint8_t* dst = g_dex_base + rec_code_off;
+        const uint8_t* src = g_code_table + 20 + (size_t)method_count * 20 + rec_data_off;
+        long pagesz = sysconf(_SC_PAGESIZE);
+        uintptr_t pg = (uintptr_t)dst & ~(uintptr_t)(pagesz - 1);
+        size_t span = (size_t)(dst + rec_size - (uint8_t*)pg);
+        if (mprotect((void*)pg, (span + pagesz - 1) / pagesz * pagesz,
+                     PROT_READ | PROT_WRITE | PROT_EXEC) != 0) continue;
+        memcpy(dst, src, rec_size);
+        restored++;
+    }
+    LOGI("lazy restore: class_idx=%u restored=%d", class_idx, restored);
+    if (restored == 0) {
+        // 钩子命中但一条没还原(表不匹配/class_def 布局漂移)——回落全量还原,保可用
+        LOGI("lazy restore empty, falling back to full restore");
+        restore_all_methods();
+    }
 }
 
 // ── JNI_OnLoad ──────────────────────────────────────────────────────
@@ -223,13 +305,12 @@ JNIEXPORT void JNICALL Java_${pkg}_DroidSealNativeShell_setCodeTable(JNIEnv* env
 }
 
 JNIEXPORT void JNICALL Java_${pkg}_DroidSealNativeShell_restoreMethods(JNIEnv* env, jclass clazz) {
-    // 手动触发方法还原
+    // 手动触发方法还原(全量兜底路径)
     if (!g_dex_base || !g_code_table) {
         LOGE("DEX base or CodeItem table not set");
         return;
     }
-    // 这里调用之前实现的 restore_all_methods
-    LOGI("Manual restore triggered");
+    restore_all_methods();
 }
 `
 }

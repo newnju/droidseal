@@ -222,5 +222,50 @@ export async function scanProjectDataflow(
       })
     }
   }
+  // ── 生命周期摘要(污点入口点视图)──────────────────────────────────
+  // 对全部文件的命中做二次聚合:按入口点上下文(生命周期/回调/普通)归组,
+  // 产出一条结构性摘要 finding——报告的污点段从"逐条罗列"升级为"入口点视图"。
+  // 摘要是聚合视图,不新增检测能力,confidence/severity 不高于其成员。
+  const summaryByFile = new Map<string, { lifecycle: number; callback: number; plain: number; vuln: number; sources: Set<string>; sinks: Set<string>; firstLine: number }>()
+  for (const file of files) {
+    const source = await readFile(file, "utf8").catch(() => "")
+    const matches = scanTaintFlow(source, customRules)
+    if (matches.length === 0) continue
+    const relative = path.relative(projectRoot, file).replaceAll("\\", "/")
+    const agg = { lifecycle: 0, callback: 0, plain: 0, vuln: 0, sources: new Set<string>(), sinks: new Set<string>(), firstLine: matches[0]!.line }
+    for (const m of matches) {
+      if (m.vuln) agg.vuln += 1
+      else if (m.lifecycle) agg.lifecycle += 1
+      else if (m.callback) agg.callback += 1
+      else agg.plain += 1
+      agg.sources.add(m.source)
+      agg.sinks.add(m.sink)
+    }
+    summaryByFile.set(relative, agg)
+  }
+  if (summaryByFile.size > 0) {
+    let lifecycleFiles = 0
+    let callbackFiles = 0
+    let vulnFiles = 0
+    const sources = new Set<string>()
+    const sinks = new Set<string>()
+    for (const [, agg] of summaryByFile) {
+      if (agg.lifecycle > 0) lifecycleFiles += 1
+      if (agg.callback > 0) callbackFiles += 1
+      if (agg.vuln > 0) vulnFiles += 1
+      for (const s of agg.sources) sources.add(s)
+      for (const s of agg.sinks) sinks.add(s)
+    }
+    const entryNote = `入口点分布:生命周期回调 ${lifecycleFiles} 个文件 / 动态注册回调 ${callbackFiles} 个文件 / 漏洞型汇 ${vulnFiles} 个文件(共 ${summaryByFile.size} 个文件命中)。`
+    findings.push({
+      severity: vulnFiles > 0 ? "medium" : "low",
+      confidence: "medium",
+      code: "TAINT_LIFECYCLE_SUMMARY",
+      title: `污点生命周期摘要:${summaryByFile.size} 个文件存在源→汇流(入口点视图)`,
+      detail: `污点分析汇总——${entryNote}源 API(${sources.size} 类):${[...sources].slice(0, 8).join(", ")}${sources.size > 8 ? "…" : ""};汇 API(${sinks.size} 类):${[...sinks].slice(0, 8).join(", ")}${sinks.size > 8 ? "…" : ""}。生命周期/回调内的流是污点分析的经典入口点(JAADAS 差距①⑱),优先核验;摘要为聚合视图,逐条明细见 SOURCE_DATAFLOW/SOURCE_LIFECYCLE_ENTRY/SOURCE_CALLBACK_ENTRY findings。`,
+      recommendation: "按入口点优先级核验:漏洞型汇 > 生命周期回调 > 动态回调 > 普通流;敏感数据在入口点集中脱敏优于在每处汇点分散处理。",
+      evidence: `files=${summaryByFile.size} lifecycle=${lifecycleFiles} callback=${callbackFiles} vuln=${vulnFiles} sources=${[...sources].slice(0, 5).join("|")} sinks=${[...sinks].slice(0, 5).join("|")}`,
+    })
+  }
   return findings
 }

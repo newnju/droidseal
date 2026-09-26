@@ -74,34 +74,67 @@ export function extractDexStrings(bytes: Uint8Array, maxStrings = 200_000): DexS
 }
 
 // Known third-party SDK package descriptor prefixes for the SBOM inventory (Tier3-J).
-const SDK_PREFIXES: ReadonlyArray<{ prefix: string; name: string }> = [
-  { prefix: "Lcom/google/firebase/", name: "Google Firebase" },
-  { prefix: "Lcom/google/android/gms/", name: "Google Play Services" },
-  { prefix: "Lcom/facebook/", name: "Facebook SDK" },
-  { prefix: "Lcom/umeng/", name: "友盟 Umeng" },
-  { prefix: "Lcom/bytedance/", name: "字节跳动 ByteDance" },
-  { prefix: "Lcom/tencent/", name: "腾讯 Tencent" },
-  { prefix: "Lcom/alipay/", name: "支付宝 Alipay" },
-  { prefix: "Lcom/amap/api/", name: "高德地图 AMap" },
-  { prefix: "Lcom/baidu/", name: "百度 Baidu" },
-  { prefix: "Lcom/squareup/okhttp", name: "OkHttp" },
-  { prefix: "Lretrofit2/", name: "Retrofit" },
-  { prefix: "Lcom/bumptech/glide/", name: "Glide" },
-  { prefix: "Lio/reactivex/", name: "RxJava" },
-  { prefix: "Lcom/appsflyer/", name: "AppsFlyer" },
-  { prefix: "Lcom/adjust/sdk/", name: "Adjust" },
+// 指纹库 v2:每条带类别与风险注记(数据采集/已知问题),供 SUPPLYCHAIN_SDK_INVENTORY
+// 输出结构化明细——纯前缀表只能报名字,审阅者仍需逐个查背景。
+export interface SdkFingerprint {
+  prefix: string
+  name: string
+  category: "统计" | "广告" | "推送" | "支付" | "地图" | "网络" | "UI" | "社交" | "崩溃" | "云服务"
+  /** 数据采集/权限注记(空串=无已知显著采集) */
+  note?: string
+}
+
+export const SDK_FINGERPRINTS: ReadonlyArray<SdkFingerprint> = [
+  { prefix: "Lcom/google/firebase/", name: "Google Firebase", category: "云服务", note: "采集设备标识/使用统计" },
+  { prefix: "Lcom/google/android/gms/", name: "Google Play Services", category: "云服务" },
+  { prefix: "Lcom/facebook/", name: "Facebook SDK", category: "社交", note: "采集设备标识/社交图谱" },
+  { prefix: "Lcom/umeng/", name: "友盟 Umeng", category: "统计", note: "采集设备标识/位置;国内合规审查重点" },
+  { prefix: "Lcom/bytedance/", name: "字节跳动 ByteDance", category: "广告", note: "广告追踪;采集设备标识/使用行为" },
+  { prefix: "Lcom/tencent/", name: "腾讯 Tencent", category: "社交" },
+  { prefix: "Lcom/alipay/", name: "支付宝 Alipay", category: "支付" },
+  { prefix: "Lcom/amap/api/", name: "高德地图 AMap", category: "地图", note: "采集位置" },
+  { prefix: "Lcom/baidu/", name: "百度 Baidu", category: "地图", note: "采集位置/设备标识" },
+  { prefix: "Lcom/squareup/okhttp/", name: "OkHttp", category: "网络" },
+  { prefix: "Lretrofit2/", name: "Retrofit", category: "网络" },
+  { prefix: "Lcom/bumptech/glide/", name: "Glide", category: "UI" },
+  { prefix: "Lio/reactivex/", name: "RxJava", category: "UI" },
+  { prefix: "Lcom/appsflyer/", name: "AppsFlyer", category: "统计", note: "归因追踪;采集广告标识/设备信息" },
+  { prefix: "Lcom/adjust/sdk/", name: "Adjust", category: "统计", note: "归因追踪;采集广告标识" },
+  // 指纹库 v2 扩充(国内常用 + 隐私敏感大户)
+  { prefix: "Lcn/jpush/", name: "极光推送 JPush", category: "推送", note: "采集设备标识;后台常驻" },
+  { prefix: "Lcn/umeng/", name: "友盟 Umeng(cn)", category: "统计", note: "同 com/umeng" },
+  { prefix: "Lcom/getui/", name: "个推 Getui", category: "推送", note: "采集设备标识" },
+  { prefix: "Lcn/leancloud/", name: "LeanCloud", category: "云服务" },
+  { prefix: "Lcom/bugly/", name: "Bugly", category: "崩溃", note: "采集设备标识/崩溃日志" },
+  { prefix: "Lcom/crashlytics/", name: "Crashlytics", category: "崩溃", note: "采集设备标识/崩溃日志" },
+  { prefix: "Lio/sentry/", name: "Sentry", category: "崩溃", note: "崩溃日志可能含敏感参数" },
+  { prefix: "Lcom/unity3d/", name: "Unity Ads", category: "广告", note: "广告追踪" },
+  { prefix: "Lcom/ironsource/", name: "ironSource", category: "广告", note: "广告追踪" },
+  { prefix: "Lcom/mopub/", name: "MoPub", category: "广告", note: "广告追踪(已停止维护——供应链风险)" },
+  { prefix: "Lcom/flurry/", name: "Flurry", category: "统计", note: "采集设备标识/使用统计" },
+  { prefix: "Lcom/amazon/identity/", name: "Amazon Auth", category: "云服务" },
+  { prefix: "Lcom/huawei/", name: "华为 HMS", category: "云服务" },
+  { prefix: "Lcom/xiaomi/", name: "小米 SDK", category: "推送" },
+  { prefix: "Lcom/meituan/", name: "美团 SDK", category: "地图", note: "采集位置" },
+  { prefix: "Lcom/ss/android/", name: "穿山甲 CSJ", category: "广告", note: "广告追踪;采集设备标识(国内合规审查重点)" },
+  { prefix: "Lcom/qq/e/", name: "广点通 GDT", category: "广告", note: "广告追踪" },
 ]
 
 // Best-effort third-party SDK detection from type descriptors. Returns display names.
 export function detectSdkPackages(strings: Iterable<string>): string[] {
-  const found = new Set<string>()
+  return [...detectSdkFingerprints(strings)].map((f) => f.name).sort()
+}
+
+// 指纹库 v2:返回命中的完整指纹(带类别/注记),供结构化 SBOM 输出。
+export function detectSdkFingerprints(strings: Iterable<string>): SdkFingerprint[] {
+  const found = new Map<string, SdkFingerprint>()
   for (const value of strings) {
     if (value.length === 0 || value.charCodeAt(0) !== 0x4c /* 'L' */) continue
-    for (const sdk of SDK_PREFIXES) {
-      if (value.startsWith(sdk.prefix)) found.add(sdk.name)
+    for (const sdk of SDK_FINGERPRINTS) {
+      if (value.startsWith(sdk.prefix)) found.set(sdk.name, sdk)
     }
   }
-  return [...found].sort()
+  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // Scan the combined string pool of one or more DEX files for heuristic risks.
