@@ -88,6 +88,8 @@ function usage(): string {
                            离线/被拒则解密失败。丢失 server-challenge.json 该构建永久无法解密
 
 通用选项:
+  --use-cn-mirror          官方源下载受阻时直接切换国内镜像重试(预应答,免交互;
+                           等价 DROIDSEAL_MIRROR=cn。交互终端下受阻时也会主动询问)
   --json                   JSON 格式输出(适合 CI/CD)
 
 batch 子命令:
@@ -109,6 +111,12 @@ TUI 内置命令:
 }
 
 // ── 命令分发 ──────────────────────────────────────────────────────────
+
+// --use-cn-mirror 预应答开关:脚本化/CI 场景下免去交互询问——官方源受阻时
+// 直接按国内镜像重试,等价于提前回答"切换"。显式 DROIDSEAL_MIRROR 优先。
+if (hasFlag("--use-cn-mirror") && !process.env.DROIDSEAL_MIRROR) {
+  process.env.DROIDSEAL_MIRROR = "cn"
+}
 
 if (hasFlag("--help") || hasFlag("-h")) { console.log(usage()); process.exit(0) }
 if (hasFlag("--version") || hasFlag("-v")) { console.log(VERSION); process.exit(0) }

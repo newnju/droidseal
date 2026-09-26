@@ -120,7 +120,12 @@ export function isInteractiveStdin(): boolean {
  * 60s 无输入超时按拒绝处理——终端挂着不回应时流水线不应永久等待。
  */
 export async function promptMirrorSwitch(fileName: string): Promise<boolean> {
-  if (!isInteractiveStdin()) return false
+  if (!isInteractiveStdin()) {
+    // 非 TTY 的专门提示(仅一行 stderr,不阻塞):脚本化/CI 用户需要知道
+    // 存在切换选项——重跑加 --use-cn-mirror 或设 DROIDSEAL_MIRROR=cn 即可。
+    console.error(`提示: ${fileName} 官方源下载受阻。非交互环境不询问——重跑时加 --use-cn-mirror 或设 DROIDSEAL_MIRROR=cn 可切换国内镜像重试。`)
+    return false
+  }
   try {
     const { createInterface } = await import("node:readline/promises")
     const rl = createInterface({ input: process.stdin, output: process.stderr })
