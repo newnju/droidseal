@@ -540,7 +540,133 @@ int dsvm_execute_leaf(const uint8_t* code, size_t code_len,
 `
 }
 
-// ── Finding 生成 ──────────────────────────────────────────────────────
+// ── 里程碑 B:RegisterNatives 注入桥(代码路径,真机验收前 vmProtected 恒 false)──
+// 语义:壳初始化(JNI_OnLoad)时,把被 VM 化的方法经 RegisterNatives 注册为
+// native 实现——dispatch 进 VM 解释器执行,替代原 Dalvik 代码路径。
+// 诚实边界:本生成器只产出桥 C 代码(可编译、可单测字符串断言);
+// 真机矩阵(API 24-35)验收通过前,vmProtected 维持 false——stub 的 ACC_NATIVE
+// 标记与桥注册是否在真机生效,属于运行时行为,构建期无法证实。
+
+export interface VmBridgeEntry {
+  /** 混淆后的 native 桩方法名(壳 DEX 中 stub 方法的注册名) */
+  stubName: string
+  /** 完整 Dalvik 签名,如 "(II)I" */
+  signature: string
+  /** VM payload 中该方法的 method_idx(运行时查表键) */
+  methodIdx: number
+}
+
+/**
+ * 生成 RegisterNatives 桥 C 代码:JNINativeMethod 表 + 注册函数 + VM 分发。
+ * 分发函数按 methodIdx 从 payload 表查 VM 字节码,调 dsvm_execute_leaf 执行;
+ * 未收录的方法 idx 如实返回 0 并打日志(fail-open 保可用,与惰性还原同口径)。
+ */
+export function generateVmRegisterBridgeC(entries: VmBridgeEntry[]): string {
+  const tableRows = entries
+    .map((e) => `    { "${e.stubName}", "${e.signature}", ${e.methodIdx} },`)
+    .join("\n")
+  return `// DroidSeal VMP-lite RegisterNatives 桥(里程碑 B,构建期自动生成,勿手动修改)
+// 语义:注册 VM 化方法为 native 实现,dispatch 进解释器(与 executeVmLeaf 对拍)。
+// 诚实边界:未过真机矩阵验收前,构建侧 vmProtected 保持 false——本文件存在
+// 不等于注入生效;生效与否由 device-test.sh --vm-mode 真机断言背书。
+#include <jni.h>
+#include <stdint.h>
+#include <string.h>
+#include <android/log.h>
+
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "DroidSealVMP", __VA_ARGS__)
+
+/* 与 vmp-compiler.ts generateVmInterpreterC 同一执行端(链接期合并) */
+extern int dsvm_execute_leaf(const uint8_t* code, size_t code_len,
+                             int32_t initial, int32_t* out_result);
+
+/* VM payload 运行时布局(与 serializeVmPayload 一致):
+ * "DROIDSEAL_VMP"(14B) + method_count(4B LE) + [method_idx(4B) + code_len(4B) + code]* */
+static const uint8_t* g_vm_payload = NULL;
+static size_t g_vm_payload_len = 0;
+
+/* 查表:method_idx → VM 字节码;未收录返回 NULL(如实,不假执行) */
+static const uint8_t* vm_lookup(uint32_t method_idx, size_t* out_len) {
+    if (g_vm_payload == NULL || g_vm_payload_len < 18) return NULL;
+    if (memcmp(g_vm_payload, "DROIDSEAL_VMP", 13) != 0) return NULL;
+    uint32_t count;
+    memcpy(&count, g_vm_payload + 14, 4);
+    size_t pos = 18;
+    for (uint32_t i = 0; i < count; i++) {
+        if (pos + 8 > g_vm_payload_len) return NULL;
+        uint32_t idx, len;
+        memcpy(&idx, g_vm_payload + pos, 4);
+        memcpy(&len, g_vm_payload + pos + 4, 4);
+        pos += 8;
+        if (pos + len > g_vm_payload_len) return NULL;
+        if (idx == method_idx) { *out_len = len; return g_vm_payload + pos; }
+        pos += len;
+    }
+    return NULL;
+}
+
+/* 统一分发:int 返回值叶子方法(叶子子集均为算术,入参取 jint 压缩) */
+static jint vm_dispatch_leaf(JNIEnv* env, jclass clazz, jint arg, jint method_idx) {
+    (void)env; (void)clazz;
+    size_t len = 0;
+    const uint8_t* code = vm_lookup((uint32_t)method_idx, &len);
+    if (code == NULL) {
+        LOGI("vm_dispatch_leaf: method %u not in payload (fail-open)", method_idx);
+        return 0;
+    }
+    int32_t result = 0;
+    if (dsvm_execute_leaf(code, len, arg, &result) != 0) {
+        LOGI("vm_dispatch_leaf: method %u execution failed (fail-closed)", method_idx);
+        return 0;
+    }
+    return result;
+}
+
+/* 每个 VM 化方法一个 thunk:按注册表 methodIdx 预置分发参数 */
+${entries.map((e, i) => `static jint JNICALL vm_thunk_${i}(JNIEnv* env, jclass clazz, jint arg) {
+    return vm_dispatch_leaf(env, clazz, arg, ${e.methodIdx});
+}`).join("\n")}
+
+static JNINativeMethod g_bridge_table[] = {
+${tableRows}
+};
+static void* g_thunks[] = {
+${entries.map((_, i) => `    (void*)vm_thunk_${i},`).join("\n")}
+};
+
+/* 壳初始化时调用:把 VM 化方法注册为 native(经 FindClass 定位壳桩类) */
+int dsvm_register_vm_bridge(JNIEnv* env, jclass stub_class) {
+    for (size_t i = 0; i < sizeof(g_bridge_table) / sizeof(g_bridge_table[0]); i++) {
+        g_bridge_table[i].fnPtr = g_thunks[i];
+    }
+    jint n = sizeof(g_bridge_table) / sizeof(g_bridge_table[0]);
+    if (stub_class == NULL) { LOGI("vm bridge: stub class null, skip"); return -1; }
+    if ((*env)->RegisterNatives(env, stub_class, g_bridge_table, n) != JNI_OK) {
+        LOGI("vm bridge: RegisterNatives failed");
+        return -1;
+    }
+    LOGI("vm bridge: %d methods registered", (int)n);
+    return 0;
+}
+
+/* payload 注入点(壳 setCodeTable 侧调用) */
+void dsvm_set_vm_payload(const uint8_t* data, size_t len) {
+    g_vm_payload = data;
+    g_vm_payload_len = len;
+}
+`
+}
+
+// stub native 标记(DEX 侧):VM 化方法在壳 DEX 中必须带 ACC_NATIVE(0x0100),
+// 否则 ART 走解释 Dalvik 路径,RegisterNatives 注册无效。
+// 输入 access_flags,输出置位后的 flags(幂等,已置位原样返回)。
+export const ACC_NATIVE = 0x0100
+export function markStubNative(accessFlags: number): number {
+  return accessFlags | ACC_NATIVE
+}
+export function isStubNative(accessFlags: number): boolean {
+  return (accessFlags & ACC_NATIVE) !== 0
+}
 
 export function buildVmpCompilerFindings(compiledCount: number, totalPayloadSize: number): Finding[] {
   if (compiledCount === 0) return []
