@@ -82,6 +82,32 @@ Android 安全工具分两条赛道：**审计**（MobSF、AndroBugs、APKiD—�
 
 **一句话总结**：作为离线"审计→加固→签名→验证"流水线没有对手；加固强度居中游；密钥化防御是差异化亮点；成熟度是最大短板。
 
+## 实测能力(基准数字,不是宣称)
+
+以下数字全部来自 [`benchmark/`](benchmark/README.md) 下可复现的基准 harness;每项都随附测量口径——与工具对自身 finding 的要求同一纪律。
+
+**审计(静态分析)**
+
+| 能力 | 实测 | 口径 |
+|---|---|---|
+| 恶意流检测(TaintBench,39 app / 249 条 GT 流) | 端点级 TP 171/249(68.7%),流级 TP 136 | 端点级 = GT 类中出现 target API;流级 = 两端同时命中 |
+| 误报率(434 个良性 app,AndroZoo VT=0 代理) | 数据流引擎层 FP = **0**(95% CI 上界 0.69%) | 只认数据流层;辅助配置类提示单列 |
+| 检测器基座(源码/配置/加固模式) | 379 条检测器,内置 38 用例基准精确率 76.9% / 召回 90.9% | 模式级,MSTG 映射 |
+| JNI 动态注册恢复 | 注册表字符串邻近共现 + DEX 交叉验证 | 新 finding 类 `JNI_DYNAMIC_REGISTER`;静态符号扫描不可见的 native 攻击面 |
+| native 线性数据流 | JNI 导出函数体 source→sink 共现 | **线性启发式,非指针分析**;设计上 `confidence: low` |
+
+**加固(发布 APK,可选)**
+
+| 层 | 状态 |
+|---|---|
+| DEX payload 加密(AES-256-GCM + HKDF,密钥化锚点 P0-A/B/C) | 已交付;模拟器验收通过(SEC-010/011/012 经真机闭环修复) |
+| 方法抽取(code-item hollowing)+ 惰性还原 | 已交付;fail-open 回落全量还原 |
+| 字符串加密 + 调用点改写(MUTF-8 安全密文 + 校验和重算) | 已交付;写回 apktool fail-closed |
+| VMP-lite | 里程碑 A 已交付(叶子方法解释器,TS/C 对拍 12 测试);**里程碑 B(RegisterNatives 桥 + stub `ACC_NATIVE` 标记)仅为构建期代码——真机矩阵(API 24–35)验收通过前 `vmProtected` 恒 false** |
+| 密钥化防御(完整性锚点/环境门控/密钥分片/服务端写战) | 已交付,如实边界见下文加固章节 |
+
+**数字的如实边界**:TaintBench 行号与 jadx 行号不同源(230 端点仅 6 个精确)——连通级对判因此分严格档(行号 ±2,历史上为 0)与宽松档(类词干对齐,66/249)双档呈现;宽松档不可单独引用。混淆 GT 方法名(`i`,31 处)仅当包装方法体恰含一个已知 source/sink API 时才恢复;歧义情形如实放弃,不猜。
+
 ## 测试与验收
 
 成熟度在这里的定义是"**声明过的能力 = 实测过的能力**"——三层验证,由廉价到昂贵:
@@ -120,7 +146,7 @@ CI(`.github/workflows/ci.yml`)在每次 push/PR 上跑 `tsc --noEmit` + 全量�
 
 ### 自研部分 vs 第三方调用
 
-- **自研**(业务核心):`src/core`(30 个模块——ZIP/DEX/ELF/ARSC/AXML 解析与审计、流水线编排、签名策略、发布门禁)、`src/ui`(TUI + i18n)、反调试桩、`scripts`(构建/发布/门禁脚本)、双启动器;
+- **自研**(业务核心):`src/core`(139 个模块——ZIP/DEX/ELF/ARSC/AXML 解析与审计、流水线编排、签名策略、发布门禁、污点数据流、VMP-lite 编译器、JNI 动态注册恢复)、`src/ui`(TUI + i18n)、反调试桩、`scripts`(构建/发布/门禁/基准脚本)、双启动器;
 - **第三方**(渲染/构建层):OpenTUI(终端渲染)、Solid.js(响应式 UI)、Terser(构建压缩,仅可选 Web JS 处理)、TypeScript/Bun(工具链)、外部 Android 工具(keytool/Gradle/zipalign/apksigner/aapt——经自研发现与校验编排)。
 
 ### 流水线可视化(每步自研/第三方)
