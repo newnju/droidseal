@@ -4,7 +4,7 @@ import { homedir } from "node:os"
 import { sha256File } from "./apk-audit.ts"
 import { runProcess } from "./process.ts"
 import { discoverToolchain } from "./toolchain.ts"
-import { resolveMirrorConfig, resolveDownloadCandidates, resolveProxyArgs, promptMirrorSwitch } from "./download-mirror.ts"
+import { resolveMirrorConfig, resolveDownloadCandidates, resolveProxyArgs, promptMirrorSwitch, isInteractiveStdin } from "./download-mirror.ts"
 import type { PipelineConfig, ToolLocation, Toolchain } from "./types.ts"
 
 export type ToolInstallGroup = "jdk" | "android-build-tools" | "gradle"
@@ -24,6 +24,25 @@ export interface ToolInstallOutcome {
 
 export interface ToolInstallOptions {
   onProgress?: (message: string) => void
+  /**
+   * 镜像切换询问钩子(如实降级原则的交互层):官方源下载受阻时被调用。
+   * 默认实现为 readline 问答(CLI);TUI 注入按钮式对话框;CI/非 TTY 注入
+   * 恒 false(不询问)。返回 true = 用户确认切换国内镜像并重试。
+   */
+  mirrorPrompt?: (fileName: string) => Promise<boolean>
+}
+
+// 全局询问实现(模块态):installMissingTools 的 options.mirrorPrompt 优先;
+// 未注入时用默认 readline 实现(promptMirrorSwitch,内部自带 TTY 检测——
+// 非 TTY 直接 false,CI 不询问)。TUI 启动时 setActiveMirrorPrompt 注入对话框。
+let currentMirrorPrompt: ((fileName: string) => Promise<boolean>) | undefined
+
+export function setActiveMirrorPrompt(impl: (fileName: string) => Promise<boolean> | undefined): void {
+  currentMirrorPrompt = impl
+}
+
+function activeMirrorPrompt(): (fileName: string) => Promise<boolean> {
+  return currentMirrorPrompt ?? promptMirrorSwitch
 }
 
 interface DownloadAsset {
@@ -162,9 +181,9 @@ async function downloadVerified(
   // 多源容灾:候选列表 = 命中的镜像(按名单顺序) + 官方兜底,逐个尝试,
   // 任一成功即止;全部失败最后抛官方源的错误。镜像只加速不受信任——
   // SHA-256 校验照常执行,任何源返回被篡改的字节都会在校验层被拒。
-  // 交互增强:官方模式下全源失败且 stdin 为 TTY 时,询问是否切换国内镜像
-  // 重试(每轮安装至多提示一次);确认后按 cn 预设重试,拒绝则维持原错误。
-  // 非 TTY(CI/管道)不询问——无人值守环境靠环境变量显式配置。
+  // 交互增强:官方模式下全源失败时询问是否切换国内镜像重试(每轮安装至多
+  // 提示一次)。询问实现可注入:CLI 默认 readline 问答;TUI 注入按钮对话框;
+  // 非 TTY 默认实现自身返回 false(CI 不询问)。
   const mirror = resolveMirrorConfig(process.env.DROIDSEAL_MIRROR)
   let candidates = resolveDownloadCandidates(asset.url, mirror)
   let mirrorPrompted = false
@@ -184,7 +203,7 @@ async function downloadVerified(
         }
       }
     }
-    if (mirror.mode === "official" && !mirrorPrompted && (await promptMirrorSwitch(asset.fileName))) {
+    if (mirror.mode === "official" && !mirrorPrompted && (await activeMirrorPrompt()(asset.fileName))) {
       mirrorPrompted = true
       candidates = resolveDownloadCandidates(asset.url, resolveMirrorConfig("cn"))
       onProgress?.("已切换国内镜像,重试下载")

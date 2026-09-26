@@ -45,6 +45,7 @@ try {
 import {
   createToolRecoveryPlan,
   installMissingTools,
+  setActiveMirrorPrompt,
   type ToolRecoveryPlan,
 } from "../core/tool-installer.ts"
 import { discoverToolchain } from "../core/toolchain.ts"
@@ -98,6 +99,12 @@ interface ToolRecoveryState {
   plan: ToolRecoveryPlan
   resume: "standalone" | "guided" | "one-click"
   stepIndex: number
+}
+
+// 镜像切换对话框状态:官方源下载受阻时弹出的专门按钮询问(而非聊天消息)
+interface MirrorPromptState {
+  fileName: string
+  resolve: (accept: boolean) => void
 }
 
 const SPINNER = ["✦", "✧", "·", "✧"] as const
@@ -255,6 +262,16 @@ export function App() {
   const [currentStepIndex, setCurrentStepIndex] = createSignal(0)
   const [busy, setBusy] = createSignal(false)
   const [thinking, setThinking] = createSignal("")
+  // 镜像切换对话框:官方源受阻时由 core 询问钩子置值,按钮 resolve 后清空
+  const [mirrorPrompt, setMirrorPrompt] = createSignal<MirrorPromptState>()
+  // TUI 注入专门的按钮式询问(core 在下载受阻时调用;resolve 由对话框按钮触发)
+  setActiveMirrorPrompt((fileName) => {
+    addMessage("warning", "官方源下载受阻", [
+      `无法从官方源获取: ${fileName}`,
+      "可切换国内镜像继续下载(镜像只加速不受信任,SHA-256 校验照常执行)。",
+    ])
+    return new Promise<boolean>((resolve) => setMirrorPrompt({ fileName, resolve }))
+  })
   const [needsFailureAdvance, setNeedsFailureAdvance] = createSignal(false)
   const [pipelineDone, setPipelineDone] = createSignal(false)
   const [exitHint, setExitHint] = createSignal(false)
@@ -361,6 +378,31 @@ export function App() {
     }
   }
   const activeButtons = createMemo<ActiveButton[]>(() => {
+    // 镜像切换对话框按钮(最高优先级:任何屏幕下弹出即替换操作行)
+    const mp = mirrorPrompt()
+    if (mp) {
+      return [
+        {
+          label: "切换国内镜像",
+          shortcut: "Y",
+          tone: "accent" as const,
+          detail: `官方源无法下载 ${mp.fileName}`,
+          onPress: () => {
+            setMirrorPrompt(undefined)
+            mp.resolve(true)
+          },
+        },
+        {
+          label: "继续用官方源",
+          shortcut: "N",
+          detail: "保持官方源(下载可能失败)",
+          onPress: () => {
+            setMirrorPrompt(undefined)
+            mp.resolve(false)
+          },
+        },
+      ]
+    }
     if (screen() === "wizard") {
       const question = currentQuestion()
       if (question?.kind === "choice") {
