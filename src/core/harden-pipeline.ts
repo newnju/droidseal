@@ -25,14 +25,14 @@ import { generateRuntimeProtectionFiles, DEFAULT_RUNTIME_CONFIG, buildRuntimePro
 import { generateVmInterpreterSmali, DEFAULT_VM_CONFIG, buildVmpFindings } from "./vmp-protection.ts"
 import { repackApk, type SigningConfig, type RepackConfig } from "./apk-repack.ts"
 import { generateResourceDecryptorSmali } from "./resource-string-protection.ts"
-import { generateNativeShellFiles, buildNativeShellFindings, type NativeShellConfig } from "./native-shell.ts"
+import { generateNativeShellFiles, buildNativeShellFindings, patchSoTextCrc, type NativeShellConfig } from "./native-shell.ts"
 import { compileAndMergeSmali } from "./smali-merge.ts"
 import { buildPayloadContainer, decryptContainerEntry, encryptContainerEntryDerived, decryptContainerEntryDerived, chainSeed, CONTAINER_ASSET_NAME, type ContainerEntry } from "./payload-container.ts"
 import { generateSplitKeyInjectionData } from "./split-key-inject.ts"
 import { recompileAndInjectManifest } from "./axml-recompile.ts"
 import { injectRuntimeProtection, generateRuntimeInitCall } from "./runtime-inject.ts"
-import { encryptAndReplaceStrings } from "./string-encrypt-writeback.ts"
-import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings } from "./vmp-compiler.ts"
+import { runStringWritebackCycle } from "./string-callsite-rewrite.ts"
+import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings, compileVmSubset } from "./vmp-compiler.ts"
 import { compileNativeSo, generateCmakeListsForShell } from "./native-so-compile.ts"
 import { generateEnhancedRuntimeSmali, generateEnhancedNativeC, buildEnhancedGuardFindings } from "./enhanced-guard.ts"
 import { buildCodeItemTable, encryptCodeItemTable, generateCodeItemRestoreHeader } from "./codeitem-table.ts"
@@ -193,6 +193,29 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
         evidence: `minSdk=${info.minSdk}`,
       })
     }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Step 1.7: 字符串加密写回(StringFog 式调用点改写,唯一可靠路径)
+  // 原位字节写回已被证伪:const-string 仍引用原 string_ids,写回密文=运行时拿到乱码。
+  // 此处走 apktool 解码→smali 改写→重编译;工具链缺失/任一步失败 → applied=false,
+  // 完全不写回(fail-closed),stringWritebackApplied 保持 false,门禁如实报 not-wired。
+  // ──────────────────────────────────────────────────────────────────────
+  try {
+    const cycle = await runStringWritebackCycle(config.inputApk, packageName, "", config.outputDir)
+    findings.push(...cycle.findings)
+    if (cycle.applied && cycle.dexFiles && cycle.dexFiles.length > 0) {
+      apkContents.dexFiles = cycle.dexFiles.map((d) => ({ name: d.name, bytes: d.bytes, compressed: false, compressionMethod: 0, crc32: 0 }))
+      stringWritebackApplied = true
+    }
+  } catch (swErr) {
+    findings.push({
+      severity: "medium", confidence: "high", code: "STRING_WRITEBACK_ERROR",
+      title: "字符串加密写回异常,未生效(如实降级)",
+      detail: `闭环执行异常: ${swErr instanceof Error ? swErr.message : String(swErr)}。原 DEX 未改动。`,
+      recommendation: "检查工具链环境;失败时产物走原路径(无字符串加密)。",
+      evidence: String(swErr).slice(0, 120),
+    })
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -568,6 +591,33 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   if (config.enableVmProtection) {
     const vmSmali = generateVmInterpreterSmali(packageName, DEFAULT_VM_CONFIG)
     generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealVmInterpreter.smali`, content: vmSmali })
+    // 方法级 VM 子集:对被抽取方法的原始 CodeItem 真实编译为 VM 字节码,
+    // payload 作为独立产物落盘(数据真实、可单测);解释器 smali 仍是参考产物不注入,
+    // vmProtected 维持如实 false——编译产物 ≠ 运行时生效,不因编译成功而翻绿。
+    const hollow = dexResult?.hollowResult
+    if (hollow && hollow.stubMethods.length > 0) {
+      const subset = compileVmSubset(hollow.extractedCodeItems, hollow.stubMethods)
+      if (subset.compiled.length > 0) {
+        const vmPayload = serializeVmPayload(subset.compiled)
+        generatedFiles.push({ name: "native/vm-payload.bin.b64", content: Buffer.from(vmPayload).toString("base64") })
+        findings.push(...buildVmpCompilerFindings(subset.compiled.length, vmPayload.length))
+        findings.push({
+          severity: "medium", confidence: "high", code: "VMP_SUBSET_COMPILED_NOT_INJECTED",
+          title: `方法级 VM 子集编译完成:${subset.compiled.length} 个方法(payload 落盘,未注入)`,
+          detail: `VM 字节码 payload 已生成(${vmPayload.length}B,跳过 ${subset.skipped} 个翻译不完整的方法)并作为产物落盘;但 VM 解释器未接线注入 APK——运行时无执行路径,对产物安全性无实际贡献,vmProtected 如实报 false。`,
+          recommendation: "不要将该 payload 计入防护能力;待解释器注入链路实现后重新加固。",
+          evidence: `compiled=${subset.compiled.length} skipped=${subset.skipped} bytes=${subset.translatedBytes}`,
+        })
+      } else {
+        findings.push({
+          severity: "medium", confidence: "high", code: "VMP_SUBSET_EMPTY",
+          title: "方法级 VM 子集编译零产出(如实降级)",
+          detail: `抽取的 ${hollow.stubMethods.length} 个方法全部翻译失败(操作码覆盖不足)——不产出半成品 payload。`,
+          recommendation: "扩展 translateDalvikInstruction 的操作码覆盖后重试。",
+          evidence: `stubs=${hollow.stubMethods.length}`,
+        })
+      }
+    }
     findings.push(...buildVmpFindings(true, false, false))
   }
 
@@ -619,11 +669,32 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     })
     findings.push(...soResult.findings)
     if (soResult.success) {
+      let textCrcPatched = 0
       for (const so of soResult.soFiles) {
         const soBytes = new Uint8Array(await readFile(so.path))
-        apkContents.soFiles.push({ name: `lib/${so.abi}/${randomSo}`, bytes: soBytes, compressed: true, compressionMethod: 8, crc32: 0 })
+        // text 段 CRC 构建期补丁(inline hook 检测):补丁失败如实降级标注
+        const tic = patchSoTextCrc(soBytes)
+        if (tic.patched) textCrcPatched += 1
+        apkContents.soFiles.push({ name: `lib/${so.abi}/${randomSo}`, bytes: tic.bytes, compressed: true, compressionMethod: 8, crc32: 0 })
       }
       soInjected = true
+      if (textCrcPatched > 0) {
+        findings.push({
+          severity: "info", confidence: "high", code: "NATIVE_TEXT_CRC_EMBEDDED",
+          title: "Native 壳 text 段完整性自检已启用",
+          detail: `已对 ${textCrcPatched}/${soResult.soFiles.length} 个 ABI 的壳 SO 补丁嵌入可执行段 CRC32;运行时 ds_text_integrity_check 重算比对,检测 inline hook(Frida Interceptor 等改写 .text 的手段)。"无法核验"时如实不投票(fail-open 到其余检测源)。`,
+          recommendation: "无需处理;真机验收可用 device-test.sh 验证检测行为。",
+          evidence: `soName=${randomSo} patched=${textCrcPatched}`,
+        })
+      } else {
+        findings.push({
+          severity: "medium", confidence: "high", code: "NATIVE_TEXT_CRC_NOT_PATCHED",
+          title: "Native 壳 text 段完整性自检未生效(如实降级)",
+          detail: "编译产物中未找到唯一可执行段或 DSTC 标记块,text CRC 未嵌入——运行时该源将如实报告无法核验而非防护。",
+          recommendation: "检查壳 SO 编译配置(应含 text_integrity.c 且为单可执行段的标准 NDK 产物)。",
+          evidence: `soName=${randomSo}`,
+        })
+      }
     }
     // NDK 缺失或编译失败:如实标注 —— part2 仍走静态字段回退(Java fetchPart2 已实现)
     if (!soInjected) {
