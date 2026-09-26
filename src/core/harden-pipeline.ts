@@ -32,7 +32,7 @@ import { generateSplitKeyInjectionData } from "./split-key-inject.ts"
 import { recompileAndInjectManifest } from "./axml-recompile.ts"
 import { injectRuntimeProtection, generateRuntimeInitCall } from "./runtime-inject.ts"
 import { runStringWritebackCycle } from "./string-callsite-rewrite.ts"
-import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings, compileVmSubset } from "./vmp-compiler.ts"
+import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings, compileVmSubset, generateVmInterpreterC } from "./vmp-compiler.ts"
 import { compileNativeSo, generateCmakeListsForShell } from "./native-so-compile.ts"
 import { generateEnhancedRuntimeSmali, generateEnhancedNativeC, buildEnhancedGuardFindings } from "./enhanced-guard.ts"
 import { buildCodeItemTable, encryptCodeItemTable, generateCodeItemRestoreHeader } from "./codeitem-table.ts"
@@ -600,12 +600,16 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       if (subset.compiled.length > 0) {
         const vmPayload = serializeVmPayload(subset.compiled)
         generatedFiles.push({ name: "native/vm-payload.bin.b64", content: Buffer.from(vmPayload).toString("base64") })
+        // 里程碑 A 执行端:解释器 C 随 native 壳编译链落盘(可编译可单测),
+        // 但方法路由未接(ArtMethod 替换 = 里程碑 B)——运行时仍无 VM 执行路径,
+        // vmProtected 恒 false,直到注入链落地并通过真机验收。
+        generatedFiles.push({ name: "native/vm_interpreter.c", content: generateVmInterpreterC() })
         findings.push(...buildVmpCompilerFindings(subset.compiled.length, vmPayload.length))
         findings.push({
           severity: "medium", confidence: "high", code: "VMP_SUBSET_COMPILED_NOT_INJECTED",
-          title: `方法级 VM 子集编译完成:${subset.compiled.length} 个方法(payload 落盘,未注入)`,
-          detail: `VM 字节码 payload 已生成(${vmPayload.length}B,跳过 ${subset.skipped} 个翻译不完整的方法)并作为产物落盘;但 VM 解释器未接线注入 APK——运行时无执行路径,对产物安全性无实际贡献,vmProtected 如实报 false。`,
-          recommendation: "不要将该 payload 计入防护能力;待解释器注入链路实现后重新加固。",
+          title: `方法级 VM 子集编译完成:${subset.compiled.length} 个方法(payload+解释器 C 落盘,未注入)`,
+          detail: `VM 字节码 payload 已生成(${vmPayload.length}B,跳过 ${subset.skipped} 个翻译不完整的方法)并落盘;叶子方法解释器执行端(里程碑 A,const/算术/return 子集)已随产物落盘,TS/C 两侧语义对拍有单测背书。但方法路由未接线(ArtMethod 替换 = 里程碑 B)——运行时无 VM 执行路径,对产物安全性无实际贡献,vmProtected 如实报 false。`,
+          recommendation: "不要将该 payload 计入防护能力;里程碑 B(注入)落地并通过真机验收后重新加固。",
           evidence: `compiled=${subset.compiled.length} skipped=${subset.skipped} bytes=${subset.translatedBytes}`,
         })
       } else {
@@ -701,7 +705,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       findings.push({
         severity: "medium", confidence: "high", code: "SO_SPLITKEY_FALLBACK",
         title: "壳 SO 未编译注入,Split-Key part2 回退静态字段(降级)",
-        detail: "NDK 缺失或编译失败时,fetchPart2 回退 KEY_PART2 静态字段——密钥完整片段可从单个 DEX 提取,Split-Key 异位目标未达成。",
+        detail: "NDK 缺失或编译失败时,fetchPart2 回退 KEY_PART2 静态字段——密钥完整片段可从单个 DEX 提取,Split-Key 异位目标未达成。装机引导:Android Studio SDK Manager 勾选 NDK,或命令行 sdkmanager \"ndk;26.3.11579064\"(约 1-2GB,不随本工具自动安装——体积原因由用户显式决定)。",
         recommendation: "安装 Android NDK 后重新加固,使 part2 真正移入 SO。",
         evidence: `soName=${randomSo}`,
       })

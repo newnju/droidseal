@@ -402,6 +402,144 @@ export function compileVmSubset(
   return { compiled, skipped, translatedBytes }
 }
 
+// ── 里程碑 A:叶子方法 VM 解释器执行端 ─────────────────────────────────
+// 语义:寄存器式 VM(与 translateDalvikInstruction 的发射格式严格一致——
+//   CONST reg, imm16 | OP dst, src1, src2 | RETURN reg)。
+// 覆盖操作码 = CONST/ADD/SUB/MUL/DIV/RETURN 子集,不含 invoke/字段/分支——
+// 叶子方法(getter/校验/简单算法)专用。
+// 诚实边界:本生成器只产出执行端 C(可编译可测),不注入 APK、不改方法路由——
+// 注入(ArtMethod 替换/JNI 注册)是里程碑 B,summary 的 vmProtected 在注入前恒 false。
+
+// TS 参考解释器:与 C 执行端同语义(单测对拍基准,防两侧漂移)
+// v0 预置入参 initial;寄存器 16 个(int32)。
+export function executeVmLeaf(code: Uint8Array, arg: number): { ok: boolean; result?: number } {
+  const regs = new Int32Array(16)
+  regs[0] = arg | 0
+  let pc = 0
+  const view = new DataView(code.buffer, code.byteOffset, code.byteLength)
+  while (pc < code.length) {
+    const op = code[pc]!
+    pc += 1
+    switch (op) {
+      case VM_OPCODES.CONST: {
+        // CONST reg, val16(LE,符号扩展——与 const/16 语义一致)
+        if (pc + 3 > code.length) return { ok: false }
+        const reg = code[pc]!
+        const val = view.getUint16(pc + 1, true)
+        if (reg >= 16) return { ok: false }
+        regs[reg] = (val << 16) >> 16
+        pc += 3
+        break
+      }
+      case VM_OPCODES.ADD: case VM_OPCODES.SUB: case VM_OPCODES.MUL: case VM_OPCODES.DIV: {
+        // OP dst, src1, src2
+        if (pc + 3 > code.length) return { ok: false }
+        const dst = code[pc]!
+        const s1 = code[pc + 1]!
+        const s2 = code[pc + 2]!
+        if (dst >= 16 || s1 >= 16 || s2 >= 16) return { ok: false }
+        const a = regs[s1]!
+        const b = regs[s2]!
+        if (op === VM_OPCODES.ADD) regs[dst] = (a + b) | 0
+        else if (op === VM_OPCODES.SUB) regs[dst] = (a - b) | 0
+        else if (op === VM_OPCODES.MUL) regs[dst] = Math.imul(a, b)
+        else {
+          if (b === 0) return { ok: false } // 除零如实失败,不兜底假值
+          regs[dst] = Math.trunc(a / b) | 0
+        }
+        pc += 3
+        break
+      }
+      case VM_OPCODES.RETURN: {
+        // RETURN reg
+        if (pc + 1 > code.length) return { ok: false }
+        const reg = code[pc]!
+        if (reg >= 16) return { ok: false }
+        return { ok: true, result: regs[reg]! }
+      }
+      default:
+        return { ok: false } // 未知操作码如实失败(fail-closed,不静默跳过)
+    }
+  }
+  return { ok: false } // 无 return 结尾:不完整方法,拒绝执行
+}
+
+/** 生成 VM 解释器 C 执行端(叶子方法子集,寄存器式,guard_vote 同编译链) */
+export function generateVmInterpreterC(): string {
+  return `// DroidSeal VMP-lite 叶子方法解释器(里程碑 A,构建期自动生成,勿手动修改)
+// 寄存器式:与 TS 参考解释器 executeVmLeaf 严格一致(单测对拍防漂移)。
+// 指令格式(与 vmp-compiler.ts 翻译器发射一致):
+//   CONST  reg, imm16   (1B op + 1B reg + 2B LE, 符号扩展)
+//   ADD/SUB/MUL/DIV dst, src1, src2 (1B op + 3B reg)
+//   RETURN reg          (1B op + 1B reg)
+// 边界:仅上述子集;未知操作码/除零/寄存器越界/截断指令如实返回错误码,
+// 不兜底假值;本文件不含方法路由——注入是里程碑 B,未注入前 vmProtected=false。
+#include <stdint.h>
+#include <stddef.h>
+
+#define DSVM_REGS 16
+#define DSVM_ERR_UNKNOWN_OP (-1)
+#define DSVM_ERR_REG        (-2)
+#define DSVM_ERR_DIVZERO    (-3)
+#define DSVM_ERR_TRUNCATED  (-4)
+#define DSVM_ERR_NO_RETURN  (-5)
+
+/* 操作码常量(与 vmp-compiler.ts VM_OPCODES 一致) */
+#define DSVM_OP_CONST   0x02
+#define DSVM_OP_ADD     0x03
+#define DSVM_OP_SUB     0x04
+#define DSVM_OP_MUL     0x05
+#define DSVM_OP_DIV     0x06
+#define DSVM_OP_RETURN  0x1D
+
+int dsvm_execute_leaf(const uint8_t* code, size_t code_len,
+                      int32_t initial, int32_t* out_result) {
+    int32_t regs[DSVM_REGS];
+    regs[0] = initial; /* v0 预置入参(与 TS 参考一致) */
+    size_t pc = 0;
+    while (pc < code_len) {
+        uint8_t op = code[pc++];
+        switch (op) {
+            case DSVM_OP_CONST: {
+                if (pc + 3 > code_len) return DSVM_ERR_TRUNCATED;
+                uint8_t reg = code[pc];
+                if (reg >= DSVM_REGS) return DSVM_ERR_REG;
+                uint16_t raw = (uint16_t)(code[pc + 1] | ((uint16_t)code[pc + 2] << 8));
+                regs[reg] = (int32_t)(int16_t)raw; /* 符号扩展(const/16 语义) */
+                pc += 3;
+                break;
+            }
+            case DSVM_OP_ADD: case DSVM_OP_SUB: case DSVM_OP_MUL: case DSVM_OP_DIV: {
+                if (pc + 3 > code_len) return DSVM_ERR_TRUNCATED;
+                uint8_t dst = code[pc], s1 = code[pc + 1], s2 = code[pc + 2];
+                if (dst >= DSVM_REGS || s1 >= DSVM_REGS || s2 >= DSVM_REGS) return DSVM_ERR_REG;
+                int32_t a = regs[s1], b = regs[s2];
+                if (op == DSVM_OP_ADD) regs[dst] = (int32_t)((uint32_t)a + (uint32_t)b);
+                else if (op == DSVM_OP_SUB) regs[dst] = (int32_t)((uint32_t)a - (uint32_t)b);
+                else if (op == DSVM_OP_MUL) regs[dst] = (int32_t)((uint32_t)a * (uint32_t)b);
+                else {
+                    if (b == 0) return DSVM_ERR_DIVZERO;
+                    regs[dst] = a / b;
+                }
+                pc += 3;
+                break;
+            }
+            case DSVM_OP_RETURN: {
+                if (pc + 1 > code_len) return DSVM_ERR_TRUNCATED;
+                uint8_t reg = code[pc];
+                if (reg >= DSVM_REGS) return DSVM_ERR_REG;
+                *out_result = regs[reg];
+                return 0;
+            }
+            default:
+                return DSVM_ERR_UNKNOWN_OP;
+        }
+    }
+    return DSVM_ERR_NO_RETURN;
+}
+`
+}
+
 // ── Finding 生成 ──────────────────────────────────────────────────────
 
 export function buildVmpCompilerFindings(compiledCount: number, totalPayloadSize: number): Finding[] {
