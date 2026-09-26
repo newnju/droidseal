@@ -200,6 +200,89 @@ describe("analyzeElf", () => {
   test("throws on non-elf buffers", () => {
     expect(() => analyzeElf(new Uint8Array(128))).toThrow()
   })
+
+  test("flags PT_LOAD below 16KB page alignment (Google Play 2025-11)", () => {
+    // 64-bit ELF:PT_LOAD(p_align=4096, < 16384)+ PT_DYNAMIC
+    const phoff = 64
+    const phentsize = 56
+    const phnum = 2
+    const total = phoff + phentsize * phnum
+    const bytes = new Uint8Array(total)
+    bytes.set([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0], 0)
+    const view = new DataView(bytes.buffer)
+    view.setUint16(16, 3, true) // ET_DYN
+    view.setBigUint64(0x20, BigInt(phoff), true)
+    view.setUint16(0x36, phentsize, true)
+    view.setUint16(0x38, phnum, true)
+    view.setUint32(phoff, 1, true) // PT_LOAD
+    view.setBigUint64(phoff + 40, 4096n, true) // p_align = 4KB(违规;Elf64 p_align@+40)
+    view.setUint32(phoff + phentsize, 2, true) // PT_DYNAMIC
+    const hardening = analyzeElf(bytes)
+    expect(hardening.minLoadAlign).toBe(4096)
+    expect(hardening.pageAlign16k).toBe(false)
+    const codes = buildSoFindings("libtest.so", hardening).map((f) => f.code)
+    expect(codes).toContain("SO_PAGE_ALIGN_16K")
+  })
+
+  test("passes PT_LOAD at exactly 16KB alignment", () => {
+    const phoff = 64
+    const phentsize = 56
+    const total = phoff + phentsize
+    const bytes = new Uint8Array(total)
+    bytes.set([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0], 0)
+    const view = new DataView(bytes.buffer)
+    view.setUint16(16, 3, true)
+    view.setBigUint64(0x20, BigInt(phoff), true)
+    view.setUint16(0x36, phentsize, true)
+    view.setUint16(0x38, 1, true)
+    view.setUint32(phoff, 1, true) // PT_LOAD
+    view.setBigUint64(phoff + 40, 16384n, true) // p_align = 16KB(达标;Elf64 p_align@+40)
+    const hardening = analyzeElf(bytes)
+    expect(hardening.pageAlign16k).toBe(true)
+    const codes = buildSoFindings("libtest.so", hardening).map((f) => f.code)
+    expect(codes).not.toContain("SO_PAGE_ALIGN_16K")
+  })
+
+  test("detects dangerous imports, embedded keys and URLs in .rodata", () => {
+    // 构造含标记的 ELF:strcpy(溢出向量)+ RegisterNatives + Google API key + URL
+    // (含应被过滤的 XML 命名空间 URL 噪声)
+    const markers = [
+      "strcpy",
+      "RegisterNatives",
+      "AIzaSyA1234567890123456789012345678901ab",
+      "https://telemetry.evil-cdn.net/collect?v=1",
+      "https://schemas.android.com/apk/res/android",
+    ].join("\0") + "\0"
+    const blob = new TextEncoder().encode(markers)
+    const base = buildElf()
+    const bytes = new Uint8Array(base.length + blob.length)
+    bytes.set(base, 0)
+    bytes.set(blob, base.length)
+    const hardening = analyzeElf(bytes)
+    expect(hardening.bufferOverflowFunctions.length).toBe(1)
+    expect(hardening.jniDangerousFunctions.some((t) => t.includes("RegisterNatives"))).toBe(true)
+    expect(hardening.embeddedKeyHits).toContain("google-api-key")
+    expect(hardening.embeddedUrls).toContain("https://telemetry.evil-cdn.net/collect?v=1")
+    // XML 命名空间噪声被过滤
+    expect(hardening.embeddedUrls.some((u) => u.includes("schemas.android.com"))).toBe(false)
+    const codes = buildSoFindings("libmarker.so", hardening).map((f) => f.code)
+    expect(codes).toContain("SO_BUFFER_OVERFLOW_RISK")
+    expect(codes).toContain("SO_JNI_DANGEROUS")
+    expect(codes).toContain("SO_EMBEDDED_KEY_FORMAT")
+    expect(codes).toContain("SO_EMBEDDED_URL")
+  })
+
+  test("clean ELF produces no import/key findings", () => {
+    const hardening = analyzeElf(buildElf())
+    expect(hardening.bufferOverflowFunctions.length).toBe(0)
+    expect(hardening.jniDangerousFunctions.length).toBe(0)
+    expect(hardening.embeddedKeyHits.length).toBe(0)
+    expect(hardening.embeddedUrls.length).toBe(0)
+    const codes = buildSoFindings("libclean.so", hardening).map((f) => f.code)
+    expect(codes).not.toContain("SO_BUFFER_OVERFLOW_RISK")
+    expect(codes).not.toContain("SO_EMBEDDED_KEY_FORMAT")
+    expect(codes).not.toContain("SO_EMBEDDED_URL")
+  })
 })
 
 describe("auditApk integration (no aapt)", () => {
