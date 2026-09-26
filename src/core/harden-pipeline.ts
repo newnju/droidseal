@@ -940,7 +940,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   // 指标背书一致性门禁(如实降级机械化):每个 *Protected 指标必须有真实产物证据
   // (加密条目数/写回标志),证据缺失即使配置开着也强制报 false + not-wired finding。
   const gate = gateSummaryClaims([
-    { key: "dexProtected", configEnabled: config.enableDexEncryption || config.enableMethodHollow, evidenceCount: (dexResult?.encryptedDex?.length ?? 0) + mhHollowed },
+    { key: "dexProtected", configEnabled: config.enableDexEncryption || config.enableMethodHollow, evidenceCount: (dexResult?.encryptedDex ? 1 : 0) + mhHollowed },
     { key: "soProtected", configEnabled: config.enableSoEncryption, evidenceCount: soResults?.length ?? 0 },
     { key: "resourceProtected", configEnabled: config.enableResourceEncryption, evidenceCount: resourceResults?.length ?? 0 },
     { key: "stringProtected", configEnabled: true, evidenceCount: stringWritebackApplied ? 1 : 0 },
