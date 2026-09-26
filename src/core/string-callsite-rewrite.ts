@@ -46,40 +46,49 @@ function unescapeSmaliString(s: string): string {
   return out
 }
 
-// ── 工具检测 ──────────────────────────────────────────────────────────
+// ── 工具检测(PATH → 托管目录 → 自动下载;TOFU 指纹防篡改)──────────────
+import { ensureJarTool, detectJava } from "./tool-bootstrap.ts"
+
 export interface RewriteToolStatus {
   apktool: boolean
   smali: boolean
   apktoolCmd?: string
   smaliCmd?: string
+  /** 引导事件(下载/复用/失败),供如实降级 finding 的 evidence */
+  events?: string[]
 }
 
-export function detectRewriteTools(): RewriteToolStatus {
-  const probe = (cmd: string, args: string[]): boolean => {
-    try {
-      return spawnSync(cmd, args, { timeout: 8000, stdio: "pipe" }).status === 0
-    } catch {
-      return false
-    }
+export async function detectRewriteTools(): Promise<RewriteToolStatus> {
+  const status: RewriteToolStatus = { apktool: false, smali: false, events: [] }
+  if (!detectJava()) {
+    status.events!.push("java-missing:托管 jar 需要 JRE,未检测到 java 命令")
+    return status
   }
-  const status: RewriteToolStatus = { apktool: false, smali: false }
-  if (probe("apktool", ["--version"])) {
+  // apktool 2.9.3 / smali 3.0.5 官方发布源(首位官方,TOFU 建指纹)
+  const apktool = await ensureJarTool({
+    name: "apktool",
+    version: "2.9.3",
+    urls: [
+      "https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar",
+      "https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar",
+    ],
+  })
+  status.events!.push(...apktool.events.map((e) => `apktool:${e}`))
+  if (apktool.available && apktool.command) {
     status.apktool = true
-    status.apktoolCmd = "apktool"
-  } else {
-    // win 下 apktool.bat 常需显式
-    if (process.platform === "win32" && probe("apktool.bat", ["--version"])) {
-      status.apktool = true
-      status.apktoolCmd = "apktool.bat"
-    }
+    status.apktoolCmd = apktool.command
   }
-  const smaliJar = path.join(process.env.HOME ?? process.env.USERPROFILE ?? "", ".droidseal", "tools", "smali.jar")
-  if (probe("smali", ["--version"])) {
+  const smali = await ensureJarTool({
+    name: "smali",
+    version: "3.0.5",
+    urls: [
+      "https://github.com/google/smali/releases/download/v3.0.5/smali-3.0.5.jar",
+    ],
+  })
+  status.events!.push(...smali.events.map((e) => `smali:${e}`))
+  if (smali.available && smali.command) {
     status.smali = true
-    status.smaliCmd = "smali"
-  } else if (probe("java", ["-jar", smaliJar, "--version"])) {
-    status.smali = true
-    status.smaliCmd = `java -jar ${smaliJar}`
+    status.smaliCmd = smali.command
   }
   return status
 }
@@ -114,14 +123,14 @@ export async function rewriteStringCallsites(
   maxEncrypt = 200,
 ): Promise<CallsiteRewriteResult> {
   const findings: Finding[] = []
-  const tools = detectRewriteTools()
+  const tools = await detectRewriteTools()
   if (!tools.apktool || !tools.smali) {
     findings.push({
       severity: "medium", confidence: "high", code: "STRING_WRITEBACK_TOOLS_MISSING",
       title: "字符串加密写回未执行(工具链缺失,如实降级)",
-      detail: `apktool=${tools.apktool ? "可用" : "缺失"} smali=${tools.smali ? "可用" : "缺失"}。调用点改写需完整 apktool 解码→smali 重编译链;缺失时绝不原位写回密文(const-string 仍指向原字符串,写回=运行时拿到乱码,产出必坏 App)。`,
-      recommendation: "安装 apktool 与 smali 后重新加固,字符串加密才能真正生效。",
-      evidence: `apktool=${tools.apktool} smali=${tools.smali}`,
+      detail: `apktool=${tools.apktool ? "可用" : "缺失"} smali=${tools.smali ? "可用" : "缺失"}。调用点改写需完整 apktool 解码→smali 重编译链;缺失时绝不原位写回密文(const-string 仍指向原字符串,写回=运行时拿到乱码,产出必坏 App)。引导事件:${(tools.events ?? []).join("; ") || "无"}。`,
+      recommendation: "确保已安装 JRE(java 命令可用)且能访问 GitHub releases;工具将自动下载到 ~/.droidseal/tools/。",
+      evidence: `apktool=${tools.apktool} smali=${tools.smali} events=${(tools.events ?? []).join("|").slice(0, 200)}`,
     })
     return { rewrittenFiles: 0, rewrittenCallsites: 0, findings, applied: false }
   }
@@ -236,14 +245,14 @@ export async function runStringWritebackCycle(
   maxEncrypt = 200,
 ): Promise<StringWritebackCycleResult> {
   const findings: Finding[] = []
-  const tools = detectRewriteTools()
+  const tools = await detectRewriteTools()
   if (!tools.apktool || !tools.smali) {
     findings.push({
       severity: "medium", confidence: "high", code: "STRING_WRITEBACK_TOOLS_MISSING",
       title: "字符串加密写回未执行(工具链缺失,如实降级)",
-      detail: `apktool=${tools.apktool ? "可用" : "缺失"} smali=${tools.smali ? "可用" : "缺失"}。调用点改写需完整 apktool 解码→smali 重编译链;缺失时绝不原位写回密文(const-string 仍指向原字符串,写回=运行时拿到乱码,产出必坏 App)。`,
-      recommendation: "安装 apktool 与 smali 后重新加固,字符串加密才能真正生效。",
-      evidence: `apktool=${tools.apktool} smali=${tools.smali}`,
+      detail: `apktool=${tools.apktool ? "可用" : "缺失"} smali=${tools.smali ? "可用" : "缺失"}。调用点改写需完整 apktool 解码→smali 重编译链;缺失时绝不原位写回密文(const-string 仍指向原字符串,写回=运行时拿到乱码,产出必坏 App)。引导事件:${(tools.events ?? []).join("; ") || "无"}。`,
+      recommendation: "确保已安装 JRE(java 命令可用)且能访问 GitHub releases;工具将自动下载到 ~/.droidseal/tools/。",
+      evidence: `apktool=${tools.apktool} smali=${tools.smali} events=${(tools.events ?? []).join("|").slice(0, 200)}`,
     })
     return { applied: false, findings }
   }
