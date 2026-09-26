@@ -7,6 +7,11 @@
 #   --challenge-offline   挑战模式产物**离线**验收(端点不可达):D2 预期失败——
 #                         进程 5s 内消亡 = fail-closed 语义正确,判据方向反转。
 #                         不加此 flag 时挑战模式产物直接跑会误报 D2 失败。
+#   --auto-emulator       无已连接设备时,自动启动首个可用 AVD 再继续(需本机
+#                         已装 Android 模拟器 + 至少一个 system image)。Windows 下
+#                         经 PowerShell Start-Process 分离启动,避免模拟器随脚本
+#                         会话结束而消亡;启动后轮询 adb 等待 boot 完成(上限 180s)。
+#                         不加此 flag 时维持原行为:无设备直接 FAIL 并给出指引。
 # 判据(全部通过 exit 0,任一失败 exit 1):
 #   D1 安装成功(adb install -r)
 #   D2 启动后 5 秒进程存活——stub 引导 → loader 解密 → 壳启动闭环未中断
@@ -24,19 +29,50 @@ APK="${1:?用法: device-test.sh <hardened.apk> <package.name> [flags]}"
 shift
 PKG="${1:?缺少包名(如 com.example.app)}"
 shift || true
-KS_RELAUNCH=""; WANT_API=""; CHALLENGE_OFFLINE=""
+KS_RELAUNCH=""; WANT_API=""; CHALLENGE_OFFLINE=""; AUTO_EMU=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ks-relaunch) KS_RELAUNCH=1 ;;
     --api) WANT_API="${2:?--api 需要版本号}"; shift ;;
     --challenge-offline) CHALLENGE_OFFLINE=1 ;;
+    --auto-emulator) AUTO_EMU=1 ;;
     *) echo "FAIL: 未知参数 $1"; exit 2 ;;
   esac
   shift
 done
 ADB=adb
 command -v "$ADB" >/dev/null 2>&1 || { echo "FAIL: 找不到 adb——安装 Android Platform-Tools 并加入 PATH"; exit 2; }
-"$ADB" get-state >/dev/null 2>&1 || { echo "FAIL: 无已连接设备(adb devices 为空)——连接设备或启动模拟器"; exit 2; }
+
+# 自动模拟器(--auto-emulator):仅当当前无已连接设备时才触发;有设备则零影响。
+if ! "$ADB" get-state >/dev/null 2>&1; then
+  if [ -z "$AUTO_EMU" ]; then
+    echo "FAIL: 无已连接设备(adb devices 为空)——连接设备、启动模拟器,或加 --auto-emulator 自动启动 AVD"
+    exit 2
+  fi
+  EMU=$(command -v emulator || true)
+  [ -n "$EMU" ] || { echo "FAIL: --auto-emulator 需要模拟器(emulator 不在 PATH)"; exit 2; }
+  AVD_LIST=$("$EMU" -list-avds 2>/dev/null | head -1)
+  [ -n "$AVD_LIST" ] || { echo "FAIL: --auto-emulator 未找到任何 AVD(avdmanager create avd 先建一个)"; exit 2; }
+  echo ">> 无已连接设备,自动启动 AVD: $AVD_LIST"
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      # Windows:分离启动(模拟器进程必须脱离本脚本会话,否则脚本退出时被杀)
+      powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -FilePath '$EMU' -ArgumentList '@$AVD_LIST'" ;;
+    *)
+      nohup "$EMU" "@$AVD_LIST" >/dev/null 2>&1 & ;;
+  esac
+  echo ">> 等待设备 boot(上限 180s)"
+  boot_ok=1
+  for _ in $(seq 1 60); do
+    sleep 3
+    "$ADB" wait-for-device >/dev/null 2>&1 || continue
+    BOOT=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+    if [ "$BOOT" = "1" ]; then boot_ok=0; break; fi
+  done
+  [ "$boot_ok" -eq 0 ] || { echo "FAIL: 模拟器 180s 内未完成 boot"; exit 2; }
+  echo ">> 模拟器已就绪"
+fi
+"$ADB" get-state >/dev/null 2>&1 || { echo "FAIL: 设备仍未连接"; exit 2; }
 
 pass=0; fail=0
 check() { # check <id> <ok: 0|1> <detail>

@@ -60,6 +60,9 @@ function usage(): string {
   --arsc-obfuscate         启用资源名混淆
 
 加固选项:
+  --profile <quick|balanced|maximum>  预设档(默认 balanced):quick=最快出包(关抽取/
+                           字符串加密/三重入口/随机名,保留 DEX 加密);maximum=全开。
+                           显式单 flag 永远优先于预设值
   --algorithm <aes-256-gcm|chacha20-poly1305>  加密算法(默认:aes-256-gcm)
   --cert-sha256 <hash>     签名证书 SHA-256(密钥派生)
   --no-dex                 禁用 DEX 加密
@@ -303,6 +306,23 @@ if (resolved && resolved.inputPath) {
     if (hasFlag("--challenge-url") && !challengeUrl) {
       console.warn("警告: --challenge-url 后未提供 URL——本次构建按纯本地模式执行(密钥完整进 APK)。")
     }
+    // profile 预设(参数组合糖,不新增流水线能力):
+    //   quick    — 最快出包:关抽取/字符串加密/三重入口/随机名,保留 DEX 加密
+    //   balanced — 默认档(与省略 --profile 完全一致)
+    //   maximum  — 全开(含 --enable-vmp 传参;VMP 未接线时报告如实 not-wired)
+    // 显式 flag 永远优先于预设(先算预设布尔,再被单 flag 覆盖)。
+    const profileArg = (getArg("--profile") ?? "balanced").toLowerCase()
+    const profiles: Record<string, { hollow: boolean; stringEnc: boolean; triple: boolean; randomNames: boolean; vmp: boolean }> = {
+      quick: { hollow: false, stringEnc: false, triple: false, randomNames: false, vmp: false },
+      balanced: { hollow: true, stringEnc: true, triple: true, randomNames: true, vmp: false },
+      maximum: { hollow: true, stringEnc: true, triple: true, randomNames: true, vmp: true },
+    }
+    const profile = profiles[profileArg]
+    if (!profile) {
+      console.error(`错误: 未知 --profile "${profileArg}"(可选: quick / balanced / maximum)`)
+      process.exit(2)
+    }
+    if (profileArg !== "balanced") console.log(`Profile: ${profileArg}`)
     const hardenConfig = {
       ...DEFAULT_HARDEN_CONFIG,
       inputApk: inputPath,
@@ -312,15 +332,15 @@ if (resolved && resolved.inputPath) {
       algorithm: (getArg("--algorithm") as "aes-256-gcm" | "chacha20-poly1305") ?? "aes-256-gcm",
       certSha256: getArg("--cert-sha256") ?? undefined,
       enableDexEncryption: !hasFlag("--no-dex"),
-      enableMethodHollow: !hasFlag("--no-dex"),
+      enableMethodHollow: hasFlag("--no-dex") ? false : (profileArg === "balanced" ? !hasFlag("--no-dex") : profile.hollow),
       enableSoEncryption: !hasFlag("--no-so"),
       enableResourceEncryption: !hasFlag("--no-resource"),
-      enableStringEncryption: !hasFlag("--no-string"),
+      enableStringEncryption: profileArg === "balanced" ? !hasFlag("--no-string") : profile.stringEnc,
       enableRuntimeProtection: !hasFlag("--no-runtime"),
-      enableVmProtection: hasFlag("--enable-vmp"),
+      enableVmProtection: hasFlag("--enable-vmp") || profile.vmp,
       enableSplitKey: !hasFlag("--no-split-key"),
-      enableTripleEntry: !hasFlag("--no-triple-entry"),
-      enableRandomNames: !hasFlag("--no-random-names"),
+      enableTripleEntry: profileArg === "balanced" ? !hasFlag("--no-triple-entry") : profile.triple,
+      enableRandomNames: profileArg === "balanced" ? !hasFlag("--no-random-names") : profile.randomNames,
       enableKeystoreBinding: hasFlag("--keystore-bind"),
       classExclusionPatterns: excludePatterns,
       signingConfig: getArg("--keystore") ? {
