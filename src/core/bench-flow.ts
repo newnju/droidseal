@@ -7,7 +7,7 @@ import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 import { scanSourceDetectors } from "./source-detectors.ts"
 
-export interface GtPoint { class: string; line: number; target: string }
+export interface GtPoint { class: string; line: number; target: string; /** GT methodName 解析出的方法名(混淆名归一用) */ method?: string }
 export interface GtFlow { source: GtPoint; sink: GtPoint; negative: boolean }
 export interface FlowApp { name: string; dir: string; flows: GtFlow[] }
 
@@ -32,9 +32,11 @@ export function parseFindings(json: string): GtFlow[] {
   for (const f of data.findings ?? []) {
     const s = f.source, k = f.sink
     if (s?.className && k?.className) {
+      const srcMethod = parseMethodName(String(s.methodName ?? ""))
+      const snkMethod = parseMethodName(String(k.methodName ?? ""))
       flows.push({
-        source: { class: String(s.className), line: Number(s.lineNo ?? 0), target: String(s.targetName ?? "") },
-        sink: { class: String(k.className), line: Number(k.lineNo ?? 0), target: String(k.targetName ?? "") },
+        source: { class: String(s.className), line: Number(s.lineNo ?? 0), target: String(s.targetName ?? ""), ...(srcMethod !== undefined ? { method: srcMethod } : {}) },
+        sink: { class: String(k.className), line: Number(k.lineNo ?? 0), target: String(k.targetName ?? ""), ...(snkMethod !== undefined ? { method: snkMethod } : {}) },
         negative: f.isNegative === true,
       })
     }
@@ -78,6 +80,15 @@ const SINKS = [
   "getInputStream",
 ]
 
+/** 解析 GT methodName("public void onCreate()" → "onCreate";空/畸形返回 undefined)。 */
+export function parseMethodName(m: string): string | undefined {
+  const mm = m.match(/([A-Za-z_$][\w$]*)\s*\(/)
+  const name = mm?.[1]
+  // 排除构造器形态(类名同名)与关键字
+  if (!name || ["if", "for", "while", "switch", "catch", "synchronized", "return", "new"].includes(name)) return undefined
+  return name
+}
+
 /** 扫描 app 全部源码,产出端点报告:类词干 → 行 → API 名。 */
 export async function endpointReports(appDir: string): Promise<Map<string, Set<string>>> {
   // index: (classStem, line) → codes;另建 classStem → 全部 target API 集合(语义等价层)
@@ -103,6 +114,78 @@ export async function endpointReports(appDir: string): Promise<Map<string, Set<s
   }
   await walk(appDir)
   return byStem
+}
+
+/** 类词干 → 源码全文(混淆名归一用;剥字符串前原文——方法体提取需要字面量结构)。 */
+async function classTexts(appDir: string): Promise<Map<string, string>> {
+  const texts = new Map<string, string>()
+  const walk = async (dir: string): Promise<void> => {
+    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) await walk(p)
+      else if (/\.(java|kt)$/.test(e.name)) {
+        const stem = path.basename(e.name).replace(/\.(java|kt)$/, "")
+        const text = await readFile(p, "utf8").catch(() => "")
+        if (text && !texts.has(stem)) texts.set(stem, text)
+      }
+    }
+  }
+  await walk(appDir)
+  return texts
+}
+
+/**
+ * 提取类文件中指定方法的方法体(声明行起,花括号配平)。找不到返回 undefined。
+ * 混淆场景方法名唯一性由调用方保证歧义检查(≥2 个同名声明如实放弃)。
+ */
+export function extractMethodBody(text: string, method: string): string | undefined {
+  const declRe = new RegExp(`\\b${method.replace(/[$]/g, "\\$")}\\s*\\(`)
+  let first = -1
+  let count = 0
+  let idx = 0
+  while (count < 3) {
+    const m = text.slice(idx).match(declRe)
+    if (!m) break
+    const at = idx + m.index!
+    if (first < 0) first = at
+    count += 1
+    idx = at + m[0]!.length
+  }
+  if (first < 0) return undefined
+  // 花括号配平:从首个声明后的第一个 { 到配平 }
+  const open = text.indexOf("{", first)
+  if (open < 0) return undefined
+  let depth = 0
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === "{") depth += 1
+    else if (text[i] === "}") {
+      depth -= 1
+      if (depth === 0) return text.slice(first, i + 1)
+    }
+  }
+  return undefined
+}
+
+/**
+ * 混淆名归一(调用上下文指纹):GT target 是混淆名(如 "i")时,定位该类中
+ * GT methodName 指向的方法体,若体内恰好出现唯一一个已知 source/sink API,
+ * 则把端点归一到该 API。歧义(0 或 ≥2 个 API)如实返回 undefined 不猜。
+ */
+export function normalizeObfuscatedTarget(
+  pt: GtPoint,
+  texts: Map<string, string>,
+): string | undefined {
+  if (pt.target === "" || pt.method === undefined) return undefined
+  // 仅对不在已知 API 表中的名称启用(已知 API 走精确匹配,不重复判)
+  if ([...SOURCES, ...SINKS].includes(pt.target)) return undefined
+  const stem = pt.class.split(".").pop() ?? pt.class
+  const text = texts.get(stem)
+  if (!text) return undefined
+  const body = extractMethodBody(text, pt.method)
+  if (!body) return undefined
+  const clean = body.replace(/"(?:\\.|[^"\\])*"/g, '""')
+  const hits = [...SOURCES, ...SINKS].filter((api) => clean.includes(api))
+  return hits.length === 1 ? hits[0] : undefined
 }
 
 /** 引擎流(连通级对判依据,与 Rust EngineFlow 同构):两端类词干 + 行号。 */
@@ -163,6 +246,7 @@ export async function engineFlows(appDir: string, opts?: { enableCrossclass?: bo
  *  @param opts.enableCrossclass 变异开关(透传 engineFlows,false = 变异基线)。 */
 export async function adjudicate(app: FlowApp, opts?: { enableCrossclass?: boolean }): Promise<FlowVerdict> {
   const reports = await endpointReports(app.dir)
+  const texts = await classTexts(app.dir)
   const efs = await engineFlows(app.dir, opts)
   const v: FlowVerdict = { app: app.name, gtFlows: app.flows.length, tp: 0, fn: 0, fpNegative: 0, tpConnected: 0, tpConnectedLenient: 0, fnSourceMiss: 0, fnSinkMiss: 0, fnBothMiss: 0, fnPropagationBreak: 0, unmatchedReports: 0 }
   const hit = (pt: GtPoint): boolean => {
@@ -170,7 +254,10 @@ export async function adjudicate(app: FlowApp, opts?: { enableCrossclass?: boole
     const apis = reports.get(stem)
     if (!apis || pt.target === "") return false
     // 语义等价:该类文件中出现 target API(同端点);回退:该类含任一同族 source/sink
-    return apis.has(pt.target)
+    if (apis.has(pt.target)) return true
+    // 混淆名归一回退:target 是混淆名时,GT methodName 指向的方法体唯一 API 锚定
+    const normalized = normalizeObfuscatedTarget(pt, texts)
+    return normalized !== undefined && apis.has(normalized)
   }
   for (const f of app.flows) {
     const s = hit(f.source), k = hit(f.sink)
