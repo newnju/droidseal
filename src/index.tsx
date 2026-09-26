@@ -70,7 +70,8 @@ function usage(): string {
   --no-resource            禁用资源加密
   --no-string              禁用字符串加密
   --no-runtime             禁用运行时保护
-  --enable-vmp             启用 VMP 虚拟机保护
+  --enable-vmp             生成 VM 解释器参考产物(写入输出目录,不注入 APK——
+                           不构成生效防护,报告如实标 vmProtected=false)
   --no-split-key           禁用 Split-Key 混淆
   --no-triple-entry        禁用三重入口
   --no-random-names        禁用随机包名/SO 名
@@ -317,7 +318,7 @@ if (resolved && resolved.inputPath) {
     // profile 预设(参数组合糖,不新增流水线能力):
     //   quick    — 最快出包:关抽取/字符串加密/三重入口/随机名,保留 DEX 加密
     //   balanced — 默认档(与省略 --profile 完全一致)
-    //   maximum  — 全开(含 --enable-vmp 传参;VMP 未接线时报告如实 not-wired)
+    //   maximum  — 全开(含 --enable-vmp 传参;VMP 仅产出参考 smali,报告如实 not-wired)
     // 显式 flag 永远优先于预设(先算预设布尔,再被单 flag 覆盖)。
     const profileArg = (getArg("--profile") ?? "balanced").toLowerCase()
     const profiles: Record<string, { hollow: boolean; stringEnc: boolean; triple: boolean; randomNames: boolean; vmp: boolean }> = {
