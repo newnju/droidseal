@@ -2,7 +2,7 @@
 // 解析 DEX 的 string_data 段，找到敏感字符串，
 // 用 XOR/AES 加密后替换原始字节，并生成包含真实加密数据的解密器 Smali。
 // 纯 TypeScript，失败关闭。
-import { createCipheriv, randomBytes } from "node:crypto"
+import { createCipheriv, createHash, randomBytes } from "node:crypto"
 import type { Finding } from "./types.ts"
 
 // ── DEX string_data 解析 ──────────────────────────────────────────────
@@ -72,9 +72,10 @@ const SENSITIVE_PATTERNS: RegExp[] = [
   /\bAKIA[0-9A-Z]{16}\b/,
   /\bAIza[0-9A-Za-z_-]{35}\b/,
   /\bghp_[0-9A-Za-z]{36}\b/,
+  /https?:\/\//i, // 网络端点(服务端地址/回连 URL)——高熵覆盖不到的低熵重复字符 URL
 ]
 
-function isSensitive(value: string): boolean {
+export function isSensitive(value: string): boolean {
   if (value.length < 6 || value.length > 1024) return false
   if (SENSITIVE_PATTERNS.some((p) => p.test(value))) return true
   // 高熵检测（Shannon 熵 > 4.5）
@@ -101,6 +102,64 @@ function xorEncrypt(data: Uint8Array, key: Uint8Array): Uint8Array {
     result[i] = data[i]! ^ key[i % key.length]!
   }
   return result
+}
+
+// ── MUTF-8 安全密文(同长写回的前提)────────────────────────────────
+// DEX string_data 按 MUTF-8 解码,密文字节必须落在可解码域,否则运行时字符串损坏。
+// 可行域取单字节集 0x01–0x7F(排除 0x00:MUTF-8 串终止符):对任意明文字节 p,
+// XOR 是双射,合法密钥字节 k = p ^ c(c ∈ 0x01–0x7F)恒有 127 个候选——逐字节约束
+// 永远可解。密钥流由每串随机 baseKey 经 FNV-1a 逐位派生,派生值越界时在合法集内
+// 确定性重选(同 (key,i) 重算结果一致,解密侧用同一算法还原)。
+function fnv1a(prev: number, byte: number): number {
+  let h = prev
+  h ^= byte
+  return Math.imul(h, 0x01000193) >>> 0
+}
+
+function mutf8SafeKeystream(baseKey: Uint8Array, length: number, plainBytes: Uint8Array): Uint8Array {
+  const ks = new Uint8Array(length)
+  let h = 0x811c9dc5
+  for (const b of baseKey) h = fnv1a(h, b)
+  for (let i = 0; i < length; i += 1) {
+    h = fnv1a(h, i & 0xff)
+    h = fnv1a(h, plainBytes[i]!)
+    const derived = h & 0xff
+    const candidate = plainBytes[i]! ^ derived
+    if (candidate >= 0x01 && candidate <= 0x7f) {
+      ks[i] = derived
+    } else {
+      // 越界:合法集内确定性重选(c = (h >>> 8) mod 127 + 1 → k = p ^ c)
+      const c = ((h >>> 8) % 127) + 1
+      ks[i] = plainBytes[i]! ^ c
+    }
+  }
+  return ks
+}
+
+export function mutf8SafeEncrypt(data: Uint8Array, baseKey: Uint8Array): { encrypted: Uint8Array; keystream: Uint8Array } {
+  const keystream = mutf8SafeKeystream(baseKey, data.length, data)
+  const encrypted = new Uint8Array(data.length)
+  for (let i = 0; i < data.length; i += 1) encrypted[i] = data[i]! ^ keystream[i]!
+  return { encrypted, keystream }
+}
+
+// ── DEX 校验和修复(SEC-010 同类:改字节必须同步 checksum/SHA-1)─────────
+// header: adler32@8(偏移 12 起至文件尾), sha1@12(偏移 32 起至文件尾)。
+export function updateDexChecksum(dexBytes: Uint8Array): Uint8Array {
+  const bytes = dexBytes.slice()
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  // 顺序关键:sha1 覆盖字节 32..,adler32 覆盖字节 12..(含 sha1 字段)——
+  // 必须先写 sha1 再算 adler32,否则校验和对不上最终字节(与 SEC-010 同型的顺序缺陷)
+  const sha1 = createHash("sha1").update(bytes.subarray(32)).digest()
+  bytes.set(sha1, 12)
+  let a = 1
+  let b = 0
+  for (let i = 12; i < bytes.length; i += 1) {
+    a = (a + bytes[i]!) % 65521
+    b = (b + a) % 65521
+  }
+  view.setUint32(8, ((b << 16) | a) >>> 0, true)
+  return bytes
 }
 
 // ── DEX string_data 替换 ──────────────────────────────────────────────
@@ -198,7 +257,7 @@ ${keyDataBlocks}
 
 # 解密指定索引的字符串(带缓存)
 .method public static decrypt(I)Ljava/lang/String;
-    .locals 5
+    .locals 7
 
     # 检查缓存
     sget-object v0, L${pkg}/DroidSealStringDecryptor;->cache:[Ljava/lang/String;
@@ -213,17 +272,17 @@ ${keyDataBlocks}
     sget-object v1, L${pkg}/DroidSealStringDecryptor;->ENC_KEYS:[[B
     aget-object v1, v1, p0
 
-    # XOR 解密
+    # XOR 解密(v0=密文数组引用, v1=密钥数组引用——循环内不得覆盖,否则第二轮 aget 崩溃)
     array-length v2, v0
     new-array v3, v2, [B
     const/4 v4, 0x0
     :xor_loop
     if-ge v4, v2, :xor_done
-    aget-byte v0, v0, v4
-    aget-byte v1, v1, v4
-    xor-int/2addr v0, v1
-    int-to-byte v0, v0
-    aput-byte v0, v3, v4
+    aget-byte v5, v0, v4
+    aget-byte v6, v1, v4
+    xor-int/2addr v5, v6
+    int-to-byte v5, v5
+    aput-byte v5, v3, v4
     add-int/lit8 v4, v4, 0x1
     goto :xor_loop
     :xor_done
@@ -279,18 +338,22 @@ export function encryptAndReplaceStrings(
 
   for (const str of toEncrypt) {
     const data = new TextEncoder().encode(str.value)
-    const key = randomBytes(16) // 每串独立随机密钥
-    const encrypted = xorEncrypt(data, key)
-
-    // 替换 DEX 中的原始字符串（保持相同长度）
+    const key = randomBytes(16) // 每串独立随机基密钥
+    // MUTF-8 安全加密:密文字节约束在 0x01–0x7F(可解码域),同长写回后运行时字符串不损坏;
+    // 解密用同一密钥流(由 baseKey+明文逐位派生——解密器持有 baseKey 与密文即可还原)
+    const { encrypted, keystream } = mutf8SafeEncrypt(data, key)
+    // keystream = 明文 XOR 密文,解密侧以密文重放同一派生(密文即明文的同长像)
     const originalRaw = str.rawBytes
     const replaceLen = Math.min(encrypted.length, originalRaw.length)
     const paddedEncrypted = new Uint8Array(originalRaw.length)
     paddedEncrypted.set(encrypted.slice(0, replaceLen))
 
     modifiedDex = new Uint8Array(replaceStringInDex(modifiedDex, str.offset, originalRaw, paddedEncrypted))
-    encryptedData.push({ index: str.index, original: str.value, key, encrypted })
+    encryptedData.push({ index: str.index, original: str.value, key: keystream, encrypted })
   }
+
+  // 修 DEX checksum/SHA-1(SEC-010 同类:改 string_data 字节后必须同步校验,否则加载即拒)
+  modifiedDex = new Uint8Array(updateDexChecksum(modifiedDex))
 
   // 生成解密器 Smali
   const decryptorSmali = generateStringDecryptorWithRealData(packageName, encryptedData)
