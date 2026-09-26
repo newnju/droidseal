@@ -444,7 +444,21 @@ ${jniName}(JNIEnv *env, jclass clazz) {
  */
 export function generateGuardVoteC(jniClassPath: string): string {
   const jniName = `Java_${jniClassPath.replace(/\//g, "_")}_nativeGuardVote`
+  // 自混淆(构建期):敏感字符串按次构建随机 key 逐字节 XOR 编码,运行时经
+  // ds_dstr 解码到栈缓冲——strings/grep 不再能直接扫出 "frida"/"TracerPid:" 等
+  // 壳特征;key 逐构建随机,同一逻辑每次构建密文不同。控制流:三个检测源经
+  // dispatch loop 状态机轮询,静态读源看不出检测顺序与短路关系。
+  const xk = Array.from(randomBytes(8), (b) => b & 0xff)
+  const strs = ["/proc/self/maps", "/proc/%d/status", "TracerPid:", "frida", "gum-js-loop", "linjector"]
+  const enc = strs.map((s) => {
+    const bytes = Array.from(new TextEncoder().encode(s))
+    return bytes.map((b, i) => b ^ xk[i % xk.length]!)
+  })
+  const dataArrs = enc.map((d, i) => `static const unsigned char ds_e${i}[${d.length}] = { ${d.join(", ")} };`).join("\n")
+  const ptrs = enc.map((_, i) => `ds_e${i}`).join(", ")
+  const lens = enc.map((d) => d.length)
   return `// DroidSeal native 反分析检测(构建期自动生成,勿手动修改)
+// 字符串逐构建 XOR 混淆(运行时解码);三检测源 dispatch 状态机轮询
 #include <jni.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -455,6 +469,18 @@ export function generateGuardVoteC(jniClassPath: string): string {
 #include <ctype.h>
 #include <string.h>
 #include <stdio.h>
+
+static const unsigned char ds_k[8] = { ${xk.join(", ")} };
+${dataArrs}
+static const unsigned char* const ds_e[6] = { ${ptrs} };
+static const int ds_len[6] = { ${lens.join(", ")} };
+
+/* 运行时解码第 idx 条字符串到 buf(调用方保证容量;XOR 可逆) */
+static void ds_dstr(int idx, char* buf) {
+    int n = ds_len[idx];
+    for (int i = 0; i < n; i++) buf[i] = (char)(ds_e[idx][i] ^ ds_k[i % 8]);
+    buf[n] = 0;
+}
 
 static int ds_probe_port(unsigned short port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -470,12 +496,18 @@ static int ds_probe_port(unsigned short port) {
 }
 
 static int ds_maps_hit(void) {
-    FILE* f = fopen("/proc/self/maps", "r");
+    char path[64];
+    ds_dstr(0, path);
+    FILE* f = fopen(path, "r");
     if (!f) return 0;
     char line[512];
     int hit = 0;
     while (fgets(line, sizeof(line), f)) {
-        if (strstr(line, "frida") || strstr(line, "gum-js-loop") || strstr(line, "linjector")) {
+        char pat[3][16];
+        ds_dstr(3, pat[0]);
+        ds_dstr(4, pat[1]);
+        ds_dstr(5, pat[2]);
+        if (strstr(line, pat[0]) || strstr(line, pat[1]) || strstr(line, pat[2])) {
             hit = 1;
             break;
         }
@@ -491,14 +523,18 @@ static int ds_parent_traced(void) {
     pid_t ppid = getppid();
     if (ppid <= 0) return 0;
     char path[64];
-    snprintf(path, sizeof(path), "/proc/%d/status", (int) ppid);
+    char fmt[32];
+    ds_dstr(1, fmt);
+    snprintf(path, sizeof(path), fmt, (int) ppid);
     FILE* f = fopen(path, "r");
     if (!f) return 0;
     char line[256];
+    char key[16];
+    ds_dstr(2, key);
     int hit = 0;
     while (fgets(line, sizeof(line), f)) {
-        if (strncmp(line, "TracerPid:", 10) == 0) {
-            const char* p = line + 10;
+        if (strncmp(line, key, strlen(key)) == 0) {
+            const char* p = line + strlen(key);
             while (*p && isspace((unsigned char) *p)) p++;
             hit = atoi(p) > 0 ? 1 : 0;
             break;
@@ -510,13 +546,21 @@ static int ds_parent_traced(void) {
 
 JNIEXPORT jint JNICALL
 ${jniName}(JNIEnv *env, jclass clazz) {
-    // 源 A:fork 子进程跨进程读父进程 TracerPid(零副作用)
-    if (ds_parent_traced()) return 1;
-    // 源 B:Frida 默认端口监听探测
-    if (ds_probe_port(27042) || ds_probe_port(27043)) return 1;
-    // 源 C:maps 特征(native 读路径)
-    if (ds_maps_hit()) return 1;
-    return 0;
+    /* dispatch 状态机:轮询三个检测源(顺序经状态变量交织,单步跟踪看不出
+     * 优先级;任一命中即投 1,全部干净返回 0)。 */
+    volatile int state = 0;
+    int verdict = 0;
+    while (state < 3) {
+        switch (state) {
+            case 0: verdict |= ds_parent_traced() ? 1 : 0; break;
+            case 1: verdict |= (ds_probe_port(27042) || ds_probe_port(27043)) ? 1 : 0; break;
+            case 2: verdict |= ds_maps_hit() ? 1 : 0; break;
+            default: break;
+        }
+        if (verdict) break;
+        state++;
+    }
+    return verdict;
 }
 `
 }
