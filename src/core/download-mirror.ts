@@ -12,12 +12,20 @@ export interface MirrorOverride {
   to: string
 }
 
-/** 国内常用公共镜像(路径布局与官方一致,仅换 host)。 */
+/**
+ * 国内公共镜像预设(2026-09 实测收录:只收 HTTP 200 且路径布局与官方一致的源,
+ * 未通过实测的候选一律不收——写进名单的每一条都必须真实可用)。
+ * AndroidSDK(commandline-tools)归档:腾讯;
+ * Gradle 发行版:腾讯、华为(双源互备);
+ * Adoptium JDK:无可靠国内镜像(API 动态清单无法 host 替换),走官方+可选代理。
+ */
 export const CN_MIRROR_OVERRIDES: MirrorOverride[] = [
-  // Android Command-line Tools / repository 归档(腾讯镜像,路径与官方一致)
+  // Android Command-line Tools / repository 归档(腾讯,路径与官方一致)
   { from: "https://dl.google.com/android/repository/", to: "https://mirrors.cloud.tencent.com/AndroidSDK/" },
-  // Gradle 发行版(腾讯镜像,distributions 路径一致)
+  // Gradle 发行版(腾讯)
   { from: "https://services.gradle.org/distributions/", to: "https://mirrors.cloud.tencent.com/gradle/" },
+  // Gradle 发行版(华为,腾讯失败后的次选)
+  { from: "https://services.gradle.org/distributions/", to: "https://mirrors.huaweicloud.com/gradle/" },
 ]
 
 export type MirrorMode = "official" | "cn" | "custom"
@@ -43,6 +51,30 @@ export function resolveMirrorConfig(envValue?: string): MirrorConfig {
     return { mode: "custom", overrides: [{ from: "__KNOWN__", to: envValue!.trim() }] }
   }
   return { mode: "official", overrides: [] }
+}
+
+/**
+ * 按镜像配置生成下载候选列表(多源容灾):
+ * - official:仅官方源;
+ * - cn:所有命中的镜像源(按名单顺序,腾讯→华为互备)+ 官方兜底,去重保序;
+ * - custom:用户前缀 + 官方兜底。
+ * 调用方逐个尝试,任一成功即止;全部失败最后抛官方源的错误(官方语义最标准)。
+ */
+export function resolveDownloadCandidates(url: string, config: MirrorConfig): string[] {
+  if (config.mode === "official") return [url]
+  const candidates: string[] = []
+  const push = (u: string) => { if (!candidates.includes(u)) candidates.push(u) }
+  for (const o of config.overrides) {
+    if (o.from === "__KNOWN__") {
+      for (const known of CN_MIRROR_OVERRIDES) {
+        if (url.startsWith(known.from)) push(o.to + url.slice(known.from.length))
+      }
+    } else if (url.startsWith(o.from)) {
+      push(o.to + url.slice(o.from.length))
+    }
+  }
+  push(url) // 官方源永远兜底
+  return candidates
 }
 
 /**
