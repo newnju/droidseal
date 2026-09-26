@@ -82,7 +82,33 @@ Android security tooling splits into two tracks: **audit** (MobSF, AndroBugs, AP
 
 **One-line summary**: unmatched as an offline audit→harden→sign→verify pipeline; mid-pack on raw hardening strength; keyed defenses are the differentiator; maturity is the biggest gap.
 
-## Testing & acceptance
+## Measured capabilities (benchmarked, not claimed)
+
+Numbers below come from reproducible harnesses in [`benchmark/`](benchmark/README.md); each is stated with its measurement criteria — the same discipline the tool applies to its own findings.
+
+**Audit (static analysis)**
+
+| Capability | Measured | Criteria |
+|---|---|---|
+| Malicious-flow detection (TaintBench, 39 apps / 249 GT flows) | endpoint TP 171 / 249 (68.7%), flow TP 136 | endpoint = target API present in the GT class; flow = both ends hit |
+| False positives (434 benign apps, AndroZoo VT=0 proxy) | dataflow engine FP = **0** (95% CI upper 0.69%) | only the dataflow layer counts; auxiliary config hints reported separately |
+| Detector base (source/config/hardening patterns) | 379 detectors, precision 76.9% / recall 90.9% on the 38-case built-in bench | pattern-level, MSTG-mapped |
+| JNI dynamic-register recovery | registry-string co-occurrence + DEX cross-validation | new finding class `JNI_DYNAMIC_REGISTER`; native attack surface invisible to static symbol scans |
+| Native linear dataflow | JNI exported-function source→sink co-occurrence | **linear heuristic, not pointer analysis**; `confidence: low` by design |
+
+**Hardening (release APK, opt-in)**
+
+| Layer | Status |
+|---|---|
+| DEX payload encryption (AES-256-GCM, HKDF, keyed anchors P0-A/B/C) | shipped; emulator-accepted (SEC-010/011/012 fixed via real-device loop) |
+| Method extraction (code-item hollowing) + lazy restoration | shipped; fail-open fallback to full restore |
+| String encryption with call-site rewrite (MUTF-8 safe ciphertext + checksum recompute) | shipped; apktool fail-closed on write-back |
+| VMP-lite | milestone A shipped (leaf-method interpreter, TS/C cross-checked 12 tests); **milestone B (RegisterNatives bridge + stub `ACC_NATIVE` marking) is build-time code only — `vmProtected` stays `false` until a real-device matrix (API 24–35) passes** |
+| Keyed defenses (integrity anchor / environment gate / key sharding / server challenge) | shipped, with honest caveats in the hardening section below |
+
+**Honest boundaries of the numbers**: TaintBench line numbers and jadx line numbers are different sources (230 endpoints, only 6 exact) — connected-level matching therefore offers a strict tier (line ±2, historically 0) and a lenient tier (class-stem alignment, 66/249); the lenient tier must never be quoted alone. Obfuscated GT method names (`i`, 31 occurrences) are recovered only when the wrapping method body contains exactly one known source/sink API; ambiguous cases are dropped, not guessed.
+
+
 
 Maturity here means *claimed capabilities are tested capabilities* — three layers, from cheapest to most expensive:
 
@@ -120,7 +146,7 @@ A defensive tool: by default it does not unpack, pack, or inject hooks / anti-de
 
 ### Self-developed vs third-party calls
 
-- **Self-developed** (business core): `src/core` (30 modules — ZIP/DEX/ELF/ARSC/AXML parsing and audit, pipeline orchestration, signing strategy, release gate), `src/ui` (TUI + i18n), the anti-debug stub, `scripts` (build/release/gate scripts), and the dual launchers;
+- **Self-developed** (business core): `src/core` (139 modules — ZIP/DEX/ELF/ARSC/AXML parsing and audit, pipeline orchestration, signing strategy, release gate, taint dataflow, VMP-lite compiler, JNI dynamic-register recovery), `src/ui` (TUI + i18n), the anti-debug stub, `scripts` (build/release/gate/bench scripts), and the dual launchers;
 - **Third-party** (rendering/build layer): OpenTUI (terminal rendering), Solid.js (reactive UI), Terser (build minification, optional web JS only), TypeScript/Bun (toolchain), and external Android tools (keytool/Gradle/zipalign/apksigner/aapt — orchestrated through self-developed discovery and verification).
 
 ### Pipeline visualization (self/third-party per step)

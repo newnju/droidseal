@@ -1,8 +1,18 @@
-# Changelog
+﻿# Changelog
 
 DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Changelog；公开兼容性表面确定后，项目遵循语义化版本。
 
 ## [Unreleased]
+
+
+### Added (2026-09-26 能力与文档轮)
+
+- **JNI 动态注册恢复**(JNI_DYNAMIC_REGISTER):SO 字符串池注册表痕迹扫描 + DEX 类/方法双命中交叉验证——动态注册 native 方法无静态导出符号,此前不可见;
+- **native 线性数据流**(NATIVE_DATAFLOW_SUSPECT):JNI 导出函数体 source→sink 共现检测,线性启发式(confidence: low)如实标注;
+- **混淆名归一**(对判层):GT 混淆方法名经方法体唯一 API 锚定恢复,歧义如实放弃——TaintBench 249 流口径 TP 130 → 136、宽松档 61 → 66;
+- **allowBackup 可执行修复**:审计 finding → AXML 原位翻转补丁(lipAllowBackupFalse,resId 0x01010280,长度保持);
+- **VMP 里程碑 B(构建期代码路径)**:RegisterNatives 桥生成器 + stub ACC_NATIVE 标记;真机矩阵验收前 mProtected 恒 false(如实降级);
+- **文档**:双语 README 新增「实测能力(基准数字)」节(全部随口径),模块数 30 → 139 修正;benchmark 报告与威胁模型补能力提升轮记录。
 
 ### Added
 
@@ -155,3 +165,4 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 10. **工程化**：零运行时依赖 + 开放格式自研（DEX/ARSC/ELF/PDF/SARIF）+ 失败关闭 + 有界扫描 + 特征词预过滤 + 内容缓存 + 发布预检 5 门禁（含基准精度门禁 ≥60%）。
 11. **精度治理**：**误报根因分类学**（alternation 分支误匹配/检测器重叠/模式过宽——3 类根因）+ 72 精度用例门禁——内置基准精度 60% → **88.2%**（FP 10 → 2）。
 12. **评测框架**：内置 30 用例基准（十维度正负）+ 外部 DroidBench（`--dir`/`--expected`）+ `--monitor` 监控（耗时/RSS/CPU）——DroidBench 23 用例标注评测：精度 **100%**·召回 84.8%——全量 25 用例 155ms·峰值 RSS 111MB。
+
