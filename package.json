@@ -50,7 +50,7 @@
     "bundle:local": "bun run scripts/collect-local-dependencies.ts",
     "dev": "bun --preload @opentui/solid/preload src/index.tsx",
     "start": "bun --preload @opentui/solid/preload src/index.tsx",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "test": "bun test",
     "build": "bun run scripts/build.ts",
     "build:node": "bun run scripts/build-node.ts",

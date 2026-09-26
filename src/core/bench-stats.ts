@@ -45,13 +45,15 @@ export function pairedBootstrapRecallDiff(a: CaseOutcome[], b: CaseOutcome[], it
     const sa: CaseOutcome[] = [], sb: CaseOutcome[] = []
     for (let i = 0; i < n; i++) {
       const idx = Number(next() % BigInt(n))
-      sa.push(a[idx]); sb.push(b[idx])
+      const ca = a[idx]; const cb = b[idx]
+      if (!ca || !cb) continue // 越界守卫(防御性,n 与数组长度由调用方保证一致)
+      sa.push(ca); sb.push(cb)
     }
     diffs.push(recall(sa) - recall(sb))
   }
   diffs.sort((x, y) => x - y)
-  const lo = diffs[Math.floor(0.025 * iters)]
-  const hi = diffs[Math.floor(0.975 * iters) - 1]
+  const lo = diffs[Math.floor(0.025 * iters)] ?? 0
+  const hi = diffs[Math.floor(0.975 * iters) - 1] ?? 0
   return [Math.round(lo * 10) / 10, Math.round(hi * 10) / 10]
 }
 
