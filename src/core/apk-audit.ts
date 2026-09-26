@@ -17,6 +17,8 @@ import { buildPrivacyFindings } from "./privacy-collection.ts"
 import { buildPermissionRiskFindings, linkPermissionDataflow } from "./permission-risk.ts"
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey, type SecretPattern } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages, detectSdkFingerprints } from "./dex-scan.ts"
+import { scanJniDynamicRegistrations, crossValidateWithDex } from "./jni-register-scan.ts"
+import { scanNativeDataflow } from "./native-dataflow.ts"
 import { extractCalledMethods, extractCallGraph, callersOf } from "./dex-callgraph.ts"
 import { disassembleNamed } from "./dex-disassembler.ts"
 import { matchBehaviorRules, maliciousScore, buildBehaviorFindings, matchDeobfuscatedRules, type BehaviorRule, BUILTIN_BEHAVIOR_RULES, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
@@ -1146,6 +1148,21 @@ async function scanNativeLibraries(
   const findings: Finding[] = []
   let failed = 0
   let scanned = 0
+  // P1a: JNI 动态注册端点恢复——DEX 字符串池懒加载(交叉验证用,多 SO 共享)
+  let dexStringSet: Set<string> | undefined
+  const loadDexStringSet = async (): Promise<Set<string>> => {
+    if (dexStringSet) return dexStringSet
+    const set = new Set<string>()
+    for (const dn of ["classes.dex", "classes2.dex", "classes3.dex"]) {
+      const bytes = await extractApkEntryBytes(apkPath, dn).catch(() => undefined)
+      if (!bytes) continue
+      try {
+        for (const s of extractDexStrings(bytes).strings) set.add(s)
+      } catch { /* 损坏 DEX:如实跳过 */ }
+    }
+    dexStringSet = set
+    return set
+  }
   for (const entryName of byBaseName.values()) {
     if (scanned >= MAX_NATIVE_LIBS_SCANNED) break
     const bytes = await extractApkEntryBytes(apkPath, entryName).catch(() => undefined)
@@ -1161,6 +1178,46 @@ async function scanNativeLibraries(
       const llvmResults = detectLlvmOllvmFeatures(bytes)
       if (llvmResults.length > 0) findings.push(...buildLlvmFindings(base, llvmResults))
       const secretHits = scanStringsForSecrets(extractAsciiStrings(bytes))
+      // P1a: RegisterNatives 动态注册端点恢复(签名表 × DEX 交叉验证)
+      const jniCandidates = scanJniDynamicRegistrations(extractAsciiStrings(bytes))
+      // P3: native 线性数据流(JNI 导出函数 source→sink 共现,线性启发式口径)
+      const dfHits = scanNativeDataflow(bytes)
+      if (dfHits.length > 0) {
+        findings.push({
+          severity: "medium",
+          confidence: "low",
+          code: "NATIVE_DATAFLOW_SUSPECT",
+          title: `JNI 导出函数疑似 source→sink 数据流:${dfHits.length} 个(线性启发式)`,
+          detail:
+            `在 ${base} 的 JNI 导出函数(JNI_OnLoad/Java_*)函数体范围内观察到网络/文件读类 API 与` +
+            `外发/执行类 API 的导入符号共现: ` +
+            dfHits.slice(0, 6).map((h) => `${h.symbol}[${h.sources.join("+")}→${h.sinks.join("+")}]`).join("、") +
+            (dfHits.length > 6 ? ` 等 ${dfHits.length} 个` : "") +
+            "。如实边界:线性启发式非指针分析——按符号表函数体范围共现判定,PLT 间接调用不解析,误报可能存在,仅作人工核验线索。",
+          recommendation: "优先人工核验共现函数的网络外发逻辑(尤其与动态注册端点重合的);确认恶意后建议加壳检测或服务端管控。",
+          evidence: dfHits.slice(0, 5).map((h) => `${base}:${h.symbol}`).join(", "),
+        })
+      }
+      if (jniCandidates.length > 0) {
+        const validated = crossValidateWithDex(jniCandidates, await loadDexStringSet())
+        if (validated.length > 0) {
+          findings.push({
+            severity: "info",
+            confidence: "medium",
+            code: "JNI_DYNAMIC_REGISTER",
+            title: `检测到 JNI 动态注册端点:${validated.length} 个(静态符号扫描不可见)`,
+            detail:
+              `在 ${base} 的字符串池中发现 JNINativeMethod 注册表痕迹(方法名+签名+类路径邻近共现),` +
+              `且宿主类与方法名在 DEX 中交叉验证命中——这些 native 方法经 RegisterNatives 动态注册,` +
+              `DEX 侧仅有 native 声明、无 Java_ 前缀静态导出符号,静态符号扫描不可见: ` +
+              validated.slice(0, 10).map((c) => `${c.classDotted}.${c.method}${c.signature}`).join("、") +
+              (validated.length > 10 ? ` 等 ${validated.length} 个` : "") +
+              "。如实边界:仅恢复注册清单,不含实现地址与行号。",
+            recommendation: "动态注册是 native 攻击面的常见隐藏入口,逐个核验实现逻辑(尤其网络/加密/反调试相关);交叉验证未命中的候选已如实丢弃。",
+            evidence: validated.slice(0, 5).map((c) => `${c.classPath}->${c.method}${c.signature}`).join(", "),
+          })
+        }
+      }
       if (secretHits.length > 0) {
         findings.push({
           severity: secretHits.some((hit) => hit.confidence === "confirmed" || hit.confidence === "high") ? "high" : "medium",
