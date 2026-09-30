@@ -9,6 +9,17 @@
 | 1 | API 26+ 真机或模拟器 | 主路径:`InMemoryDexClassLoader` 动态加载 | 标准加固、+`--keystore-bind`、+`--challenge-url` |
 | 2 | API 24 真机或模拟器 | 降级路径:loader 落盘 + 偏移直读 | 标准加固(确认落盘解密仍闭环) |
 
+### 矩阵化一键执行(推荐)
+
+`scripts/device-matrix.sh` 把「变体 × API 级」参数化:每个 API 级自动构建 standard / keystore(`--ks-relaunch` 二次启动判据)/ challenge(在线 + `--challenge-offline` fail-closed 反转)三类产物并逐格跑 device-test.sh:
+
+```bash
+bash scripts/device-matrix.sh app-release.apk --api 26,24 [--cert-sha256 <hex>] [--output out-matrix]
+```
+
+- 无 adb/无设备时如实 SKIP(exit 0)并给指引——skip 不是失败;失败格位即真机缺陷定位;
+- **vmProtected 置 true 的前提 = 矩阵全绿**(变体 × API 每格 D1-D5 全过),与 threat-model 的如实降级纪律一致。
+
 ## 标准流程
 
 ```bash
