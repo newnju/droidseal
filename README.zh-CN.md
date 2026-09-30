@@ -24,6 +24,8 @@
 | PyPI | `pip install droidseal` |
 | GitHub Releases | 直接下载 Windows zip / Linux tar.gz |
 
+> npm 包内为带完整性校验的单文件 bundle(`dist/droidseal.mjs`):`droidseal` 启动器每次运行先校验 bundle 的 SHA-256(与构建元数据比对)再加载——需要 Node.js ≥ 18。安装后执行 `droidseal --version` 确认可用。
+
 > **Windows 提示**：双击 exe 被 SmartScreen 拦截时，右键 → 属性 → 解除锁定。TUI 需在终端中运行：PowerShell 执行 `droidseal`，或双击随包附带的 `droidseal-gui.cmd` 启动器。
 
 ## 使用

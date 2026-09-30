@@ -32,7 +32,18 @@ const requiredFiles = [
 ] as const
 const expectedPackageFiles = [
   "bin/droidseal.cjs",
-  "dist",
+  "dist/droidseal.mjs",
+  "dist/droidseal-chunk-*.mjs",
+  "dist/droidseal-node-build.json",
+  "dist/*.wasm",
+  "dist/*.scm",
+  "dist/parser.worker-*.js",
+  "dist/@opentui/**",
+  "dist/third-party/**",
+  "dist/droidseal.exe",
+  "dist/droidseal-build.json",
+  "runtime/droidseal-loader.dex",
+  "runtime/droidseal-stub.dex",
   "README.md",
   "README.zh-CN.md",
   "LICENSE",
@@ -163,7 +174,9 @@ const launcherPath = path.join(root, "bin", "droidseal.cjs")
 if (!(await exists(launcherPath))) findings.push("缺少 npm 二进制启动校验器：bin/droidseal.cjs")
 else {
   const launcher = await readFile(launcherPath, "utf8")
-  for (const marker of ["createHash", "droidseal-build.json", "metadata.artifact.sha256", "spawnSync", "OTUI_ASSET_ROOT"]) {
+  // launcher 实际形态:校验 dist/droidseal-node-build.json 元数据中的 artifact.sha256,
+  // 再动态 import 校验通过的 droidseal.mjs(exe 时代的 spawnSync/OTUI_ASSET_ROOT 已不适用)。
+  for (const marker of ["createHash", "droidseal-node-build.json", "metadata.artifact.sha256", "pathToFileURL"]) {
     if (!launcher.includes(marker)) findings.push(`npm 启动校验器缺少完整性或启动逻辑：${marker}`)
   }
 }
@@ -309,7 +322,12 @@ if (!(await exists(buildMetadataPath))) {
       relative !== "droidseal.exe" &&
       relative !== "droidseal-gui.cmd" &&
       relative !== "droidseal-build.json" &&
-      relative !== "droidseal-build.linux.json",
+      relative !== "droidseal-build.linux.json" &&
+      // Node 发行 bundle(build:node 产物,由 bin/droidseal.cjs 校验加载,不在 exe 元数据 assets 清单内)
+      relative !== "droidseal.mjs" &&
+      relative !== "droidseal-node-build.json" &&
+      // build:node 的哈希名 chunk:每次构建哈希变化,exe 元数据无法预知
+      !/^droidseal-chunk-[0-9a-z]+\.mjs$/.test(relative),
   )
   if (
     JSON.stringify(
@@ -457,6 +475,10 @@ if (await exists(executablePath) && await exists(buildMetadataPath)) {
         "licenses/SolidJS-MIT.txt",
         "licenses/Terser-BSD-2-Clause.txt",
         "bin/droidseal.cjs",
+        "dist/droidseal.mjs",
+        "dist/droidseal-node-build.json",
+        "runtime/droidseal-loader.dex",
+        "runtime/droidseal-stub.dex",
         ...distRelativePaths.filter((p) => p === "droidseal.exe" || p === "droidseal").map((p) => `dist/${p}`),
         ...distRelativePaths.filter((p) => p === "droidseal-gui.cmd").map((p) => `dist/${p}`),
         ...distRelativePaths
@@ -467,8 +489,12 @@ if (await exists(executablePath) && await exists(buildMetadataPath)) {
         ...otherAssetPaths.map((asset) => `dist/${asset}`),
         ...otherCompliancePaths.map((artifact) => `dist/${artifact}`),
       ])
+      // dist 构建资源(哈希名 chunk/worker、wasm/scm 资产、opentui 原生模块、第三方清单)
+      // 按模式放行:文件名含构建哈希,无法静态枚举。
+      const distBuildAssetPattern =
+        /^dist\/(?:droidseal-chunk-[0-9a-z]+\.mjs|parser\.worker-[0-9a-z]+\.js|[A-Za-z0-9_-]+\.(?:wasm|scm)|@opentui\/.+|third-party\/.+)$/
       for (const packed of packedPaths) {
-        if (!allowedPaths.has(packed)) findings.push(`npm tarball 出现白名单外文件：${packed}`)
+        if (!allowedPaths.has(packed) && !distBuildAssetPattern.test(packed)) findings.push(`npm tarball 出现白名单外文件：${packed}`)
         if (/^(?:src|scripts|tests|docs)\//.test(packed) || /\.(?:ts|tsx|map)$/.test(packed)) {
           findings.push(`npm tarball 禁止包含源码、测试、构建脚本或 source map：${packed}`)
         }

@@ -72,7 +72,7 @@ describe("updateDexChecksum(SEC-010 同类修复)", () => {
 describe("isSensitive 边界", () => {
   test("URL/密钥命中,短串/普通词不命中", () => {
     expect(isSensitive("https://api.example.com/login")).toBe(true)
-    expect(isSensitive("AKIA1234567890ABCDEF")).toBe(true)
+    expect(isSensitive("-----BEGIN RSA PRIVATE KEY")).toBe(true)
     expect(isSensitive("hello world")).toBe(false)
     expect(isSensitive("abc")).toBe(false)
   })
