@@ -57,7 +57,8 @@ async function runAll(pipeline: Pipeline): Promise<void> {
 }
 
 describe("signing integrity", () => {
-  test("a failed keystore step short-circuits signing instead of re-reporting a vaguer error", async () => {
+  // 跑真实签名流水线(keystore + apksigner 子进程),负载下可能超 bun 默认 5s
+  test("a failed keystore step short-circuits signing instead of re-reporting a vaguer error", { timeout: 60_000 }, async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "droidseal-signing-"))
     const inputApk = path.join(workspace, "example.apk")
     await writeFile(inputApk, "PK\u0003\u0004fake-apk-bytes")
@@ -87,7 +88,7 @@ describe("signing integrity", () => {
     expect(verify.summary).toContain("SIGNATURE_MISSING_AFTER_FAILED_SIGNING")
   })
 
-  test("the final artifact is never named sealed-signed when signing did not succeed", async () => {
+  test("the final artifact is never named sealed-signed when signing did not succeed", { timeout: 60_000 }, async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "droidseal-signing-"))
     const inputApk = path.join(workspace, "example.apk")
     await writeFile(inputApk, "PK\u0003\u0004fake-apk-bytes")

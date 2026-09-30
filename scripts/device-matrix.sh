@@ -13,9 +13,9 @@ shift || true
 APIS="26,24"; OUTDIR="out-matrix"; CERT=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --api) APIS="${2:?--api 需要逗号分隔版本号}"; shift ;;
-    --output) OUTDIR="${2:?--output 需要目录}"; shift ;;
-    --cert-sha256) CERT="${2:?--cert-sha256 需要指纹}"; shift ;;
+    --api) APIS="${2:?--api 需要逗号分隔版本号}"; shift; shift ;;
+    --output) OUTDIR="${2:?--output 需要目录}"; shift; shift ;;
+    --cert-sha256) CERT="${2:?--cert-sha256 需要指纹}"; shift; shift ;;
     *) echo "FAIL: 未知参数 $1"; exit 2 ;;
   esac
 done
@@ -40,9 +40,9 @@ run_case() { # $1=标签 $2=api $3=构建flags $4=验收flags
   local apk="$OUTDIR/${PKG_BASE}.${label}.hardened.apk"
   echo "=== [$label API $api] build ==="
   if [ -n "$CERT" ]; then
-    $BUN run src/index.tsx harden "$INPUT" --output "$OUTDIR/$label" --cert-sha256 "$CERT" $build_flags || { echo "FAIL: $label 构建失败"; FAILED=$((FAILED+1)); return; }
+    $BUN run src/index.tsx "$INPUT" --output "$OUTDIR/$label" --cert-sha256 "$CERT" $build_flags || { echo "FAIL: $label 构建失败"; FAILED=$((FAILED+1)); return; }
   else
-    $BUN run src/index.tsx harden "$INPUT" --output "$OUTDIR/$label" $build_flags || { echo "FAIL: $label 构建失败"; FAILED=$((FAILED+1)); return; }
+    $BUN run src/index.tsx "$INPUT" --output "$OUTDIR/$label" $build_flags || { echo "FAIL: $label 构建失败"; FAILED=$((FAILED+1)); return; }
   fi
   # 产物名与包名从构建输出目录取(包名 = 原包名;device-test 需要)
   local hardened
@@ -67,7 +67,7 @@ for api in $(echo "$APIS" | tr ',' ' '); do
   build_flags_challenge="--challenge-url http://127.0.0.1:8080"
   if [ -n "$CERT" ]; then build_flags_challenge="$build_flags_challenge --cert-sha256 $CERT"; fi
   echo "=== [challenge API $api] build ==="
-  if $BUN run src/index.tsx harden "$INPUT" --output "$OUTDIR/challenge-$api" $build_flags_challenge; then
+  if $BUN run src/index.tsx "$INPUT" --output "$OUTDIR/challenge-$api" $build_flags_challenge; then
     challenge_doc=$(ls "$OUTDIR/challenge-$api"/*/server-challenge.json 2>/dev/null | head -1)
     [ -z "$challenge_doc" ] && challenge_doc=$(ls "$OUTDIR/challenge-$api"/server-challenge.json 2>/dev/null | head -1)
     if [ -n "$challenge_doc" ]; then
