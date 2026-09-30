@@ -19,7 +19,7 @@ interface SourceDetector {
   protectionPattern?: RegExp
 }
 
-const SOURCE_DETECTORS: readonly SourceDetector[] = [
+export const SOURCE_DETECTORS: readonly SourceDetector[] = [
   // 加密
   { code: "SOURCE_INSECURE_KEY_DERIVATION", title: "不安全的密钥派生（弱迭代次数）", severity: "medium", pattern: /PBEKeySpec\s*\([^)]*,[^)]*,\s*(?:[1-9]\d{0,3}|0)\s*\)/i, recommendation: "PBKDF2 迭代次数应 ≥ 10000（建议 210000——OWASP 密码存储建议）。", note: "PBEKeySpec 的迭代次数过弱——暴力破解成本过低。" },
   { code: "SOURCE_STATIC_IV", title: "静态初始化向量（CBC 固定 IV）", severity: "medium", pattern: /IvParameterSpec\s*\(\s*"[0-9A-Fa-f]+"/i, recommendation: "IV 每次加密应随机生成（不固定）——否则 CBC 模式泄露明文模式。", note: "固定 IV 违反加密最佳实践（每次加密随机 IV）。" },
@@ -437,6 +437,10 @@ const SOURCE_DETECTORS: readonly SourceDetector[] = [
   { code: "SOURCE_SELECTED_PHOTOS_FALLBACK", title: "部分授权后重选入口缺失", severity: "low", pattern: /READ_MEDIA_VISUAL_USER_SELECTED[\s\S]{0,200}?requestPermissions/i, recommendation: "部分授权后应常驻\"选择更多照片\"入口（ACTION_USER_SELECT_PHOTOS）——否则用户无法扩选。", note: "部分授权——扩选入口。" },
   { code: "SOURCE_IMPLICIT_INTENT_DANGEROUS", title: "隐式 Intent 发往敏感组件（Android 14 显式化要求）", severity: "medium", pattern: /sendBroadcast\s*\(\s*new\s+Intent\s*\(\s*["'](?!android\.intent\.action\.(?:MAIN|VIEW|SEND|BOOT))[a-z]+(?:\.[a-z]+)+["']/i, protectionPattern: /setPackage\s*\(|setClassName\s*\(|Intent\s*\(\s*\w+\s*,\s*\w+\.class/i, recommendation: "Android 14 对敏感广播要求显式 Intent（setPackage/setClassName）——隐式 Intent 可被任意应用接收。", note: "隐式广播——显式化。" },
   { code: "SOURCE_SCHEDULER_OVERRIDE", title: "屏幕/闹钟权限滥用（Android 14 滥用检测）", severity: "medium", pattern: /(?:ACCESSIBILITY_SERVICE|BIND_ACCESSIBILITY_SERVICE|SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM)[\s\S]{0,200}?(?:overlay|hide|click|auto)/i, recommendation: "无障碍/精确闹钟被用于模拟点击/隐藏图标属 Play 政策违规——Android 14 加强检测（封号风险）。", note: "无障碍滥用——政策违规。" },
+  // MASTG 收编批 1(2026-09-26:MASTG 原子测试对齐,正反用例见 tests/mastg-batch1.test.ts)
+  { code: "SOURCE_DESERIALIZATION_UNTRUSTED", title: "反序列化不可信数据（MASTG-TEST-0337）", severity: "high", pattern: /new\s+ObjectInputStream\s*\(/i, recommendation: "ObjectInputStream 反序列化外部输入可致 RCE（gadget chain）——优先 JSON 等安全格式;确需 Java 序列化时用 ObjectInputFilter 白名单（DESERIALIZE 许可类清单）。", note: "Java 原生反序列化是经典 RCE 入口——MASTG-TEST-0337 对齐。" },
+  { code: "SOURCE_URL_SCHEME_UNVALIDATED", title: "自定义 URL scheme 处理未校验输入（MASTG-TEST-0394）", severity: "medium", pattern: /(?:onCreate|onNewIntent|getIntent\s*\(\s*\))[\s\S]{0,300}?getData\s*\(\s*\)/i, protectionPattern: /(?:getScheme|getHost|getQueryParameter)[\s\S]{0,200}?(?:equals|startsWith|matches|contains)|(?:equals|startsWith|matches|contains)[\s\S]{0,200}?(?:getScheme|getHost|getData)/i, recommendation: "deeplink 入口对 getData() 返回的 URI 应校验 scheme/host/参数白名单——恶意链接可经 adb/am 命令注入数据（MASTG-TEST-0394）。", note: "URL scheme 入口——校验缺失才报告（protectionPattern 命中即跳过）。" },
+  { code: "SOURCE_IMPLICIT_INTENT_SENSITIVE_EXTRAS", title: "隐式 Intent 携带敏感 extras（MASTG-TEST-0374）", severity: "medium", pattern: /new\s+Intent\s*\(\s*"[^"]*"\s*\)[\s\S]{0,120}?(?:putExtra|putExtras)[\s\S]{0,80}?(?:password|token|secret|key|credential|auth)/i, recommendation: "隐式 Intent 的 extras 任何应用可读取——敏感数据应显式 Intent（setPackage/setClass）或加密后传递（MASTG-TEST-0374）。", note: "隐式 Intent 敏感 extras——泄露面。" },
 ]
 
 // 从检测器正则自动提取特征词（性能优化：预过滤——文件不含特征词则跳过该检测器，不跑全正则）。
