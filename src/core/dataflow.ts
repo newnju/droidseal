@@ -85,7 +85,9 @@ function stripStrings(line: string): string {
   return line.replace(/"(?:\\.|[^"\\])*"/g, '""')
 }
 function lhsOf(line: string): string | null {
-  const m = line.match(/^\s*[\w.$[\]]*\s*(?:this\.)?([A-Za-z_$][\w$]*)\s*=(?!=)/)
+  // \b 词边界防回退劈词:无类型声明的赋值("data = ..."/"this.data = ...")
+  // 此前会被贪婪前缀劈成 dat+a,取错 LHS——字段媒介流因此断链(引擎级 bug)。
+  const m = line.match(/^\s*[\w.$[\]]*\s*(?:this\.)?\b([A-Za-z_$][\w$]*)\s*=(?!=)/)
   return m ? (m[1] ?? null) : null
 }
 function rhsVars(line: string): string[] {
@@ -93,6 +95,29 @@ function rhsVars(line: string): string[] {
   if (eq < 0) return []
   const rhs = line.slice(eq + 1)
   return [...rhs.matchAll(/[A-Za-z_$][\w$]*/g)].map(m => m[0]).filter(v => !["new", "null", "true", "false", "this"].includes(v))
+}
+
+// P1-c: 单层字段访问(对象不敏感保守口径)——x.f 作为独立 env 键传播。
+// 动机:局部对象字段媒介(h.data = 污点 → send(h.data))此前被按整词劈开
+// (rhsVars 只出 h/data 两个裸名),字段键丢失 → 流断链。单层足矣:GT 语料中
+// 嵌套字段(x.f.g)占比极低,如实不做通用 access path。
+// 字段写:赋值行左侧以 x.f 结尾(排除裸变量/声明;this.data 归一为 "this.data" 键)。
+function fieldAssign(clean: string): [string, string] | null {
+  const eq = clean.search(/=(?!=)/)
+  if (eq < 0) return null
+  const left = clean.slice(0, eq).trim()
+  const m = left.match(/([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/)
+  return m ? [m[1]!, m[2]!] : null
+}
+// 字段读:ident.ident 且非方法调用(后随 "(" 视为调用,跳过)。
+function fieldReads(clean: string): Array<[string, string]> {
+  const out: Array<[string, string]> = []
+  for (const m of clean.matchAll(/([A-Za-z_$][\w$]*)\.\s*([A-Za-z_$][\w$]*)/g)) {
+    const after = clean.slice((m.index ?? 0) + m[0].length)
+    if (/^\s*\(/.test(after)) continue
+    out.push([m[1]!, m[2]!])
+  }
+  return out
 }
 function varsInCall(line: string): string[] {
   return [...line.matchAll(/[A-Za-z_$][\w$]*/g)].map(m => m[0]).filter(v => !["new", "null", "true", "false", "this", "Log"].includes(v))
@@ -572,8 +597,25 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
   const units = files.map(f => {
     const lines = f.content.split("\n")
     const meths = extractMethods(lines, f.cls)
-    // 回调注册解析(P2-2):匿名内部类方法并入宿主类(与 Rust 同口径)
-    expandAnonymousMethods(meths, lines, f.cls)
+    // 回调注册解析(P2-2):匿名内部类方法并入宿主类(与 Rust 同口径)。
+    // P1-b 不动点:回调体内可再注册回调(嵌套 new Xxx(){}),单遍展开只浮出第一层;
+    // 反复展开直至方法表不再增长(有界:每轮至少浮出一层嵌套,上限防病态构造)。
+    // 注意:expandAnonymousMethods 每轮从头重扫,会重复 push 已浮出的匿名方法——
+    // 每轮按 (name, body 起点) 去重,保证不动点判定有效。
+    for (let round = 0; round < 8; round++) {
+      const before = meths.length
+      expandAnonymousMethods(meths, lines, f.cls)
+      const seenKeys = new Set<string>()
+      const deduped = meths.filter(m => {
+        const key = `${m.name}:${m.body[0] ?? -1}`
+        if (seenKeys.has(key)) return false
+        seenKeys.add(key)
+        return true
+      })
+      meths.length = 0
+      meths.push(...deduped)
+      if (meths.length === before) break
+    }
     return { cls: f.cls, lines, meths: meths.filter(m => m.name !== "__file__") }
   })
   const nameIndex = new Map<string, Array<[string, string]>>()
@@ -632,30 +674,75 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
   }
   const flows: CrossClassFlow[] = []
   const seen = new Set<string>()
-  for (const u of units) {
-    const local = new Set(u.meths.map(m => m.name))
-    for (const m of u.meths) {
-      const s = lookup(u.cls, m.name); if (!s) continue
-      const env = new Map<string, ValInfo>()
-      m.paramNames.forEach((p, i) => {
-        const info = emptyVal(); info.params.add(i)
-        const st = entry.get(`${u.cls}::${m.name}`)?.get(i)
-        if (st) info.srcs = new Set(st)
-        if (!isEmptyVal(info)) env.set(p, info)
-      })
+  // P1-b: 执行时捕获通道——外层回调体内再注册内层回调时,捕获污点在执行期才可见
+  // (summarize 期 env 为空,看不到链式传入的污点);(回调名, 变量名, 来源行集)
+  const rtCaptures: Array<[string, string, Set<number>]> = []
+  // P1-a: 方法体解释循环抽出(原内联于流检查,行为不变)——生命周期序执行复用同一函数。
+  // 返回 env 终态:字段部分(this. 前缀/裸字段名)是生命周期链的传播媒介。
+  const runMethodBody = (u: { cls: string; lines: string[]; meths: Meth[] }, m: Meth, env0: Map<string, ValInfo> | undefined): void => {
+    const local = new Set(u.meths.map(x => x.name))
+    const s = lookup(u.cls, m.name); if (!s) return
+    const env = new Map<string, ValInfo>()
+    if (env0) for (const [k, v] of env0) env.set(k, v)
+    m.paramNames.forEach((p, i) => {
+      const info = emptyVal(); info.params.add(i)
+      const st = entry.get(`${u.cls}::${m.name}`)?.get(i)
+      if (st) info.srcs = new Set(st)
+      if (!isEmptyVal(info)) env.set(p, info)
+    })
+    // P1-b 修复:框架回调捕获播种(与 analyzeInterproc 终扫同语义)——本方法被
+    // 分派为回调时,按名字注入宿主捕获污点。此前跨类路径缺这一步,回调流全部断链。
+    // rtCaptures:嵌套回调(回调体内再注册回调)的污点在执行期才可见,一并注入。
+    for (const cs of allSums.values()) {
+      for (const [cb, vn, srcs] of cs.captures) {
+        if (cb === m.name && srcs.size) {
+          const e = env.get(vn) ?? emptyVal()
+          for (const x of srcs) e.srcs.add(x)
+          env.set(vn, e)
+        }
+      }
+    }
+    for (const [cb, vn, srcs] of rtCaptures) {
+      if (cb === m.name && srcs.size) {
+        const e = env.get(vn) ?? emptyVal()
+        for (const x of srcs) e.srcs.add(x)
+        env.set(vn, e)
+      }
+    }
       for (const li of m.body) {
         const l = (u.lines[li] ?? "").trim()
         if (!l || l.startsWith("//") || l.startsWith("*") || l.startsWith("/*")) continue
         const clean = stripStrings(l)
         const lineno = li + 1
         if (sanitizerHit(clean)) { const lhs = lhsOf(clean); if (lhs) env.delete(lhs); continue }
-        if (sourceApi(clean)) { const lhs = lhsOf(clean); if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(lineno); env.set(lhs, v); continue } }
+        // P1-b 登记端:执行到回调注册行(setOnClickXxx/post/execute 等)时,当前 env
+        // 中带污点的变量就是内层回调的捕获污点——登记给对应回调名(执行期捕获)。
+        const rtCb = frameworkDispatch(clean)
+        if (rtCb) {
+          const capSrcs = new Set<number>()
+          for (const [, e] of env) for (const s of e.srcs) capSrcs.add(s)
+          if (capSrcs.size) for (const [vn, e] of env) if (!isEmptyVal(e)) rtCaptures.push([rtCb, vn, new Set(e.srcs)])
+        }
+        if (sourceApi(clean)) {
+          // P1-c: source 写入字段(h.data = getSource())→ 记字段键,不记裸名
+          const faS = fieldAssign(clean)
+          if (faS) {
+            const key = faS[0] === "this" ? `this.${faS[1]}` : `${faS[0]}.${faS[1]}`
+            const v = env.get(key) ?? emptyVal(); v.srcs.add(lineno); env.set(key, v); continue
+          }
+          const lhs = lhsOf(clean); if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(lineno); env.set(lhs, v); continue }
+        }
         const sapi = sinkApi(clean)
         if (sapi) {
           const refs = rhsVars(clean)
           const used = refs.length ? refs : varsInCall(clean)
           const info = emptyVal()
           for (const v of used) { const e = env.get(v.replace(/^this\./, "")); if (e) mergeVal(info, e) }
+          // P1-c: sink 实参中的字段读(x.f)按 "x.f" 键查 env(this.f 归一)
+          for (const [o, f] of fieldReads(clean)) {
+            const key = o === "this" ? `this.${f}` : `${o}.${f}`
+            const e = env.get(key); if (e) mergeVal(info, e)
+          }
           for (const src of info.srcs) {
             if (!sourceApi(u.lines[src - 1] ?? "")) continue // 入口污点行号属调用方文件,由 caller 侧上报
             const key = `${u.cls}:${src}->${u.cls}:${lineno}`
@@ -713,10 +800,57 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
           const refs = rhsVars(clean)
           const info = emptyVal()
           for (const v of refs) { const e = env.get(v.replace(/^this\./, "")); if (e) mergeVal(info, e) }
-          if (isEmptyVal(info) && refs.length) env.delete(lhs)
+          // P1-c: RHS 字段读(h.data)按 "x.f" 键并入(this.f 归一为 this.f 键)
+          for (const [o, f] of fieldReads(clean.slice(clean.search(/=(?!=)/) + 1))) {
+            const key = o === "this" ? `this.${f}` : `${o}.${f}`
+            const e = env.get(key); if (e) mergeVal(info, e)
+          }
+          // P1-c: LHS 是字段写(x.f = / this.f =)→ 写字段键,不覆盖对象键
+          const fa = fieldAssign(clean)
+          if (fa) {
+            const key = fa[0] === "this" ? `this.${fa[1]}` : `${fa[0]}.${fa[1]}`
+            if (!isEmptyVal(info)) env.set(key, info); else env.delete(key)
+          } else if (isEmptyVal(info) && refs.length) env.delete(lhs)
           else if (!isEmptyVal(info)) env.set(lhs, info)
         }
       }
+    // P1-a: 字段终态回写 env0(生命周期链用);非生命周期路径无 env0,无副作用。
+    // P1-c 修复:this. 前缀的字段键必须保留——它们正是生命周期链的传播媒介
+    // (onCreate 写 this.data,onReceive 读 this.data);此前整类丢弃导致链断。
+    if (env0) {
+      env0.clear()
+      for (const [k, v] of env) {
+        if (k.startsWith("$")) continue
+        if (k.startsWith("this.")) { env0.set(k, v); continue }
+        if (/^this$/.test(k)) continue
+        if (!m.paramNames.includes(k)) env0.set(k, v)
+      }
+    }
+  }
+  // P1-a: 生命周期序表(dummy-main 保守子集)——同类内按框架调用序串行执行,
+  // 字段 env 终态沿链传播;跨组件类不连接(保守,防 FP)。
+  const LIFECYCLE_SEQ = [
+    "onCreate", "onStart", "onResume", "onPause", "onStop", "onDestroy",
+    "onReceive", "onStartCommand", "onBind", "onHandleIntent",
+    "doInBackground", "onProgressUpdate", "onPostExecute",
+  ]
+  const lifecycleRank = (n: string): number => LIFECYCLE_SEQ.indexOf(n)
+  for (const u of units) {
+    const lc = u.meths
+      .filter(m => lifecycleRank(m.name) >= 0)
+      .sort((a, b) => lifecycleRank(a.name) - lifecycleRank(b.name))
+    if (lc.length >= 2) {
+      // 链式执行:前者的字段终态 = 后者的初始 env(dummy-main 语义的同类内子集)
+      const chainEnv = new Map<string, ValInfo>()
+      for (const m of lc) {
+        if (process.env.DS_DEBUG_LIFECYCLE) console.error(`DBG chain ${u.cls}::${m.name} env0=${JSON.stringify([...chainEnv.keys()])}`)
+        runMethodBody(u, m, chainEnv)
+        if (process.env.DS_DEBUG_LIFECYCLE) console.error(`DBG after ${m.name} env0=${JSON.stringify([...chainEnv.keys()])}`)
+      }
+      continue // 链上方法已按序执行,不再单独跑
+    }
+    for (const m of u.meths) {
+      runMethodBody(u, m, undefined)
     }
   }
   return flows
