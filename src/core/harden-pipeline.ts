@@ -252,6 +252,9 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   let stubApp = ""
   let loaderAssetName = "" // asset 相对路径(不含 assets/ 前缀),meta 值
   let identMetaLoaderAsset = "ds_loader_asset_mk1" // 19B 标记,构建期等长替换
+  // stub 侧实际写入的 meta 键(stubResult.metaKey 回传),Step 3 manifest 注入必须用
+  // 它(批量收敛失败时 stub 保留原标记,manifest 跟随,两侧恒一致)
+  let stubMetaKey = identMetaLoaderAsset
   // 固定标识符随机值(enableRandomNames=false 时保持原值)
   let identMagic = "DROIDSEALBIN"
   let identAssetName = "droidseal.bin"
@@ -273,10 +276,11 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     const renameResult = randomizeLoaderClassNames(loaderDexRaw, config.enableRandomNames, stubSlotForRename)
     if (renameResult.renamed) {
       loaderDexRaw = renameResult.dex
-      // newShellPath/newLoaderPath 是 "Lpkg/Class;" 形式 → JNI 需 "pkg/Class"
-      const strip = (p: string) => p.slice(1, -1)
-      shellApp = strip(renameResult.newShellPath)
-      jniClassPath = strip(renameResult.newLoaderPath)
+      // renameResult.newShellPath/newLoaderPath 已是剥壳后的 bare 斜杠形式
+      // (loader-class-rename.ts 返回前自剥 L...;)——此前这里再 slice(1,-1)
+      // 二次剥壳掐头去尾,manifest/JNI/stub 拿到错位类名 → ClassNotFoundException。
+      shellApp = renameResult.newShellPath
+      jniClassPath = renameResult.newLoaderPath
       findings.push({
         severity: "info", confidence: "high", code: "LOADER_CLASS_RANDOMIZED",
         title: `壳入口类名已随机化:${renameResult.oldShellPath} → ${renameResult.newShellPath}`,
@@ -343,6 +347,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       })
       stubDexRaw = stubResult.dex
       stubApp = stubResult.stubClassPath
+      stubMetaKey = stubResult.metaKey // 批量收敛失败时回传原标记,manifest 必须跟随
       if (stubResult.missed.length > 0) {
         findings.push({
           severity: "medium", confidence: "high", code: "STUB_RANDOMIZE_PARTIAL",
@@ -376,14 +381,19 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       if (prevApp && prevApp !== "android.app.Application" && (!originalApplication || originalApplication === "android.app.Application")) {
         originalApplication = prevApp
       }
-      // 双 DEX 激活时 manifest 指向明文 stub(真实壳类名藏于加密 loader DEX 内)
-      const manifestEntry = stubApp || shellApp
+      // 双 DEX 激活时 manifest 指向明文 stub(真实壳类名藏于加密 loader DEX 内);
+      // 无 stub 时直接指向 loader 壳类——manifest 是点分命名空间,斜杠裸名会被
+      // Android 当相对名加包前缀 → ClassNotFoundException,必须转点分(运行时等价)
+      const manifestEntry = stubApp || shellApp.replace(/\//g, ".")
       const metaDatas = [
         { name: identMetaOriginalApp, value: originalApplication || "android.app.Application" },
         { name: identMetaShellSo, value: randomSo.replace(/^lib/, "").replace(/\.so$/, "") },
       ]
       if (stubApp) {
-        metaDatas.push({ name: identMetaLoaderAsset, value: loaderAssetName })
+        // meta 键必须用 stub 侧实际写入的值(stubMetaKey = stubResult.metaKey 回传):
+        // batch 收敛失败时 stub 内保留原标记,manifest 若仍写流水线自造键,
+        // stub 运行时 metaString 取不到 asset 路径 → 解密 fail-closed 误杀
+        metaDatas.push({ name: stubMetaKey, value: loaderAssetName })
       }
       const injected = injectShellIntoAxml(apkContents.manifest.bytes, { shellApplication: manifestEntry, metaDatas })
       apkContents.manifest.bytes = injected.axml

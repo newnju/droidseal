@@ -40,15 +40,15 @@ public class BootstrapStub extends android.app.Application {
         super.attachBaseContext(base);
         try {
             byte[] dex = loadLoaderDex(base);
-            if (dex == null) { android.util.Log.e("DS_DIAG", "step1 loadLoaderDex=null(fail-closed)"); return; }
+            if (dex == null) { android.util.Log.e("DS_DIAG", "step1 loadLoaderDex=null(fail-closed)"); failClosed(); }
             android.util.Log.e("DS_DIAG", "step1 loader dex decrypted, " + dex.length + "B");
             ClassLoader cl = loadDexBytes(base, dex);
-            if (cl == null) { android.util.Log.e("DS_DIAG", "step2 loadDexBytes=null"); return; }
+            if (cl == null) { android.util.Log.e("DS_DIAG", "step2 loadDexBytes=null"); failClosed(); }
             android.util.Log.e("DS_DIAG", "step2 classloader ok");
             Class<?> shellCls = cl.loadClass(SHELL_CLASS);
             android.util.Log.e("DS_DIAG", "step3 shell class loaded: " + shellCls.getName());
             Object app = shellCls.getDeclaredConstructor().newInstance();
-            if (!(app instanceof android.app.Application)) { android.util.Log.e("DS_DIAG", "step4 not Application"); return; }
+            if (!(app instanceof android.app.Application)) { android.util.Log.e("DS_DIAG", "step4 not Application"); failClosed(); }
             real = (android.app.Application) app;
             // ContextWrapper.attachBaseContext 为 protected,反射调用(与壳内 installOriginalApplication 同模式)
             java.lang.reflect.Method attach = android.content.ContextWrapper.class
@@ -58,8 +58,16 @@ public class BootstrapStub extends android.app.Application {
             android.util.Log.e("DS_DIAG", "step5 shell attached OK");
         } catch (Throwable t) {
             android.util.Log.e("DS_DIAG", "bootstrap failed", t);
-            real = null; // 失败关闭:壳以空身份运行
+            failClosed(); // 失败关闭:解密/加载链任何一环失败,进程终止,原始应用不运行
         }
+    }
+
+    // fail-closed 拦截:解密失败(重签名/重打包/离线挑战不可达)→ 进程终止。
+    // 此前仅 real=null 空身份返回,原 dex 照常渲染,fail-closed 名存实亡。
+    private void failClosed() {
+        real = null;
+        android.os.Process.killProcess(android.os.Process.myPid());
+        System.exit(1); // killProcess 异步,兜底
     }
 
     @Override

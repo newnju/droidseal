@@ -87,18 +87,32 @@ export function randomizeLoaderClassNames(loaderDex: Uint8Array, enable: boolean
     return true
   }
   // 联合命中是概率性的(loader 槽自由度 × stub 槽窗口),重试后仍不收敛 → 放弃改名
+  // 槽内生成是"整串等长随机",L/; 结构字符可能被随机成字母/斜杠 → DEX 真名与
+  // 调用方 slice(1,-1) 剥壳后的 manifest 名错一位(CNFE)。生成后强制重塑为
+  // L...; 形态(仅首尾替换,长度不变),再验槽;失败重试。
+  const reshapeDescriptor = (s: string): string => `L${s.slice(1, -1)};`
   let newShellPath: string | undefined
   if (slotShell.prev !== undefined || slotShell.next !== undefined) {
     for (let i = 0; i < 256 && newShellPath === undefined; i += 1) {
       const c = genNameInSlot(oldShellPath.length, slotShell)
-      if (c !== undefined && fitsBoth(c)) newShellPath = c
+      if (c === undefined || !c.includes("/")) continue
+      const r = reshapeDescriptor(c)
+      if (fitsBoth(r)) newShellPath = r
     }
   } else {
     const fallback = `L${randomPackagePath()}${randomClassName(CLASS_SHELL.length)};`
     if (fitsBoth(fallback)) newShellPath = fallback
   }
   const newLoaderPath = slotLoader.prev !== undefined || slotLoader.next !== undefined
-    ? genNameInSlot(oldLoaderPath.length, slotLoader)
+    ? (() => {
+        for (let i = 0; i < 256; i += 1) {
+          const c = genNameInSlot(oldLoaderPath.length, slotLoader)
+          if (c === undefined) return undefined
+          const r = reshapeDescriptor(c)
+          if (nameFitsSlot(r, slotLoader)) return r
+        }
+        return undefined
+      })()
     : `L${randomPackagePath()}${randomClassName(CLASS_LOADER.length)};`
   if (newShellPath === undefined || newLoaderPath === undefined) {
     // 槽内空间不足(邻居过近)→ 放弃改名,保留原名(功能不受影响,调用方无需 finding)
