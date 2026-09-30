@@ -7,7 +7,7 @@ import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 import { scanSourceDetectors } from "./source-detectors.ts"
 
-export interface GtPoint { class: string; line: number; target: string; /** GT methodName 解析出的方法名(混淆名归一用) */ method?: string }
+export interface GtPoint { class: string; line: number; target: string; /** GT methodName 解析出的方法名(混淆名归一用) */ method?: string; /** GT 语句原文(同源行号锚定用,2026-09-27 实测 91.8% 端点可逐字定位) */ statement?: string }
 export interface GtFlow { source: GtPoint; sink: GtPoint; negative: boolean }
 export interface FlowApp { name: string; dir: string; flows: GtFlow[] }
 
@@ -19,6 +19,9 @@ export interface FlowVerdict {
   tpConnected: number
   /** 连通级 TP(宽松档):两端类词干对齐即算,行号仅作参考——与 Rust 同口径 */
   tpConnectedLenient: number
+  /** 连通级 TP(语句锚定档):GT statement 在源码中逐字定位 → 用同源行号做严格档 ±2 判定。
+   *  背景:GT lineNo 与仓库 src 不同源(498 端点仅 67.5% 落在文件界内),语句文本高度可靠(91.8%); */
+  tpConnectedAnchored: number
   fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number
   /** 传播断链:两端识别但无引擎流连接(独立于端点识别缺口) */
   fnPropagationBreak: number
@@ -35,8 +38,8 @@ export function parseFindings(json: string): GtFlow[] {
       const srcMethod = parseMethodName(String(s.methodName ?? ""))
       const snkMethod = parseMethodName(String(k.methodName ?? ""))
       flows.push({
-        source: { class: String(s.className), line: Number(s.lineNo ?? 0), target: String(s.targetName ?? ""), ...(srcMethod !== undefined ? { method: srcMethod } : {}) },
-        sink: { class: String(k.className), line: Number(k.lineNo ?? 0), target: String(k.targetName ?? ""), ...(snkMethod !== undefined ? { method: snkMethod } : {}) },
+        source: { class: String(s.className), line: Number(s.lineNo ?? 0), target: String(s.targetName ?? ""), ...(srcMethod !== undefined ? { method: srcMethod } : {}), ...(typeof s.statement === "string" && s.statement ? { statement: s.statement } : {}) },
+        sink: { class: String(k.className), line: Number(k.lineNo ?? 0), target: String(k.targetName ?? ""), ...(snkMethod !== undefined ? { method: snkMethod } : {}), ...(typeof k.statement === "string" && k.statement ? { statement: k.statement } : {}) },
         negative: f.isNegative === true,
       })
     }
@@ -207,6 +210,101 @@ function matchesLenient(ef: EngineFlow, gtSrc: GtPoint, gtSnk: GtPoint): boolean
     || (ef.sourceClass === ks && ef.sinkClass === ss)
 }
 
+// ── 语句锚定层(IB,2026-09-27):GT lineNo 与仓库 src 不同源(498 端点仅 67.5%
+// 落在文件界内),但 GT statement 91.8% 可在源码逐字(空白归一后)定位——
+// 以语句文本为锚反查同源行号,严格档 ±2 判定因此可用(此前"行号映射不可行"
+// 的结论是拿 GT 行号直接对,方向错误;锚定后行号同源,判定合法)。
+
+interface AnchoredText { norm: string; lineOf: number[] }
+
+/** 归一空白(空白序列→单空格,去行首缩进)并保留每字符行号映射。 */
+function buildAnchoredText(text: string): AnchoredText {
+  const chars: string[] = []
+  const lineOf: number[] = []
+  let line = 1
+  let prevSpace = true
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!
+    if (ch === "\n") { line += 1; prevSpace = true; continue }
+    if (ch === " " || ch === "\t" || ch === "\r") {
+      if (prevSpace) continue
+      chars.push(" "); lineOf.push(line); prevSpace = true
+      continue
+    }
+    chars.push(ch); lineOf.push(line); prevSpace = false
+  }
+  return { norm: chars.join(""), lineOf }
+}
+
+/** 类全限定名 → 锚定文本(语句定位用;匿名/内部类并入外部类文件——与引擎口径一致)。 */
+async function classAnchoredTexts(appDir: string): Promise<Map<string, AnchoredText>> {
+  const out = new Map<string, AnchoredText>()
+  const walk = async (dir: string, rel: string): Promise<void> => {
+    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const p = path.join(dir, e.name)
+      const relChild = rel ? `${rel}.${e.name}` : e.name
+      if (e.isDirectory()) await walk(p, relChild)
+      else if (/\.(java|kt)$/.test(e.name)) {
+        const text = await readFile(p, "utf8").catch(() => "")
+        if (!text) continue
+        const built = buildAnchoredText(text)
+        const fqn = relChild.replace(/\.(java|kt)$/, "")
+        out.set(fqn, built)
+        // GT className 是纯包名形式,而 rel 路径含源根(src.main.java. 等)——
+        // 剥掉源根前缀再注册一份,否则包名查不中,锚定档恒 0。
+        const m = fqn.match(/^(?:src\.)?(?:main\.)?(?:java|kotlin)\.(.+)$/)
+        if (m && !out.has(m[1]!)) out.set(m[1]!, built)
+      }
+    }
+  }
+  await walk(appDir, "")
+  return out
+}
+
+/**
+ * GT 端点 → { stem, line }:className 定位类文件(全名不中则逐段剥尾,
+ * 覆盖 .AnonymousClassN / $N / 非公有内部类——均与外部类同文件),statement
+ * 在该文件中逐字定位,返回同源行号与文件词干(与 EngineFlow.class 同口径)。
+ * 语句未命中/类文件缺失/语句过短(<15 字符)如实返回 undefined,不猜。
+ */
+export function anchorPoint(
+  pt: GtPoint,
+  anchored: Map<string, AnchoredText>,
+): { stem: string; line: number } | undefined {
+  const stmt = (pt.statement ?? "").replace(/\s+/g, " ").trim()
+  if (stmt.length < 15) return undefined
+  let fqn = pt.class
+  for (;;) {
+    const a = anchored.get(fqn)
+    if (a) {
+      const at = a.norm.indexOf(stmt)
+      if (at < 0) return undefined
+      const line = a.lineOf[at]
+      if (line === undefined) return undefined
+      const stem = fqn.split(".").pop() ?? fqn
+      return { stem, line }
+    }
+    // 剥尾顺序:$N 内部类后缀优先——$ 不带点,若先剥 . 段会跳过外部类
+    // (com.example.Auth$1 逐段剥点只会落到 com.example);再剥最后一段 .X。
+    const dollar = fqn.lastIndexOf("$")
+    if (dollar > fqn.lastIndexOf(".")) { fqn = fqn.slice(0, dollar); continue }
+    const dot = fqn.lastIndexOf(".")
+    if (dot < 0) return undefined
+    fqn = fqn.slice(0, dot)
+  }
+}
+
+/** 锚定档:两端语句锚定行号(同源)做定向严格档——词干相等且行号精确/±2,允许 source/sink 换向。 */
+export function matchesAnchored(
+  ef: EngineFlow,
+  src: { stem: string; line: number },
+  snk: { stem: string; line: number },
+): boolean {
+  const near = (a: number, b: number) => a === b || Math.abs(a - b) <= 2
+  return (ef.sourceClass === src.stem && near(ef.sourceLine, src.line) && ef.sinkClass === snk.stem && near(ef.sinkLine, snk.line))
+    || (ef.sourceClass === snk.stem && near(ef.sourceLine, snk.line) && ef.sinkClass === src.stem && near(ef.sinkLine, src.line))
+}
+
 /** 收集 app 全部源文件的引擎流(过程内 + 跨方法 + 跨类,与 Rust main.rs 同三表口径)。
  *  @param opts.enableCrossclass 变异开关:false 时禁用跨类解析(变异基线,验证 harness 区分真实引擎能力)。 */
 export async function engineFlows(appDir: string, opts?: { enableCrossclass?: boolean }): Promise<EngineFlow[]> {
@@ -247,8 +345,9 @@ export async function engineFlows(appDir: string, opts?: { enableCrossclass?: bo
 export async function adjudicate(app: FlowApp, opts?: { enableCrossclass?: boolean }): Promise<FlowVerdict> {
   const reports = await endpointReports(app.dir)
   const texts = await classTexts(app.dir)
+  const anchored = await classAnchoredTexts(app.dir)
   const efs = await engineFlows(app.dir, opts)
-  const v: FlowVerdict = { app: app.name, gtFlows: app.flows.length, tp: 0, fn: 0, fpNegative: 0, tpConnected: 0, tpConnectedLenient: 0, fnSourceMiss: 0, fnSinkMiss: 0, fnBothMiss: 0, fnPropagationBreak: 0, unmatchedReports: 0 }
+  const v: FlowVerdict = { app: app.name, gtFlows: app.flows.length, tp: 0, fn: 0, fpNegative: 0, tpConnected: 0, tpConnectedLenient: 0, tpConnectedAnchored: 0, fnSourceMiss: 0, fnSinkMiss: 0, fnBothMiss: 0, fnPropagationBreak: 0, unmatchedReports: 0 }
   const hit = (pt: GtPoint): boolean => {
     const stem = pt.class.split(".").pop() ?? pt.class
     const apis = reports.get(stem)
@@ -271,6 +370,11 @@ export async function adjudicate(app: FlowApp, opts?: { enableCrossclass?: boole
       if (efs.some(ef => matchesStrict(ef, f.source) && matchesStrict(ef, f.sink))) v.tpConnected++
       else v.fnPropagationBreak++
       if (efs.some(ef => matchesLenient(ef, f.source, f.sink))) v.tpConnectedLenient++
+      // 语句锚定档:GT statement 逐字定位到同源行号后再做严格档(±2)判定。
+      // 两端都锚定成功才判——单端锚定不构成行号同源证据。
+      const aSrc = anchorPoint(f.source, anchored)
+      const aSnk = anchorPoint(f.sink, anchored)
+      if (aSrc && aSnk && efs.some(ef => matchesAnchored(ef, aSrc, aSnk))) v.tpConnectedAnchored++
     } else {
       v.fn++
       if (!s && k) v.fnSourceMiss++
@@ -282,7 +386,7 @@ export async function adjudicate(app: FlowApp, opts?: { enableCrossclass?: boole
 }
 
 /** 流级汇总。@param opts.enableCrossclass 变异开关(透传 adjudicate,false = 变异基线)。 */
-export async function summarizeFlow(root: string, opts?: { enableCrossclass?: boolean }): Promise<{ total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] } | null> {
+export async function summarizeFlow(root: string, opts?: { enableCrossclass?: boolean }): Promise<{ total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; tpConnectedAnchored: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] } | null> {
   const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
   const verdicts: FlowVerdict[] = []
   for (const e of entries) {
@@ -296,20 +400,21 @@ export async function summarizeFlow(root: string, opts?: { enableCrossclass?: bo
   return {
     total: sum("gtFlows"), tp: sum("tp"), fn: sum("fn"), fpNegative: sum("fpNegative"),
     tpConnected: sum("tpConnected"), tpConnectedLenient: sum("tpConnectedLenient"),
+    tpConnectedAnchored: sum("tpConnectedAnchored"),
     fnSourceMiss: sum("fnSourceMiss"), fnSinkMiss: sum("fnSinkMiss"), fnBothMiss: sum("fnBothMiss"),
     fnPropagationBreak: sum("fnPropagationBreak"),
     verdicts,
   }
 }
 
-/** 流级 Markdown 小节(与 Rust render_flow_md 同结构,含连通级双档与负例 FP)。 */
-export function renderFlowMd(s: { total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] }): string {
+/** 流级 Markdown 小节(与 Rust render_flow_md 同结构,含连通级三档与负例 FP)。 */
+export function renderFlowMd(s: { total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; tpConnectedAnchored: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] }): string {
   const recall = s.tp + s.fn > 0 ? Math.round((s.tp / (s.tp + s.fn)) * 1000) / 10 : 0
   const pct = (n: number) => s.tp > 0 ? Math.round((n / s.tp) * 1000) / 10 : 0
   const lines = [
     "", "## 流级判定(flow-level adjudication)", "",
-    `- GT 流:${s.total}(positive ${s.tp + s.fn} + negative ${s.fpNegative + 0}) · 端点级 TP:${s.tp} · FN:${s.fn} · **负例 FP:${s.fpNegative}** · **连通级 TP:${s.tpConnected}(${pct(s.tpConnected)}%)** · 连通级宽松档 TP:${s.tpConnectedLenient}(${pct(s.tpConnectedLenient)}%) · 流级召回 ${recall}%`,
-    "> 口径声明:官方语义——Expected Flow 检出=TP、未检出=FN;Unexpected(isNegative)流检出=FP。严格档 = 两端类词干对齐且行号精确/±2;宽松档 = 两端类词干对齐(行号仅作参考)。双档并列呈现,宽松档不得单独引用。",
+    `- GT 流:${s.total}(positive ${s.tp + s.fn} + negative ${s.fpNegative + 0}) · 端点级 TP:${s.tp} · FN:${s.fn} · **负例 FP:${s.fpNegative}** · **连通级 TP:${s.tpConnected}(${pct(s.tpConnected)}%)** · 连通级宽松档 TP:${s.tpConnectedLenient}(${pct(s.tpConnectedLenient)}%) · 连通级锚定档 TP:${s.tpConnectedAnchored}(${pct(s.tpConnectedAnchored)}%) · 流级召回 ${recall}%`,
+    "> 口径声明:官方语义——Expected Flow 检出=TP、未检出=FN;Unexpected(isNegative)流检出=FP。严格档 = 两端类词干对齐且行号精确/±2;宽松档 = 两端类词干对齐(行号仅作参考);锚定档 = GT statement 逐字定位到仓库 src 同源行号后做严格档(仅两端均锚定成功的流参与)。三档并列呈现,宽松档/锚定档不得单独引用。",
     "",
     "### FN 病因归因(三类,分母=positive 流)", "",
     "| 病因 | 条数 | 含义 |", "|---|---|---|",
