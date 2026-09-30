@@ -99,7 +99,18 @@ export function randomizeStubIdentifiers(stubDex: Uint8Array, opts: StubRandomiz
       original: SHELL_CLASS_MARKER,
       candidate: () => (opts.shellClassPath.includes(".") ? opts.shellClassPath : opts.shellClassPath.replace(/\//g, ".")),
     },
-    { original: META_KEY_MARKER, alphabet: `${SLOT_ALPHABET_DEFAULT}-_` },
+    // meta 键:优先用流水线传入值,不 fit 槽时槽内生成 fit 值——回传链
+    // (stubResult.metaKey = batch[3])保证 manifest 与 stub 内实际键恒一致;
+    // 固定返回不 fit 值会让整批收敛失败 → 全部回退原名(壳名标记也不替换 → CNFE)
+    {
+      original: META_KEY_MARKER,
+      candidate: (slot: OrderedNameSlot) => {
+        const k = opts.metaKey
+        if (k !== undefined && k.length === META_KEY_MARKER.length && nameFitsSlot(k, slot)) return k
+        return genNameInSlot(META_KEY_MARKER.length, slot, LOWER)
+      },
+      alphabet: `${SLOT_ALPHABET_DEFAULT}-_`,
+    },
   ]
   const slots = items.map((it) => findStringNeighbors(stubDex, it.original))
   const batch = genNamesInSlots(items, slots)
