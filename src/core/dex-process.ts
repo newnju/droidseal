@@ -25,6 +25,7 @@ export interface DexProcessResult {
   payloadBlobs: Array<Uint8Array | undefined> // 与 processedDex 对齐的加密 payload(nonce+tag+ct)
   keyMaterial: KeyMaterial
   hollowResult?: MethodHollowResult | undefined
+  hollowDexIndex: number // hollowResult 对应的 dexFiles 下标(-1 = 无抽取;多 DEX 时抽取结果合并取最后一个)
   encryptedDex?: EncryptedDex | undefined
   findings: Finding[]
 }
@@ -88,13 +89,14 @@ export function processAllDexFiles(
 
   // 2. 处理每个 DEX 文件
   let hollowResult: MethodHollowResult | undefined
+  let hollowDexIndex = -1
   let encryptedDex: EncryptedDex | undefined
 
-  for (const dex of dexFiles) {
-    const result = processDexFile(dex.bytes, config, keyMaterial)
+  for (let di = 0; di < dexFiles.length; di += 1) {
+    const result = processDexFile(dexFiles[di]!.bytes, config, keyMaterial)
     processedDex.push(result.processedDex)
     payloadBlobs.push(result.payloadBlob)
-    if (result.hollowResult) hollowResult = result.hollowResult
+    if (result.hollowResult) { hollowResult = result.hollowResult; hollowDexIndex = di }
     if (result.encryptedDex) encryptedDex = result.encryptedDex
   }
 
@@ -114,5 +116,5 @@ export function processAllDexFiles(
     })
   }
 
-  return { processedDex, payloadBlobs, keyMaterial, hollowResult, encryptedDex, findings }
+  return { processedDex, payloadBlobs, keyMaterial, hollowResult, hollowDexIndex, encryptedDex, findings }
 }
