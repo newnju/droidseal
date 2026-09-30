@@ -15,6 +15,7 @@ import { gateSummaryClaims } from "./summary-gate.ts"
 import { generateKeyMaterial, splitKey, type KeyMaterial } from "./dex-protection-keys.ts"
 import { patchLoaderDexKeys } from "./loader-key-patch.ts"
 import { randomizeLoaderClassNames } from "./loader-class-rename.ts"
+import { dumpExtractedCodeItems, serializeMappingTxt, type DumpCodeEntry, type MappingRecord } from "./dex-artifacts.ts"
 import { randomizeLoaderIdentifiers } from "./loader-ident-randomize.ts"
 import { randomizeStubIdentifiers, encryptLoaderDex } from "./stub-encapsulate.ts"
 import { generateShellLoaderFiles, type ShellLoaderConfig, buildShellLoaderFindings } from "./dex-shell-loader.ts"
@@ -123,6 +124,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   const soResults: Array<{ name: string; encryptedSize: number; originalSize: number }> = []
   const resourceResults: Array<{ name: string; encryptedSize: number }> = []
   const generatedFiles: Array<{ name: string; content: string }> = []
+  const mappingRecords: MappingRecord[] = [] // P3 mapping.txt 数据源(壳名/标识符随机化映射)
   let keyMaterial: KeyMaterial | undefined
   const containerEntries: ContainerEntry[] = []
   let stringWritebackApplied = false // encryptAndReplaceStrings 接线后置 true
@@ -282,6 +284,11 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
         recommendation: "真机验证壳入口以新类名正常启动。",
         evidence: renameResult.newLoaderPath,
       })
+      // P3:mapping.txt 数据源——壳类与 loader 类同前缀一起随机化,原值→新值成对记录
+      mappingRecords.push(
+        { kind: "loader-class", from: renameResult.oldShellPath, to: renameResult.newShellPath },
+        { kind: "loader-class", from: renameResult.oldShellPath.replace("ShellApplication", "DroidSealLoader"), to: renameResult.newLoaderPath },
+      )
     } else if (config.enableRandomNames) {
       findings.push({
         severity: "medium", confidence: "high", code: "LOADER_CLASS_RENAME_SKIPPED",
@@ -317,6 +324,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
           evidence: identResult.missed.join(","),
         })
       }
+      for (const c of identResult.changed) mappingRecords.push({ kind: "identifier", from: c.from, to: c.to })
     }
 
     // 双 DEX:stub 随机化提前到此处(Step 3 manifest 注入需要 stub 类名/asset meta 键)
@@ -444,6 +452,38 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
         evidence: String(dexErr).slice(0, 200),
       })
     }
+
+    // P3 对照组产物(dpt-shell --dump-code / DexVMP mapping.txt 同型):
+    // dump-code.json(抽取方法原始 CodeItem 明文,排查还原失败用)+ mapping.txt(崩溃栈还原用)。
+    // 均为旁路产物,不进 APK;dump-code 含明文方法体,仅限构建者排查,严禁随 APK 分发。
+    if (dexResult?.hollowResult && dexResult.hollowDexIndex >= 0) {
+      const dumpEntries: DumpCodeEntry[] = dumpExtractedCodeItems(
+        dexResult.processedDex[dexResult.hollowDexIndex]!,
+        dexResult.hollowResult.stubMethods,
+        dexResult.hollowResult.extractedCodeItems,
+      )
+      if (dumpEntries.length > 0) {
+        generatedFiles.push({ name: "dump-code.json", content: JSON.stringify({ version: 1, entries: dumpEntries }, null, 2) })
+        findings.push({
+          severity: "info", confidence: "high", code: "DUMP_CODE_EXPORTED",
+          title: `调试产物 dump-code.json 已生成(${dumpEntries.length} 个方法)`,
+          detail: "抽取方法的原始 CodeItem 明文 JSON(类/方法名解析自 string/type/method_ids 表)——壳还原失败时定位具体方法。含明文方法体,仅限构建者本地排查,严禁随 APK 分发或提交仓库。",
+          recommendation: "排查完成后删除该文件;如需保留,与 mapping.txt 一并按密钥材料对待。",
+          evidence: `entries=${dumpEntries.length}`,
+        })
+      }
+    }
+    if (mappingRecords.length > 0) {
+      generatedFiles.push({ name: "mapping.txt", content: serializeMappingTxt(mappingRecords) })
+      findings.push({
+        severity: "info", confidence: "high", code: "MAPPING_TXT_EXPORTED",
+        title: `映射产物 mapping.txt 已生成(${mappingRecords.length} 条)`,
+        detail: "壳类名/固定标识符随机化的 原值→新值 映射(ProGuard mapping 同型)——崩溃栈与日志还原用。明文对应混淆前名,随该构建归档;提交公开仓库会废掉随机化的静态定位效果。",
+        recommendation: "与 server-challenge.json 同级对待:离线归档、严禁公开。",
+        evidence: `records=${mappingRecords.length}`,
+      })
+    }
+
     // Step 4.5: payload 完整性验证(payload 现存于容器 blob,不再追加在壳 DEX 尾部)
     // 哈希链尾声明在两个 Step 4.5 块之外:citable 条目要接续 dex 条目的链
     let dexChainTail: Uint8Array | undefined // 条目 i 密钥混入条目 i-1 密文哈希(见 chainSeed)
