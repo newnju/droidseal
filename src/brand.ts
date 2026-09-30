@@ -9,6 +9,6 @@ export const DROIDSEAL_LOGO = [
 export const DROIDSEAL_LOGO_WIDTH = Math.max(...DROIDSEAL_LOGO.map((line) => line.length))
 export const DROIDSEAL_LOGO_HEIGHT = DROIDSEAL_LOGO.length
 
-export const VERSION = "1.0.0"
+export const VERSION = "1.0.1"
 // 产品版本(Edition):当前开源 Community 版;Pro/Enterprise 为独立私有模块(见（工具）)
 export const EDITION = "community" as const

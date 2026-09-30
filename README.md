@@ -24,6 +24,8 @@
 | PyPI | `pip install droidseal` |
 | GitHub Releases | Download the Windows zip / Linux tar.gz directly |
 
+> The npm package ships a verified single-file bundle (`dist/droidseal.mjs`): the `droidseal` launcher checks the bundle's SHA-256 against the pinned build metadata on every run, then loads it — requires Node.js ≥ 18. After install, run `droidseal --version` to confirm.
+
 > **Windows note**: if SmartScreen blocks the exe on double-click, right-click → Properties → Unblock. The TUI must run in a terminal: run `droidseal` in PowerShell, or double-click the bundled `droidseal-gui.cmd` launcher.
 
 ## Usage

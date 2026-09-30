@@ -10,7 +10,7 @@ const SAMPLES = [
 const MOBSF_DIR = "C:/tmp/mobsf-scan"
 const DS_GLOB = (s) => {
   // 找该样本最新 run 的报告
-  const base = `C:/Users/diamond/textseg/multisample/${s}/.droidseal/runs`
+  const base = `textseg/multisample/${s}/.droidseal/runs`
   if (!existsSync(base)) return null
   const runs = require("node:fs").readdirSync(base).sort().reverse()
   for (const r of runs) {
@@ -104,6 +104,6 @@ for (const row of rows) {
   const dis = Object.entries(row.rules).filter(([, v]) => (v as any).msf !== (v as any).ds).map(([k, v]) => `${k}(M:${(v as any).msf?1:0}/D:${(v as any).ds?1:0}/T:${(v as any).gt?1:0})`)
   md.push(`| ${row.sample} | ${agree}/4 | ${row.msf_only} 条 | ${row.ds_only} 条 ${dis.length ? "⚠ " + dis.join(", ") : ""} |`)
 }
-writeFileSync("C:/Users/diamond/DroidSeal-GitHub/textseg/mobsf-shared-rules/comparison.md", md.join("\n"))
-writeFileSync("C:/Users/diamond/DroidSeal-GitHub/textseg/mobsf-shared-rules/comparison.json", JSON.stringify({ rows, agg }, null, 2))
+writeFileSync("textseg/mobsf-shared-rules/comparison.md", md.join("\n"))
+writeFileSync("textseg/mobsf-shared-rules/comparison.json", JSON.stringify({ rows, agg }, null, 2))
 console.log(md.join("\n"))

@@ -20,6 +20,6 @@
 
 ## 来源文件
 
-- 量化配对:C:/Users/diamond/textseg/multisample/quantify/quantify.json(21 行,3 方 × 7 样本)
+- 量化配对:../multisample/quantify/quantify.json(21 行,3 方 × 7 样本)
 - MobSF 耗时:C:/tmp/mobsf-scan/scan-*.json → logs[].timestamp
 - DroidSeal 耗时:textseg/multisample/*/.droidseal/runs/*/ 文件 mtime
