@@ -17,8 +17,17 @@
 bash scripts/device-matrix.sh app-release.apk --api 26,24 [--cert-sha256 <hex>] [--output out-matrix]
 ```
 
-- 无 adb/无设备时如实 SKIP(exit 0)并给指引——skip 不是失败;失败格位即真机缺陷定位;
-- **vmProtected 置 true 的前提 = 矩阵全绿**(变体 × API 每格 D1-D5 全过),与 threat-model 的如实降级纪律一致。
+环境变量注入(密钥材料一律留仓库外,不进命令行历史/仓库):
+
+| 变量 | 作用 | 缺省 |
+|---|---|---|
+| `DS_KS_FLAGS` | 签名参数(`--keystore <jks> --ks-alias <a> --ks-pass <p> --key-pass <p>`)——三变体产物都必须签名,否则安装判据必然 `INSTALL_PARSE_FAILED_NO_CERTIFICATES` | 空=产物不签名(仅构建期基线可用) |
+| `DS_TLS_CERT` / `DS_TLS_KEY` | challenge 在线格的 TLS 证书链/私钥(构建期 https 门强制 challenge URL 为 https://,不允许降级 http);模拟器经 `https://10.0.2.2:8443` 直达本机回环 | `~/ds-fixtures/tls/srv-fullchain.pem` / `srv.key` |
+| `ADB` / `BUN` | adb 与 bun 可执行文件绝对路径(CI/WMI 等继承环境 PATH 不可靠的场景) | `adb` / `bun` |
+
+- 无 adb/无设备/无 TLS 材料时如实 SKIP(exit 0)并给指引——skip 不是失败;失败格位即真机缺陷定位;
+- 判据纪律:启动用 `monkey`(不依赖 `resolve-activity`——adbd 抖动时该子命令挂空会导致 D2 假失败);离线格前断言端点端口已释放;
+- **vmProtected 与本矩阵无关**——矩阵验收的是壳加载链(runtimeProtected);vmProtected 绑定 VMP 注入链(里程碑 B),在其真机验收全绿前恒 false,与 threat-model 的如实降级纪律一致。
 
 ## 标准流程
 
@@ -78,6 +87,26 @@ fixture APK(ds-hello,8589B,minSdk 24)三变体逐格功能级验收(判据升级
 3. **meta 键两侧不一致**——manifest 写流水线自造随机键,stub 内批量收敛失败时保留原标记 → 运行时取不到 asset 路径误杀;修复为 manifest 跟随 `stubResult.metaKey` 回传值,候选不 fit 槽时槽内生成,两侧恒一致。
 
 **判据纪律**:D2/D6 存活判定用 `pidof`+dumpsys(API 24 镜像 `ps -A` 不可靠);功能级一律以 logcat `Displayed` 为准;challenge 离线格预期 displayed=0 + 进程终止,fail-closed 生效的证明是"原始 Activity 不渲染"而非崩溃信息。
+
+## 实测记录(2026-10-01,API 24 x86_64 模拟器,device-matrix.sh 一键化全绿轮)
+
+`device-matrix.sh` 首次全流程跑通(此前仅验证过 SKIP 路径),4 格全绿(`MATRIX PASS: 4 用例全绿,MATRIX_EXIT=0`):
+
+| 格位 | 判据 | 结果 |
+|---|---|---|
+| standard | D1a/D1/D2/D3/D6 | 5/5 PASS(D2 pid 存活,解密+壳启动闭环) |
+| keystore(`--ks-relaunch`) | D1a/D1/D2/D3/D5/D6 | 6/6 PASS(**D5 二次启动存活,unseal→XOR part3 还原路径首次实测通过**) |
+| challenge 在线 | D1a/D1/D2/D3/D6 | 5/5 PASS(TLS 端点可达,part3 在线获取) |
+| challenge 离线 | D1a/D1/D2/D3/D6 | 5/5 PASS(端点杀掉后进程 5s 内不存活,fail-closed 语义正确) |
+
+本轮一键化过程中修掉的脚本级缺陷(产物与壳链本身无回归):
+
+1. **产物路径过期**:脚本按旧扁平结构取产物,当前 CLI 输出在 `$OUT/<label>/hardened/` 子目录——ls 路径补层;
+2. **签名参数缺失**:三变体均未传 keystore 参数 → 产物未签名 → 安装判据必然 `INSTALL_PARSE_FAILED_NO_CERTIFICATES`;签名参数改经 `DS_KS_FLAGS` 环境变量注入(密钥材料留仓库外);
+3. **包名解析经 cmd shell**:bun `execSync` 在 w64devkit 环境下 PATH 跨层转换不可靠 → 改 bash 直调 aapt 绝对路径 + sed 提取;
+4. **启动依赖 resolve-activity**:adbd 抖动时该子命令挂空 → `am start` 拿空 activity 名 → D2 假失败(第九轮 standard/keystore/challenge-online 三格的 D2 失败与 challenge-offline 的假 PASS 均源于此)→ 启动改 `monkey`,D2 无 pid 时重试一次;
+5. **离线格端点未真杀**:challenge 在线/离线两格共用构建,原脚本在两格跑完后才杀 server → 离线格端点可达、解密成功、判据方向反转失败;改为在线格验收后立即杀端点(netstat 拿监听 PID → `Stop-Process` 兜底,MSYS kill 对 Windows 侧进程无效、`cmd //c` 在 w64devkit 下挂死均已实证)并断言端口释放;
+6. **环境探测**:adb 预检改直接试跑 `"$ADB" version`(支持 `ADB` 环境变量覆盖——WSL bash 劫持 `bash` 命令名时不继承 Windows 环境变量,须用 w64devkit bash 全路径调脚本)。
 
 ## 手动用例(脚本不覆盖)
 
