@@ -331,6 +331,7 @@ function argsFrom(argsStr: string, lineno: number, env: Map<string, ValInfo>): V
 function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
   const sum: Sum = { retParams: new Set(), retSrcs: new Set(), fieldsFrom: new Map(), fieldsSrcs: new Map(), sinks: [], calls: [], captures: [], intentKeys: [] }
   const env = new Map<string, ValInfo>()
+  const returnVars = new Set<string>() // P1-IA3: return 表达式变量(末尾按 env 终态回填)
   // 反射常量目标 + ICC 常量键(与 Rust summarize_pred 同款)
   const reflect = new Map<string, string>()
   const intentKeys: Array<[string, Set<number>]> = []
@@ -427,6 +428,8 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
       if (sourceApi(expr)) info.srcs.add(li + 1)
       for (const p of info.params) sum.retParams.add(p)
       for (const s of info.srcs) sum.retSrcs.add(s)
+      // P1-IA3: 收集 return 表达式变量,末尾按 env 终态回填
+      for (const v of varsInCall(expr)) returnVars.add(v)
       continue
     }
     if (sourceApi(clean)) {
@@ -443,7 +446,14 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
       const used = refs.length ? refs : varsInCall(clean)
       const info = emptyVal()
       for (const v of used) { const e = env.get(v); if (e) mergeVal(info, e) }
-      if (!isEmptyVal(info)) sum.sinks.push({ line: li + 1, api: sapi, info })
+      if (!isEmptyVal(info)) {
+        sum.sinks.push({ line: li + 1, api: sapi, info })
+        // P1-IA3: mutating-call receiver 继承实参污点——x.append(污点)/x.add(污点)
+        // 是 sink 也是"容器变污",receiver 不继承则容器后续读/返回全断
+        // (readConfig 的 stringBuilder 链断实证:FlashW→FlashVirtual 整链)。
+        const rm = /^[\w.$]*?\b([A-Za-z_$][\w$]*)\.\w+\(/.exec(clean)
+        if (rm && rm[1] !== "Log") { const e = env.get(rm[1]!) ?? emptyVal(); mergeVal(e, info); env.set(rm[1]!, e) }
+      }
       continue
     }
     const call = resolveCall(clean, li + 1, has, env)
@@ -471,6 +481,10 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
       }
     }
   }
+  // P1-IA3: return 变量污点按 env 终态回填——while(true){readLine; if(null) return sb;
+  // append} 的 return 在 append 前(循环回边未建模),线性行处理时 sb 尚无污点;
+  // 执行期 append 先于最终 return,按终态回填语义正确(sanitizer 净化不回填)。
+  if (returnVars.size) for (const v of returnVars) { const e = env.get(v); if (!e) continue; for (const s of e.srcs) sum.retSrcs.add(s); for (const p of e.params) sum.retParams.add(p) }
   sum.intentKeys = intentKeys
   return sum
 }
@@ -595,6 +609,9 @@ export function analyzeInterproc(content: string): TaintFlow[] {
         const info = emptyVal()
         for (const v of used) { const e = env.get(v.replace(/^this\./, "")); if (e) mergeVal(info, e) }
         for (const src of info.srcs) push(src, lineno, sapi)
+        // P1-IA3: mutating-call receiver 继承实参污点(x.append(污点) → 容器变污)
+        const rm = /^[\w.$]*?\b([A-Za-z_$][\w$]*)\.\w+\(/.exec(clean)
+        if (rm && rm[1] !== "Log" && !isEmptyVal(info)) { const e = env.get(rm[1]!) ?? emptyVal(); mergeVal(e, info); env.set(rm[1]!, e) }
         continue
       }
       const call = resolveCall(clean, lineno, n => names.has(n), env)
@@ -827,10 +844,30 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
               flows.push({ source_line: src, sink_line: lineno, src_api: sourceApi(u.lines[src - 1] ?? "") ?? "", sink_api: sapi, src_class: u.cls, sink_class: u.cls })
             }
           }
+          // P1-IA3: mutating-call receiver 继承实参污点(x.append(污点) → 容器变污)
+          const rm = /^[\w.$]*?\b([A-Za-z_$][\w$]*)\.\w+\(/.exec(clean)
+          if (rm && rm[1] !== "Log" && !isEmptyVal(info)) { const e = env.get(rm[1]!) ?? emptyVal(); mergeVal(e, info); env.set(rm[1]!, e) }
           continue
         }
         const call = resolveCall(clean, lineno, n => local.has(n) || nameIndex.has(n), env)
         if (call) {
+          // P1-IA3: execute 实参的内嵌读法调用污点——execute(new String[]{... +
+          // readConfig("k", ctx) + ...}) 的污点来自内嵌调用的返回值,argsFrom 只提
+          // 变量提不到;按方法名查摘要 retSrcs 注入(执行期 allSums 已建全)。
+          if (call.callee.startsWith("__async__")) {
+            const from = clean.indexOf(".execute(") + ".execute(".length
+            const parts = splitArgs(clean.slice(from))
+            for (let pi = 0; pi < call.args.length && pi < parts.length; pi++) {
+              const a = call.args[pi]!
+              for (const nm of varsInCall(parts[pi]!)) {
+                if (!(local.has(nm) || nameIndex.has(nm))) continue
+                for (const target of resolveAll(u.cls, nm)) {
+                  const cs2 = lookup(target[0], target[1]); if (!cs2) continue
+                  for (const s2 of cs2.retSrcs) a.srcs.add(s2)
+                }
+              }
+            }
+          }
           const targets = resolveAll(u.cls, call.callee)
           // 多实现集合语义:sink 流全部分发(并集);ret/fields 取并集注入
           for (const target of targets) {
