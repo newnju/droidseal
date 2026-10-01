@@ -15,6 +15,8 @@ export interface FlowVerdict {
   app: string; gtFlows: number; tp: number; fn: number
   /** 负例流(unexpected,isNegative=true)被检出数——官方口径的 FP */
   fpNegative: number
+  /** 锚定口径 FP:负例两端锚定成功且引擎流行号(±2)双端命中——端点语义等价但行号不齐的宽松匹配不在此列 */
+  fpNegativeAnchored: number
   /** 连通级 TP:两端识别且引擎流按行号(±2)连接(严格档) */
   tpConnected: number
   /** 连通级 TP(宽松档):两端类词干对齐即算,行号仅作参考——与 Rust 同口径 */
@@ -196,7 +198,8 @@ export interface EngineFlow { sourceClass: string; sinkClass: string; sourceLine
 
 /** 严格档:类词干相等且行号精确或 ±2(与 Rust matches 同口径)。 */
 function matchesStrict(ef: EngineFlow, pt: GtPoint): boolean {
-  const stem = pt.class.split(".").pop() ?? pt.class
+  // P1-IB12: 匿名类剥尾(与宽松档/锚定档同语义)——GT 匿名类流此前全挂。
+  const stem = (pt.class.split(".").pop() ?? pt.class).split("$")[0]!
   const near = (a: number, b: number) => a === b || Math.abs(a - b) <= 2
   return (ef.sourceClass === stem && near(ef.sourceLine, pt.line))
     || (ef.sinkClass === stem && near(ef.sinkLine, pt.line))
@@ -349,7 +352,7 @@ export async function adjudicate(app: FlowApp, opts?: { enableCrossclass?: boole
   const texts = await classTexts(app.dir)
   const anchored = await classAnchoredTexts(app.dir)
   const efs = await engineFlows(app.dir, opts)
-  const v: FlowVerdict = { app: app.name, gtFlows: app.flows.length, tp: 0, fn: 0, fpNegative: 0, tpConnected: 0, tpConnectedLenient: 0, tpConnectedAnchored: 0, fnSourceMiss: 0, fnSinkMiss: 0, fnBothMiss: 0, fnPropagationBreak: 0, unmatchedReports: 0 }
+  const v: FlowVerdict = { app: app.name, gtFlows: app.flows.length, tp: 0, fn: 0, fpNegative: 0, fpNegativeAnchored: 0, tpConnected: 0, tpConnectedLenient: 0, tpConnectedAnchored: 0, fnSourceMiss: 0, fnSinkMiss: 0, fnBothMiss: 0, fnPropagationBreak: 0, unmatchedReports: 0 }
   const hit = (pt: GtPoint): boolean => {
     const stem = pt.class.split(".").pop() ?? pt.class
     const apis = reports.get(stem)
@@ -364,7 +367,14 @@ export async function adjudicate(app: FlowApp, opts?: { enableCrossclass?: boole
     const s = hit(f.source), k = hit(f.sink)
     if (f.negative) {
       // 负例流(unexpected):检出 = FP,不进 TP/FN 分母
-      if (s && k) v.fpNegative++
+      if (s && k) {
+        v.fpNegative++
+        // P1-IB13: 锚定口径 FP——端点语义等价但行号不齐的宽松检出不计;
+        // 仅两端锚定成功且引擎流行号(±2)双端命中才算(数据集行号不同源的固有模糊剔除)。
+        const aSrc = anchorPoint(f.source, anchored)
+        const aSnk = anchorPoint(f.sink, anchored)
+        if (aSrc && aSnk && efs.some(ef => matchesAnchored(ef, aSrc, aSnk))) v.fpNegativeAnchored++
+      }
       continue
     }
     if (s && k) {
@@ -388,7 +398,7 @@ export async function adjudicate(app: FlowApp, opts?: { enableCrossclass?: boole
 }
 
 /** 流级汇总。@param opts.enableCrossclass 变异开关(透传 adjudicate,false = 变异基线)。 */
-export async function summarizeFlow(root: string, opts?: { enableCrossclass?: boolean }): Promise<{ total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; tpConnectedAnchored: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] } | null> {
+export async function summarizeFlow(root: string, opts?: { enableCrossclass?: boolean }): Promise<{ total: number; tp: number; fn: number; fpNegative: number; fpNegativeAnchored: number; tpConnected: number; tpConnectedLenient: number; tpConnectedAnchored: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] } | null> {
   const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
   const verdicts: FlowVerdict[] = []
   for (const e of entries) {
@@ -400,7 +410,7 @@ export async function summarizeFlow(root: string, opts?: { enableCrossclass?: bo
   if (verdicts.length === 0) return null
   const sum = (k: keyof FlowVerdict) => verdicts.reduce((a, v) => a + (v[k] as number), 0)
   return {
-    total: sum("gtFlows"), tp: sum("tp"), fn: sum("fn"), fpNegative: sum("fpNegative"),
+    total: sum("gtFlows"), tp: sum("tp"), fn: sum("fn"), fpNegative: sum("fpNegative"), fpNegativeAnchored: sum("fpNegativeAnchored"),
     tpConnected: sum("tpConnected"), tpConnectedLenient: sum("tpConnectedLenient"),
     tpConnectedAnchored: sum("tpConnectedAnchored"),
     fnSourceMiss: sum("fnSourceMiss"), fnSinkMiss: sum("fnSinkMiss"), fnBothMiss: sum("fnBothMiss"),
@@ -410,13 +420,13 @@ export async function summarizeFlow(root: string, opts?: { enableCrossclass?: bo
 }
 
 /** 流级 Markdown 小节(与 Rust render_flow_md 同结构,含连通级三档与负例 FP)。 */
-export function renderFlowMd(s: { total: number; tp: number; fn: number; fpNegative: number; tpConnected: number; tpConnectedLenient: number; tpConnectedAnchored: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] }): string {
+export function renderFlowMd(s: { total: number; tp: number; fn: number; fpNegative: number; fpNegativeAnchored: number; tpConnected: number; tpConnectedLenient: number; tpConnectedAnchored: number; fnSourceMiss: number; fnSinkMiss: number; fnBothMiss: number; fnPropagationBreak: number; verdicts: FlowVerdict[] }): string {
   const recall = s.tp + s.fn > 0 ? Math.round((s.tp / (s.tp + s.fn)) * 1000) / 10 : 0
   const pct = (n: number) => s.tp > 0 ? Math.round((n / s.tp) * 1000) / 10 : 0
   const lines = [
     "", "## 流级判定(flow-level adjudication)", "",
-    `- GT 流:${s.total}(positive ${s.tp + s.fn} + negative ${s.fpNegative + 0}) · 端点级 TP:${s.tp} · FN:${s.fn} · **负例 FP:${s.fpNegative}** · **连通级 TP:${s.tpConnected}(${pct(s.tpConnected)}%)** · 连通级宽松档 TP:${s.tpConnectedLenient}(${pct(s.tpConnectedLenient)}%) · 连通级锚定档 TP:${s.tpConnectedAnchored}(${pct(s.tpConnectedAnchored)}%) · 流级召回 ${recall}%`,
-    "> 口径声明:官方语义——Expected Flow 检出=TP、未检出=FN;Unexpected(isNegative)流检出=FP。严格档 = 两端类词干对齐且行号精确/±2;宽松档 = 两端类词干对齐(行号仅作参考);锚定档 = GT statement 逐字定位到仓库 src 同源行号后做严格档(仅两端均锚定成功的流参与)。三档并列呈现,宽松档/锚定档不得单独引用。",
+    `- GT 流:${s.total}(positive ${s.tp + s.fn} + negative ${s.fpNegative + 0}) · 端点级 TP:${s.tp} · FN:${s.fn} · **负例 FP:${s.fpNegative}**(锚定口径:${s.fpNegativeAnchored}) · **连通级 TP:${s.tpConnected}(${pct(s.tpConnected)}%)** · 连通级宽松档 TP:${s.tpConnectedLenient}(${pct(s.tpConnectedLenient)}%) · 连通级锚定档 TP:${s.tpConnectedAnchored}(${pct(s.tpConnectedAnchored)}%) · 流级召回 ${recall}%`,
+    "> 口径声明:官方语义——Expected Flow 检出=TP、未检出=FN;Unexpected(isNegative)流检出=FP。严格档 = 两端类词干对齐且行号精确/±2;宽松档 = 两端类词干对齐(行号仅作参考);锚定档 = GT statement 逐字定位到仓库 src 同源行号后做严格档(仅两端均锚定成功的流参与)。三档并列呈现,宽松档/锚定档不得单独引用。锚定口径 FP:负例两端锚定成功且引擎流行号(±2)双端命中——端点语义等价但行号不齐的宽松检出不计(数据集行号不同源的固有模糊剔除)。",
     "",
     "### FN 病因归因(三类,分母=positive 流)", "",
     "| 病因 | 条数 | 含义 |", "|---|---|---|",

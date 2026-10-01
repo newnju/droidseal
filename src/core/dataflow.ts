@@ -51,6 +51,8 @@ export const SOURCES: Array<[RegExp, string]> = [
   [/\.getConnectionInfo\(/, "getConnectionInfo"], // WiFi 信息
   [/\.getSimCountryIso\(/, "getSimCountryIso"],
   [/\.findViewById\(/, "findViewById"], // P1-IB9: UI 控件读取(GT source 位次;fakebank 实证)
+  [/\bfindViewById\(/, "findViewById"], // P1-IB12: 裸调用形态((EditText) findViewById(...),无点)
+  [/new File\(/, "File"], // P1-IB12: 通用文件构造(GT targetName "File";此前 SDCard 限定过窄)
   [/\.listFiles\(/, "listFiles"], // 文件枚举
   [/getAssets\(\)\.open\(/, "assets.open"],
   [/new File\([^)]*(?:SDCard|DCIM|sdcard|getExternalStorage)/, "new File(sdcard)"], // SD 卡路径构造
@@ -85,7 +87,9 @@ export const SINKS: Array<[RegExp, string]> = [
   [/\.call\(/, "call"],
   // 2026-10-01 GT 频次驱动补齐(sink 端未命中 58 条,探针实测;流级 FP 已满,负例 write 9 条不恶化):
   [/\.write\(/, "write"], // 41 条(OutputStreamWriter/DataOutputStream/FileOutputStream 写出)
-  [/\.startService\(/, "startService"], // 7 条(Intent 出口)
+  [/\.startService\(/, "startService"],
+  [/\bstartService\(/, "startService"], // P1-IB12: 裸调用形态(startService(start),无点)
+  [/\.put\(/, "put"], // P1-IB12: ContentValues.put 数据库写入(insert 同族;GT sink 位次)
   [/\.putObject\(/, "putObject"], // 4 条(云存储上传)
   [/\.flush\(/, "flush"],
   [/\.commit\(/, "commit"],

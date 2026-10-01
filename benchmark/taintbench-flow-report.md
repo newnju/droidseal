@@ -249,3 +249,24 @@
 - 宽松档 100+(73.5%)与锚定档 54(39.7%,目标 30+)双双达标;负例 FP 41 恒定;
 - 验证链:tsc 0、全量 394 tests/0 fail;godwon 两文件复现 2 → 8 条流、slocker GT ✗ 5 → 2;bench 全量三轮对照复跑(95/97/100);
 - 实现位置:`src/core/dataflow.ts`(fieldPool 分桶及入池点、execute 两登记、sink 内嵌调用、语句行 receiver 继承×2、执行循环补跑、clean 归一×3、rhs 变体×2、lhsOf 泛型、capturesByCb 预索引、execute 放行正则)、`src/core/bench-flow.ts`(matchesLenient 剥尾)。
+
+### 11. P1 过程间分析第三轮实测(2026-10-01)——表尾部、严格档可达性与 FP 口径(IC 轮)
+
+四方向并行推进,诊断(逐 app 形态 + 插桩)先行:
+
+1. **IC 诊断(宽松档剩余 35 条)**:分散 22 app(overlaylocker2 5/chulia 4/xbot 3…),形态=跨类对象字段(`addJavascriptInterface(new MeSetting(this))` 的对象字段出口)/反射链(`Class.forName→getDeclaredMethod→invoke`)/单例桥(`RunService.getService().getAPI()`)——逐条需深度源码分析,ROI 评估后如实放弃修复,形态记录在案;
+2. **IB12 端点表尾部**:File 通用构造(表名对齐 GT targetName "File",此前 SDCard 限定过窄)/findViewById 裸调用形态(`(EditText) findViewById(...)`,无点)/put(ContentValues 数据库写入,insert 同族)/startService 裸调用——表尾部未命中 9+3 → 2(仅剩 getDeclaredMethod 反射链 2 条,IA1 实测误伤反射用例后如实放弃);宽松档 100→101、锚定档 54→56;
+3. **严格档可达性结论**:探针证明锚定行号 ±2 内引擎行号 61 条(56 偏差 0 + 5 ±1)全部被锚定档覆盖——**锚定档即"可达严格档"**;严格档(原始 GT lineNo)原理性受限(数据集行号不同源,第 8 节结论成立);matchesStrict 匿名剥尾已落(bench 复跑无回归无提升,行号维度原理性不齐);
+4. **IB13 锚定口径 FP**:FP 41 构成实测——32 条(78%)为端点语义等价但行号不齐的宽松模糊,**锚定口径 FP 9**(-78%,探针估计与 bench 实测吻合)进报告(fpNegativeAnchored);残余 9 条为负例与正例语义等价的数据集口径极限,引擎层不可区分(如实)。
+
+**IC 轮对照(IB 轮终 → IC 终)**:
+
+| 档位 | IB 轮终 | IC 终 |
+|---|---|---|
+| 端点级 TP | 136 | 136(表尾部另一端/行号对不上,如实持平) |
+| 宽松档 | 100(73.5%) | **101(74.3%)** |
+| 锚定档 | 54(39.7%) | **56(41.2%)** |
+| 负例 FP | 41 | 41(**锚定口径 9**) |
+| 严格档 | 1 | 1(原理性受限,结论如上) |
+
+- 实现位置:`src/core/dataflow.ts`(SOURCES/SINKS IB12 四条)、`src/core/bench-flow.ts`(matchesStrict 匿名剥尾、fpNegativeAnchored 全链路);验证链:tsc 0、全量 394 tests/0 fail、bench 三轮对照复跑。
