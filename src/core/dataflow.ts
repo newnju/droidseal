@@ -19,7 +19,7 @@ export const SOURCES: Array<[RegExp, string]> = [
   [/getInstalledPackages\(/, "getInstalledPackages"],
   [/getInstalledApplications\(/, "getInstalledApplications"],
   [/getPackageManager\(\)\.getPackageInfo\(/, "getPackageInfo"],
-  [/SMSMessage\.createFromPdu\(/, "createFromPdu"],
+  [/SmsMessage\.createFromPdu\(/, "createFromPdu"], // 修正:SMSMessage(大写)永不命中实际代码 SmsMessage
   [/getDeviceId\(\)|getImei\(\)/, "getDeviceId"],
   [/getInputStream\(\)/, "getInputStream"],
   [/connection\.getInputStream/, "getInputStream"],
@@ -38,6 +38,21 @@ export const SOURCES: Array<[RegExp, string]> = [
   [/getDisplayOriginatingAddress\(/, "getDisplayOriginatingAddress"],
   [/openStream\(/, "openStream"],
   [/getExternalStorageDirectory\(/, "getExternalStorageDirectory"],
+  // 2026-10-01 GT 频次驱动补齐(positive 203 流端点未命中 100 条,探针实测;负例无同 API 或流级 FP 已满):
+  [/\.getStringExtra\(/, "getStringExtra"], // 25 条
+  [/\.getString\(/, "getString"], // 17 条(cursor/SharedPreferences/JSON 读)
+  [/\.getText\(/, "getText"], // 10 条(EditText UI 输入)
+  [/\.getDisplayMessageBody\(/, "getDisplayMessageBody"], // 9 条(SMS 内容)
+  [/new FileInputStream\(/, "FileInputStream"], // 4 条(文件读)
+  [/\.getSerializableExtra\(/, "getSerializableExtra"],
+  [/\.getExtras\(/, "getExtras"],
+  // getDeclaredMethod 不收:反射入口非污点源(加入后反射 invoke 用例的流集合被污染,实测回退)
+  [/\.getLac\(/, "getLac"], // 基站位置
+  [/\.getConnectionInfo\(/, "getConnectionInfo"], // WiFi 信息
+  [/\.getSimCountryIso\(/, "getSimCountryIso"],
+  [/\.listFiles\(/, "listFiles"], // 文件枚举
+  [/getAssets\(\)\.open\(/, "assets.open"],
+  [/new File\([^)]*(?:SDCard|DCIM|sdcard|getExternalStorage)/, "new File(sdcard)"], // SD 卡路径构造
 ]
 export const SINKS: Array<[RegExp, string]> = [
   [/Log\.[deiwv]\(/, "Log.d"],
@@ -66,6 +81,12 @@ export const SINKS: Array<[RegExp, string]> = [
   [/println\(/, "println"],
   [/RestTemplate/, "RestTemplate"],
   [/\.call\(/, "call"],
+  // 2026-10-01 GT 频次驱动补齐(sink 端未命中 58 条,探针实测;流级 FP 已满,负例 write 9 条不恶化):
+  [/\.write\(/, "write"], // 41 条(OutputStreamWriter/DataOutputStream/FileOutputStream 写出)
+  [/\.startService\(/, "startService"], // 7 条(Intent 出口)
+  [/\.putObject\(/, "putObject"], // 4 条(云存储上传)
+  [/\.flush\(/, "flush"],
+  [/\.commit\(/, "commit"],
 ]
 
 const SANITIZERS = [/encrypt\(/, /decrypt\(/, /hash\(/, /md5\(/, /sha1\(/, /sha256\(/, /Base64\.encode\(/, /URLEncoder\.encode\(/, /clean\(/, /sanitize\(/, /validate\(/]
@@ -261,22 +282,50 @@ function splitArgs(s: string): string[] {
   return out
 }
 
+// P1-IA2: String 家族方法名单——x.replace(...) 的 receiver 是 String(标准库),
+// 方法名与用户类撞名时(replace/trim/substring…),「全局唯一实现」启发会把
+// 污点变量误连到用户类调用边,call 分支的 ret 空处理清空污点(backflash 实证:
+// BackStackRecord::replace 撞名杀死 3 条流)。这类调用不建边,落回普通赋值段
+// 恒等传播(lhs 继承 receiver 污点)。
+const STRING_METHODS = new Set([
+  "replace", "replaceAll", "replaceFirst", "split", "trim", "strip", "substring",
+  "toUpperCase", "toLowerCase", "valueOf", "format", "concat", "intern", "repeat",
+  "charAt", "indexOf", "lastIndexOf", "equals", "equalsIgnoreCase", "hashCode",
+  "toString", "isEmpty", "isBlank", "contains", "startsWith", "endsWith",
+  "matches", "compareTo", "compareToIgnoreCase", "toCharArray", "getBytes", "trim",
+])
+
 function resolveCall(clean: string, lineno: number, has: (n: string) => boolean, env: Map<string, ValInfo>): { callee: string; args: ValInfo[] } | null {
+  // P1-IA2: AsyncTask execute 边——new Y().execute(args) 把污点经参数传入
+  // Y.doInBackground(Y extends AsyncTask);execute 与 Runtime.exec 撞名,
+  // 被 SINKS 的 execute( 截断后污点从不进入 AsyncTask 通道(backflash 7 断链实证)。
+  // 裸 __async__ 前缀由调用方 resolveAll/entry 特判解析为 [Y, "doInBackground"]。
+  const asyncM = /new\s+(\w+)\s*\(\s*\)?\s*\.execute\s*\(/.exec(clean)
+  if (asyncM) {
+    const from = clean.indexOf(".execute(") + ".execute(".length
+    return { callee: `__async__${asyncM[1]!}`, args: argsFrom(clean.slice(from), lineno, env) }
+  }
   const re = /([A-Za-z_$][\w$]*)\s*\(/g
   let m: RegExpExecArray | null
   while ((m = re.exec(clean))) {
     const id = m[1]
     if (!id || !has(id)) continue
+    // P1-IA2: String 家族方法不建用户类调用边(撞名误伤,见 STRING_METHODS 注释)
+    if (STRING_METHODS.has(id)) continue
     const argsStr = clean.slice(m.index + m[0].length)
-    const args = splitArgs(argsStr).map(a => {
-      const info = emptyVal()
-      for (const v of varsInCall(a)) { const e = env.get(v); if (e) mergeVal(info, e) }
-      if (sourceApi(a)) info.srcs.add(lineno)
-      return info
-    })
-    return { callee: id!, args }
+    return { callee: id!, args: argsFrom(argsStr, lineno, env) }
   }
   return null
+}
+
+/** 实参污点提取(与 resolveCall 原 args 构造同语义,抽出供 execute 边复用)。 */
+function argsFrom(argsStr: string, lineno: number, env: Map<string, ValInfo>): ValInfo[] {
+  return splitArgs(argsStr).map(a => {
+    const info = emptyVal()
+    for (const v of varsInCall(a)) { const e = env.get(v); if (e) mergeVal(info, e) }
+    if (sourceApi(a)) info.srcs.add(lineno)
+    return info
+  })
 }
 
 function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
@@ -339,7 +388,9 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
           const srcs = new Set<number>()
           for (const [k, s] of intentKeys) { if (k === key) for (const x of s) srcs.add(x) }
           if (srcs.size) { const lhs = lhsOf(clean); if (lhs) { const e = env.get(lhs) ?? emptyVal(); for (const x of srcs) e.srcs.add(x); env.set(lhs, e) } }
-          continue // getXxxExtra 不是 source
+          // P1-IA2:仅 ICC 配对成功才 continue——getStringExtra/getSerializableExtra 已是
+          // source(SOURCES 2026-10-01 扩表),配对失败时落下走 source 段,否则永远断源
+          if (srcs.size) continue
         }
       }
     }
@@ -380,9 +431,13 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
     }
     if (sourceApi(clean)) {
       const lhs = lhsOf(clean)
-      if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(li + 1); env.set(lhs, v); continue }
+      // P1-IA2: 合并 RHS 污点(如 conn = new URL(urlString).openConnection() 的
+      // 参数污点须经 conn 传到 getOutputStream sink——覆盖式注入会把参数链切断)
+      if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(li + 1); for (const rv of rhsVars(clean)) { const e = env.get(rv.replace(/^this\./, "")); if (e) mergeVal(v, e) } env.set(lhs, v); continue }
     }
-    const sapi = sinkApi(clean)
+    // .execute( 行不入 sink 分支:execute 与 Runtime.exec 撞名,放行走 call 通道
+    // (P1-IA2 AsyncTask 边:经 resolveCall 的 __async__ 检测进 doInBackground 参数)
+    const sapi = clean.includes(".execute(") ? null : sinkApi(clean)
     if (sapi) {
       const refs = rhsVars(clean)
       const used = refs.length ? refs : varsInCall(clean)
@@ -438,15 +493,21 @@ export function analyzeInterproc(content: string): TaintFlow[] {
       const s = sums.get(m.name); if (!s) continue
       const ent = entry.get(m.name)
       for (const { callee, args } of s.calls) {
+        // P1-IA2: __async__Y 边在单文件口径解析为 doInBackground(Y 须在同文件)
+        const targets = callee.startsWith("__async__")
+          ? (names.has("doInBackground") ? ["doInBackground"] : [])
+          : [callee]
+        for (const target of targets) {
         for (let j = 0; j < args.length; j++) {
           const arg = args[j]!
           const add = new Set(arg.srcs)
           if (ent) for (const p of arg.params) for (const st of ent.get(p) ?? []) add.add(st)
           if (add.size) {
-            const dm = delta.get(callee) ?? new Map(); delta.set(callee, dm)
+            const dm = delta.get(target) ?? new Map(); delta.set(target, dm)
             const ds = dm.get(j) ?? new Set(); dm.set(j, ds)
             for (const x of add) ds.add(x)
           }
+        }
         }
       }
     }
@@ -526,8 +587,8 @@ export function analyzeInterproc(content: string): TaintFlow[] {
           }
         }
       }
-      if (sourceApi(clean)) { const lhs = lhsOf(clean); if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(lineno); env.set(lhs, v); continue } }
-      const sapi = sinkApi(clean)
+      if (sourceApi(clean)) { const lhs = lhsOf(clean); if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(lineno); for (const rv of rhsVars(clean)) { const e = env.get(rv.replace(/^this\./, "")); if (e) mergeVal(v, e) } env.set(lhs, v); continue } }
+      const sapi = clean.includes(".execute(") ? null : sinkApi(clean)
       if (sapi) {
         const refs = rhsVars(clean)
         const used = refs.length ? refs : varsInCall(clean)
@@ -632,6 +693,18 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
   // 调用边解析(P2-3 集合语义):类内同名优先;跨类唯一实现解析到该实现,
   // 多实现(接口分派)全部分发,流取并集——FP 风险由对判层 sink 端约束。
   const resolveAll = (owner: string, callee: string): Array<[string, string]> => {
+    // P1-IA2: AsyncTask execute 边——new Y().execute(args) → [Y, doInBackground]
+    // (污点经参数进 doInBackground;caller 侧 cs.sinks 上报跨类流)。
+    // Y 是 new 表达式里的简单类名,cls 可能带包前缀(A.NetTask)——按后缀匹配。
+    if (callee.startsWith("__async__")) {
+      const t = callee.slice("__async__".length)
+      const out: Array<[string, string]> = []
+      for (const key of allSums.keys()) {
+        const cls = key.slice(0, key.indexOf("::"))
+        if ((cls === t || cls.endsWith(`.${t}`)) && allSums.has(`${cls}::doInBackground`)) out.push([cls, "doInBackground"])
+      }
+      return out
+    }
     if (allSums.has(`${owner}::${callee}`)) return [[owner, callee]]
     return nameIndex.get(callee) ?? []
   }
@@ -728,11 +801,14 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
           const faS = fieldAssign(clean)
           if (faS) {
             const key = faS[0] === "this" ? `this.${faS[1]}` : `${faS[0]}.${faS[1]}`
-            const v = env.get(key) ?? emptyVal(); v.srcs.add(lineno); env.set(key, v); continue
+            const v = env.get(key) ?? emptyVal(); v.srcs.add(lineno); for (const rv of rhsVars(clean)) { const e = env.get(rv.replace(/^this\./, "")); if (e) mergeVal(v, e) } env.set(key, v); continue
           }
-          const lhs = lhsOf(clean); if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(lineno); env.set(lhs, v); continue }
+          // P1-IA2: 合并 RHS 污点(参数链经 source 行传导,如 conn = new URL(urlString).openConnection())
+          const lhs = lhsOf(clean); if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(lineno); for (const rv of rhsVars(clean)) { const e = env.get(rv.replace(/^this\./, "")); if (e) mergeVal(v, e) } env.set(lhs, v); continue }
         }
-        const sapi = sinkApi(clean)
+        // .execute( 行不入 sink 分支:execute 与 Runtime.exec 撞名,放行走 call 通道
+        // (P1-IA2 AsyncTask 边:caller 侧经 cs.sinks 上报跨类流)
+        const sapi = clean.includes(".execute(") ? null : sinkApi(clean)
         if (sapi) {
           const refs = rhsVars(clean)
           const used = refs.length ? refs : varsInCall(clean)

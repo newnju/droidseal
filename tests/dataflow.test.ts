@@ -211,6 +211,64 @@ public void send(String s) {
   })
 })
 
+describe("P1-IA2 AsyncTask execute 边", () => {
+  test("new Task().execute(arg) 跨类连通到 doInBackground 内 sink", () => {
+    const files = [
+      {
+        cls: "A.Receiver",
+        content: `
+public class Receiver extends BroadcastReceiver {
+    public void onReceive(Context c, Intent i) {
+        String dev = manager.getDeviceId();
+        new NetTask().execute(dev);
+    }
+}
+`,
+      },
+      {
+        cls: "A.NetTask",
+        content: `
+public class NetTask extends AsyncTask {
+    protected Object doInBackground(Object[] params) {
+        DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
+        dos.write(params[0].getBytes());
+        return null;
+    }
+}
+`,
+      },
+    ]
+    const flows = analyzeCrossclass(files)
+    const hit = flows.find(f => f.src_class === "A.Receiver" && f.sink_class === "A.NetTask")
+    expect(hit).toBeDefined()
+    expect(hit!.source_line).toBe(4) // getDeviceId 行
+    expect(hit!.sink_line).toBe(5) // dos.write 行(NetTask 文件内)
+  })
+
+  test("execute 实参无污点时不建边", () => {
+    const files = [
+      { cls: "A.Receiver", content: `
+public class Receiver extends BroadcastReceiver {
+    public void onReceive(Context c, Intent i) {
+        new NetTask().execute("plain");
+    }
+}
+` },
+      { cls: "A.NetTask", content: `
+public class NetTask extends AsyncTask {
+    protected Object doInBackground(Object[] params) {
+        DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
+        dos.write(params[0].getBytes());
+        return null;
+    }
+}
+` },
+    ]
+    const flows = analyzeCrossclass(files)
+    expect(flows.find(f => f.src_class === "A.Receiver" && f.sink_class === "A.NetTask")).toBeUndefined()
+  })
+})
+
 describe("endpoints", () => {
   test("枚举 source/sink 行", () => {
     const { srcLines, snkLines } = endpoints(`
