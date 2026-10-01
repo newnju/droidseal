@@ -167,3 +167,36 @@
 - **口径声明(必须随行)**:锚定档仅覆盖两端 statement 均可逐字定位的流(锚定覆盖率 91.8%,分母以端点级 TP=136 计);它证明的是"行号同源后严格判定可行",不取代端点级/宽松档;三档(严格/宽松/锚定)必须并列呈现,任何单档不可单独引用;
 - 39/39 app 分片实测(5-10 app/片前台运行,增量 JSONL 落盘后汇总),汇总命令与分片脚本见 `scripts/tmp-ib-verify.ts`(临时验收 runner,数字落盘后清理);
 - 实现位置:`src/core/bench-flow.ts`(`anchorPoint`/`matchesAnchored`/`tpConnectedAnchored`);单测 `tests/bench-flow-anchored.test.ts`(4 用例:同源行号/GT 行号错误不影响/匿名类剥尾/±2 与换向判定)。
+
+### 9. P1 过程间分析首轮实测(2026-10-01)——表覆盖扩充 + 摘要传播修复
+
+盘点确认引擎已有跨类摘要/集合语义解析/嵌套回调捕获/字段键传播/同类生命周期链,断链缺口经 15 轮探针实证定位,分两批修复。
+
+**IA1:source/sink 表 GT 频次驱动扩充**(端点未命中 100+58 条 → 表补齐后余 9+5):
+
+| 档位 | 基线 | IA1(表扩充) | 占端点级 TP 比例 |
+|---|---|---|---|
+| 宽松档 | 73(53.7%) | **81(59.6%)** | — |
+| 锚定档 | 8(5.9%) | **29(21.3%)** | 21.3% |
+
+- 表来源按 GT 203 条 positive 流的 targetName 频次排序,逐条核对 statement 形态后入表;`SmsMessage.createFromPdu` 大小写修正(原 `SMSMessage` 永不命中);`getDeclaredMethod` 实测误伤反射用例后回退(反射入口非污点源,如实);
+- 负例 FP 41 条为既有满值,扩表不恶化;`getString`/`getText` 等宽 API 经负例分布核对(负例无同 API)。
+
+**IA2:摘要传播四处修复 + String 撞名**(宽松档 81→**83**、锚定档 29→**34**,负例 FP 41 恒定):
+
+1. **AsyncTask execute 边**:`new Y().execute(args)` → `Y.doInBackground(args)` 参数对齐——execute 与 Runtime.exec 撞名被 SINKS 截断,污点从不进入 AsyncTask 通道(backflash 7 条断链实证);`__async__` 虚边经 resolveAll 后缀匹配解析(Y 可带包前缀);
+2. **intentKeys 消费特判**:getStringExtra/getSerializableExtra 有常量 key 时原逻辑无条件 continue,扩表后的 source 永不进 env——改为仅 ICC 配对成功才 continue,配对失败落回 source 段;
+3. **source 分支合并 RHS 污点**:`conn = new URL(urlString).openConnection()` 覆盖式注入会切断参数链,改为合并(3 处:summarize/analyzeInterproc/runMethodBody);
+4. **String 家族方法撞名**:`inP.replace("+","")` 被「方法名全局唯一实现」启发误连到 BackStackRecord::replace,call 分支 ret 空处理清空污点——STRING_METHODS 名单内不建用户类调用边,落回普通赋值段恒等传播(探针实证:撞名文件加入后 3 条跨类流归零,修复后 8/8 持平)。
+
+**全量口径(IA1+IA2 后)**:
+
+| 档位 | 判定口径 | TP / 端点级 136 | 相对基线 |
+|---|---|---|---|
+| 严格档 | GT lineNo 直对(不同源) | 1(0.7%) | 原理性维持 |
+| 宽松档 | 两端类词干对齐,行号仅参考 | **83(61.0%)** | 73 → 83(+13.7%) |
+| 锚定档 | statement 定位同源行号 + 词干对齐 + 行号±2 | **34(25.0%)** | 8 → 34 |
+
+- **剩余断链形态(IA3 目标)**:positive 流中 partialFlow(文件中转二段)63 条——写端(writeConfig(k, 污点)→osw.write)与读端(openFileInput(k)→execute→网络写)经文件 key 桥接,引擎无此通道;探针实证 backflash 剩余 5 条断链全部属此形态;
+- 验证链:tsc 0、全量 394 tests/0 fail(含新增 execute 边 2 用例)、15 轮探针逐一定位后修复、bench 前后对照复跑;
+- 实现位置:`src/core/dataflow.ts`(SOURCES/SINKS 扩表、`resolveCall` execute 边与 STRING_METHODS、`resolveAll` 后缀匹配、intentKeys 消费、source 合并 RHS);单测 `tests/dataflow.test.ts`(execute 边跨类连通/无污点不建边)。

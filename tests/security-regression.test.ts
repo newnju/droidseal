@@ -98,8 +98,8 @@ test("SEC-005 R3: getArg 语义——下一参数为 flag 时不吞作值", () =
 test("SEC-006 R2: challenge-server 显式绑定 127.0.0.1(结构断言)", () => {
   const src = readFileSync("scripts/challenge-server.ts", "utf8")
   expect(src.includes('.listen(port, "127.0.0.1"')).toBe(true)
-  // 不得存在裸 .listen(port 调用(绑地址缺失 = 全网卡)
-  expect(/\.listen\(\s*port\s*[,)]/.test(src.replace(/\.listen\(port, "127\.0\.0\.1"/, ""))).toBe(false)
+  // 不得存在裸 .listen(port 调用(绑地址缺失 = 全网卡)——HTTP/HTTPS 两个分支都须绑定,全局替换
+  expect(/\.listen\(\s*port\s*[,)]/.test(src.replace(/\.listen\(port, "127\.0\.0\.1"/g, ""))).toBe(false)
 })
 
 // ── R1(非 ASCII URL 写坏 DEX,已有 IDN 用例在 harden-chain.test.ts)──
