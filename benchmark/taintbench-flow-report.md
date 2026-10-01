@@ -220,3 +220,32 @@
 
 - 剩余断链:宽松档 88 → 端点级 136 差 48 条;距验收目标 100+ 差 12,待下轮探针诊断(逐 app 明细定位新形态);
 - IA3 实现位置:`src/core/dataflow.ts`(三处 sink 分支 receiver 继承、call 分支内嵌调用注入、summarize 末尾 return 回填);验证链:tsc 0、全量 394 tests/0 fail。
+
+### 10. P1 过程间分析次轮实测(2026-10-01)——跨类字段媒介与泛型/匿名形态(IB 轮)
+
+逐 app 明细定位剩余断链(godwon 6 全断/overlaylocker2 5/chulia 4/slocker 3…),插桩(units 方法表 + 方法体执行轨迹)+ 两文件最小复现逐环定位,落 11 组修复:
+
+1. **IB1 跨类字段键池**(cls 分桶):`GoogleService.this.phoneNum` 匿名 Thread.run 反引外类字段——宿主字段污点经池注入匿名方法 env(生命周期链 env0 只覆盖 LIFECYCLE_SEQ 名单,run 不在列);
+2. **IB2 四刀**:execute 行两登记(sinks+__async__ 边;IA2 放行让 `new DefaultHttpClient().execute(...)` 丢 sink 语义)/sink 行实参内嵌跨类调用(`Log.e(tag, ToolHelper.postData(u, params))` 的 postData 边)/执行期+摘要期语句行 receiver 继承(`httpRequest.setEntity(entity)` → httpRequest.params ⊇ params);
+3. **IB3 执行循环补跑**:lc≥2 链式分支 continue 跳过全部非生命周期方法——GoogleService 的污点链全在匿名 run 里;
+4. **IB4 X.this. 归一**:`GoogleService.this.phoneNum` 三段链被 fieldReads 取成 X.this 键 → 行内归一 `this.phoneNum`;
+5. **IB5 rhs this. 变体**:`this.phoneNum = this.phoneNum.replace(...)` 裸名 miss 反清字段污点;
+6. **IB6 lhsOf 泛型前缀**:`List<NameValuePair> params = ...` 前缀字符类不含尖括号整行失配 → env 无键,链式全断;
+7. **IB7 receiver 凭空建键**:泛型声明行(info 空)delete 键后首次 `x.add(y)` 须能建键(env.has 前置移除);
+8. **IB8 rtCaptures 播种预索引**(性能):每次方法执行全表遍历 allSums.captures 的乘积(cajino exec 21.7s → 5.7s,-74%);
+9. **IB9 三件套**:execute 放行限定 AsyncTask 形态(非 new 形态 `httpclient.execute(httppost)` 恢复 sink,孤儿行修复)/findViewById 入 SOURCES/getInputStream 入 SINKS 首位(双角色 API,须在 Log.d 前);
+10. **IB10 宽松档匿名类剥尾**:GT 流常把匿名类标独立类($AnonymousClassN),与锚定档剥尾同语义;
+11. **IB11 裸名静态字段入池**:`public static String imei` 的裸名写入同步入池,匿名方法经池预载跨类传参(SenderActivity.imei → RequestSender.sendCode)。
+
+**IB 轮对照(IA3 → IB9/10 → IB11)**:
+
+| 档位 | IA3 | +IB9/IB10 | +IB11(终) |
+|---|---|---|---|
+| 端点级 TP | 136 | 136 | 136 |
+| 宽松档 | 88(64.7%) | 97(71.3%) | **100(73.5%)** |
+| 锚定档 | 37(27.2%) | 52(38.2%) | **54(39.7%)** |
+| 负例 FP | 41 | 41 | 41 |
+
+- 宽松档 100+(73.5%)与锚定档 54(39.7%,目标 30+)双双达标;负例 FP 41 恒定;
+- 验证链:tsc 0、全量 394 tests/0 fail;godwon 两文件复现 2 → 8 条流、slocker GT ✗ 5 → 2;bench 全量三轮对照复跑(95/97/100);
+- 实现位置:`src/core/dataflow.ts`(fieldPool 分桶及入池点、execute 两登记、sink 内嵌调用、语句行 receiver 继承×2、执行循环补跑、clean 归一×3、rhs 变体×2、lhsOf 泛型、capturesByCb 预索引、execute 放行正则)、`src/core/bench-flow.ts`(matchesLenient 剥尾)。
