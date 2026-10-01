@@ -204,7 +204,9 @@ function matchesStrict(ef: EngineFlow, pt: GtPoint): boolean {
 
 /** 宽松档(与 Rust matches_lenient 同口径):两端类词干对齐即算,行号仅作参考不设门槛。 */
 function matchesLenient(ef: EngineFlow, gtSrc: GtPoint, gtSnk: GtPoint): boolean {
-  const stemOf = (c: string) => c.split(".").pop() ?? c
+  // P1-IB10: 匿名类剥尾($AnonymousClassN/$12)——GT 流常把匿名类标为独立类,
+  // 引擎侧匿名方法已并入宿主(cls=宿主);与锚定档剥尾同语义,词干才对得上。
+  const stemOf = (c: string) => (c.split(".").pop() ?? c).split("$")[0]!
   const ss = stemOf(gtSrc.class), ks = stemOf(gtSnk.class)
   return (ef.sourceClass === ss && ef.sinkClass === ks)
     || (ef.sourceClass === ks && ef.sinkClass === ss)

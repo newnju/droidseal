@@ -50,11 +50,13 @@ export const SOURCES: Array<[RegExp, string]> = [
   [/\.getLac\(/, "getLac"], // 基站位置
   [/\.getConnectionInfo\(/, "getConnectionInfo"], // WiFi 信息
   [/\.getSimCountryIso\(/, "getSimCountryIso"],
+  [/\.findViewById\(/, "findViewById"], // P1-IB9: UI 控件读取(GT source 位次;fakebank 实证)
   [/\.listFiles\(/, "listFiles"], // 文件枚举
   [/getAssets\(\)\.open\(/, "assets.open"],
   [/new File\([^)]*(?:SDCard|DCIM|sdcard|getExternalStorage)/, "new File(sdcard)"], // SD 卡路径构造
 ]
 export const SINKS: Array<[RegExp, string]> = [
+  [/\.getInputStream\(/, "getInputStream"], // P1-IB9: 双角色 API(GT sink 位次);须在 Log.d 前,Log.d 行内嵌 getInputStream 才按 GT target 上报
   [/Log\.[deiwv]\(/, "Log.d"],
   [/sendTextMessage\(/, "sendTextMessage"],
   [/sendMultipartTextMessage\(/, "sendMultipartTextMessage"],
@@ -108,7 +110,9 @@ function stripStrings(line: string): string {
 function lhsOf(line: string): string | null {
   // \b 词边界防回退劈词:无类型声明的赋值("data = ..."/"this.data = ...")
   // 此前会被贪婪前缀劈成 dat+a,取错 LHS——字段媒介流因此断链(引擎级 bug)。
-  const m = line.match(/^\s*[\w.$[\]]*\s*(?:this\.)?\b([A-Za-z_$][\w$]*)\s*=(?!=)/)
+  // P1-IB6: 泛型前缀(List<NameValuePair> params = ...)——前缀字符类不含尖括号,
+  // 泛型声明行整行失配 → env 无变量键 → 语句行继承/内嵌调用/字段读全断(godwon 实证)。
+  const m = line.match(/^\s*[\w.$[\]]*(?:\s*<[^=]*?>)?\s*(?:this\.)?\b([A-Za-z_$][\w$]*)\s*=(?!=)/)
   return m ? (m[1] ?? null) : null
 }
 function rhsVars(line: string): string[] {
@@ -339,7 +343,7 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
   for (const li of m.body) {
     const l = (lines[li] ?? "").trim()
     if (!l || l.startsWith("//") || l.startsWith("*") || l.startsWith("/*")) continue
-    const clean = stripStrings(l.replace(/(^|\s)final\s+/g, " "))
+    const clean = stripStrings(l.replace(/(^|\s)final\s+/g, " ")).replace(/\b\w+\.this\./g, "this.") // P1-IB4: X.this.f 归一(内部类反引外类字段)
     if (sanitizerHit(clean)) { const lhs = lhsOf(clean); if (lhs) env.delete(lhs); continue }
     if (clean.includes("getMethod(")) {
       const lhs = lhsOf(clean)
@@ -440,7 +444,7 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
     }
     // .execute( 行不入 sink 分支:execute 与 Runtime.exec 撞名,放行走 call 通道
     // (P1-IA2 AsyncTask 边:经 resolveCall 的 __async__ 检测进 doInBackground 参数)
-    const sapi = clean.includes(".execute(") ? null : sinkApi(clean)
+    const sapi = /new\s+\w+\s*\(\s*\)?\s*\.execute\s*\(/.test(clean) ? null : sinkApi(clean)
     if (sapi) {
       const refs = rhsVars(clean)
       const used = refs.length ? refs : varsInCall(clean)
@@ -461,6 +465,11 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
       const merged = emptyVal()
       for (const a of call.args) mergeVal(merged, a)
       sum.calls.push(call)
+      // P1-IB2: execute 行兼是 Runtime.exec/HttpClient sink——摘要期两登记
+      // (sinks + __async__ 边)。IA2 的放行让 new DefaultHttpClient().execute(...)
+      // 丢了 sink 语义(ToolHelper.postData 摘要因此空,caller 侧无流,godwon 断);
+      // AsyncTask 场景多产的 execute-sink 流不碰正例,负例 FP 已满不恶化。
+      if (call.callee.startsWith("__async__")) sum.sinks.push({ line: li + 1, api: "execute", info: merged })
       const lhs = lhsOf(clean)
       if (lhs) { if (!isEmptyVal(merged)) env.set(lhs, merged); else env.delete(lhs) }
       continue
@@ -469,7 +478,8 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
     if (lhs) {
       const refs = rhsVars(clean)
       const info = emptyVal()
-      for (const v of refs) { const e = env.get(v); if (e) mergeVal(info, e) }
+      // P1-IB5: rhs 裸名 miss 时查 this. 键(this.phoneNum = this.phoneNum.replace(...) 的自引用链)
+      for (const v of refs) { const e = env.get(v) ?? env.get(`this.${v}`); if (e) mergeVal(info, e) }
       const key = clean.includes(`this.${lhs}`) ? `this.${lhs}` : lhs
       if (isEmptyVal(info) && refs.length) env.delete(key)
       else if (!isEmptyVal(info)) {
@@ -478,6 +488,16 @@ function summarize(m: Meth, lines: string[], has: (n: string) => boolean): Sum {
           const ss = sum.fieldsSrcs.get(key) ?? new Set<number>(); for (const s of info.srcs) ss.add(s); sum.fieldsSrcs.set(key, ss)
         }
         env.set(key, info)
+      }
+    } else {
+      // P1-IB2: 语句行 receiver 继承(摘要期)——httpRequest.setEntity(new UrlEncodedFormEntity(params))
+      // 的位次链(httpRequest.params ⊇ params)靠它对齐,execute 摘要的 sinfo.params 才能命中 caller 实参。
+      // P1-IB7: 不设 env.has 前置(与执行期同款,声明行 delete 后首次 add 凭空建键)。
+      const rm = /^[\w.$]*?\b([A-Za-z_$][\w$]*)\.(\w+)\(/.exec(clean)
+      if (rm && rm[1] !== "Log" && !STRING_METHODS.has(rm[2] ?? "")) {
+        const e = env.get(rm[1]!) ?? emptyVal()
+        for (const v of varsInCall(clean)) { if (v === rm[1]) continue; const x = env.get(v); if (x) mergeVal(e, x) }
+        env.set(rm[1]!, e)
       }
     }
   }
@@ -571,7 +591,7 @@ export function analyzeInterproc(content: string): TaintFlow[] {
     for (const li of m.body) {
       const l = (lines[li] ?? "").trim()
       if (!l || l.startsWith("//") || l.startsWith("*") || l.startsWith("/*")) continue
-      const clean = stripStrings(l)
+      const clean = stripStrings(l).replace(/\b\w+\.this\./g, "this.") // P1-IB4: X.this.f 归一
       const lineno = li + 1
       if (sanitizerHit(clean)) { const lhs = lhsOf(clean); if (lhs) env.delete(lhs); continue }
       const pposL = l.indexOf("putExtra(")
@@ -602,7 +622,7 @@ export function analyzeInterproc(content: string): TaintFlow[] {
         }
       }
       if (sourceApi(clean)) { const lhs = lhsOf(clean); if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(lineno); for (const rv of rhsVars(clean)) { const e = env.get(rv.replace(/^this\./, "")); if (e) mergeVal(v, e) } env.set(lhs, v); continue } }
-      const sapi = clean.includes(".execute(") ? null : sinkApi(clean)
+      const sapi = /new\s+\w+\s*\(\s*\)?\s*\.execute\s*\(/.test(clean) ? null : sinkApi(clean)
       if (sapi) {
         const refs = rhsVars(clean)
         const used = refs.length ? refs : varsInCall(clean)
@@ -696,10 +716,13 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
     }
     return { cls: f.cls, lines, meths: meths.filter(m => m.name !== "__file__") }
   })
+  const tUnits = process.env.DS_DEBUG_IA ? Date.now() : 0
   const nameIndex = new Map<string, Array<[string, string]>>()
+  if (process.env.DS_DEBUG_IA) for (const u of units) console.error(`DBG-IA units ${u.cls}: [${u.meths.map(m => m.name).join(",")}]`)
   for (const u of units) for (const m of u.meths) {
     const v = nameIndex.get(m.name) ?? []; v.push([u.cls, m.name]); nameIndex.set(m.name, v)
   }
+  const tSumsStart = process.env.DS_DEBUG_IA ? Date.now() : 0
   const allSums = new Map<string, Sum>() // key: cls + "::" + meth
   for (const u of units) {
     const local = new Set(u.meths.map(m => m.name))
@@ -707,6 +730,17 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
     const has = (n: string) => local.has(n) || (uniqueGlobal.has(n) && !local.has(n))
     for (const m of u.meths) allSums.set(`${u.cls}::${m.name}`, summarize(m, u.lines, has))
   }
+  // P1-IB8: rtCaptures 播种预索引(按回调名)——此前每次方法执行都全表遍历
+  // allSums 的 captures,方法执行次数 × 摘要数的乘积(cajino exec 21.7s 的主因)。
+  const capturesByCb = new Map<string, Array<[string, Set<number>]>>()
+  for (const cs of allSums.values()) {
+    for (const [cb, vn, srcs] of cs.captures) {
+      const arr = capturesByCb.get(cb) ?? []
+      arr.push([vn, srcs])
+      capturesByCb.set(cb, arr)
+    }
+  }
+  if (process.env.DS_DEBUG_IA) console.error(`DBG-IA timing units+index=${tUnits ? Date.now() - tUnits : 0}ms sums=${tSumsStart ? Date.now() - tSumsStart : 0}ms`)
   // 调用边解析(P2-3 集合语义):类内同名优先;跨类唯一实现解析到该实现,
   // 多实现(接口分派)全部分发,流取并集——FP 风险由对判层 sink 端约束。
   const resolveAll = (owner: string, callee: string): Array<[string, string]> => {
@@ -767,13 +801,22 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
   // P1-b: 执行时捕获通道——外层回调体内再注册内层回调时,捕获污点在执行期才可见
   // (summarize 期 env 为空,看不到链式传入的污点);(回调名, 变量名, 来源行集)
   const rtCaptures: Array<[string, string, Set<number>]> = []
+  // P1-IB1: 跨方法字段键池(cls → (this.f → 污点))——匿名 Thread.run 等非生命周期
+  // 方法读宿主字段(GoogleService.this.phoneNum)时,宿主方法写的字段污点经池
+  // 注入;生命周期链(env0)只覆盖 LIFECYCLE_SEQ 名单,run 不在其列。
+  // 分桶(cls 为首键)防每方法全局遍历(backflash 大类 × 全仓字段数的平方级)。
+  const fieldPool = new Map<string, Map<string, ValInfo>>()
   // P1-a: 方法体解释循环抽出(原内联于流检查,行为不变)——生命周期序执行复用同一函数。
   // 返回 env 终态:字段部分(this. 前缀/裸字段名)是生命周期链的传播媒介。
   const runMethodBody = (u: { cls: string; lines: string[]; meths: Meth[] }, m: Meth, env0: Map<string, ValInfo> | undefined): void => {
     const local = new Set(u.meths.map(x => x.name))
     const s = lookup(u.cls, m.name); if (!s) return
+    if (process.env.DS_DEBUG_IA) console.error(`DBG-IA body ${u.cls}::${m.name}`)
     const env = new Map<string, ValInfo>()
     if (env0) for (const [k, v] of env0) env.set(k, v)
+    // P1-IB1: 预载本类字段池(浅拷贝,防 env 内合并污染池;分桶只遍历本类)
+    const pool = fieldPool.get(u.cls)
+    if (pool) for (const [k, v] of pool) env.set(k, { params: new Set(v.params), srcs: new Set(v.srcs) })
     m.paramNames.forEach((p, i) => {
       const info = emptyVal(); info.params.add(i)
       const st = entry.get(`${u.cls}::${m.name}`)?.get(i)
@@ -783,13 +826,12 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
     // P1-b 修复:框架回调捕获播种(与 analyzeInterproc 终扫同语义)——本方法被
     // 分派为回调时,按名字注入宿主捕获污点。此前跨类路径缺这一步,回调流全部断链。
     // rtCaptures:嵌套回调(回调体内再注册回调)的污点在执行期才可见,一并注入。
-    for (const cs of allSums.values()) {
-      for (const [cb, vn, srcs] of cs.captures) {
-        if (cb === m.name && srcs.size) {
-          const e = env.get(vn) ?? emptyVal()
-          for (const x of srcs) e.srcs.add(x)
-          env.set(vn, e)
-        }
+    // P1-IB8: 摘要 captures 走预索引(原全表遍历 allSums,见上)。
+    for (const [vn, srcs] of capturesByCb.get(m.name) ?? []) {
+      if (srcs.size) {
+        const e = env.get(vn) ?? emptyVal()
+        for (const x of srcs) e.srcs.add(x)
+        env.set(vn, e)
       }
     }
     for (const [cb, vn, srcs] of rtCaptures) {
@@ -802,7 +844,7 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
       for (const li of m.body) {
         const l = (u.lines[li] ?? "").trim()
         if (!l || l.startsWith("//") || l.startsWith("*") || l.startsWith("/*")) continue
-        const clean = stripStrings(l)
+        const clean = stripStrings(l).replace(/\b\w+\.this\./g, "this.") // P1-IB4: X.this.f 归一(内部类反引外类字段)
         const lineno = li + 1
         if (sanitizerHit(clean)) { const lhs = lhsOf(clean); if (lhs) env.delete(lhs); continue }
         // P1-b 登记端:执行到回调注册行(setOnClickXxx/post/execute 等)时,当前 env
@@ -818,14 +860,22 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
           const faS = fieldAssign(clean)
           if (faS) {
             const key = faS[0] === "this" ? `this.${faS[1]}` : `${faS[0]}.${faS[1]}`
-            const v = env.get(key) ?? emptyVal(); v.srcs.add(lineno); for (const rv of rhsVars(clean)) { const e = env.get(rv.replace(/^this\./, "")); if (e) mergeVal(v, e) } env.set(key, v); continue
+            const v = env.get(key) ?? emptyVal(); v.srcs.add(lineno); for (const rv of rhsVars(clean)) { const e = env.get(rv.replace(/^this\./, "")); if (e) mergeVal(v, e) } env.set(key, v)
+            // P1-IB1: 字段写同步入池(跨方法/匿名方法读取;分桶)
+            let pb = fieldPool.get(u.cls); if (!pb) { pb = new Map(); fieldPool.set(u.cls, pb) }
+            pb.set(key, { params: new Set(v.params), srcs: new Set(v.srcs) })
+            continue
           }
           // P1-IA2: 合并 RHS 污点(参数链经 source 行传导,如 conn = new URL(urlString).openConnection())
-          const lhs = lhsOf(clean); if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(lineno); for (const rv of rhsVars(clean)) { const e = env.get(rv.replace(/^this\./, "")); if (e) mergeVal(v, e) } env.set(lhs, v); continue }
+          const lhs = lhsOf(clean); if (lhs) { const v = env.get(lhs) ?? emptyVal(); v.srcs.add(lineno); for (const rv of rhsVars(clean)) { const e = env.get(rv.replace(/^this\./, "")); if (e) mergeVal(v, e) } env.set(lhs, v)
+            // P1-IB11: 裸名 lhs(静态字段 imei = getDeviceId())同步入池——匿名方法
+            // 经池预载读取(SenderActivity.imei 跨类传参,godwon/slocker 实证)
+            { let pb = fieldPool.get(u.cls); if (!pb) { pb = new Map(); fieldPool.set(u.cls, pb) } pb.set(lhs, { params: new Set(v.params), srcs: new Set(v.srcs) }) }
+            continue }
         }
         // .execute( 行不入 sink 分支:execute 与 Runtime.exec 撞名,放行走 call 通道
         // (P1-IA2 AsyncTask 边:caller 侧经 cs.sinks 上报跨类流)
-        const sapi = clean.includes(".execute(") ? null : sinkApi(clean)
+        const sapi = /new\s+\w+\s*\(\s*\)?\s*\.execute\s*\(/.test(clean) ? null : sinkApi(clean)
         if (sapi) {
           const refs = rhsVars(clean)
           const used = refs.length ? refs : varsInCall(clean)
@@ -847,6 +897,26 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
           // P1-IA3: mutating-call receiver 继承实参污点(x.append(污点) → 容器变污)
           const rm = /^[\w.$]*?\b([A-Za-z_$][\w$]*)\.\w+\(/.exec(clean)
           if (rm && rm[1] !== "Log" && !isEmptyVal(info)) { const e = env.get(rm[1]!) ?? emptyVal(); mergeVal(e, info); env.set(rm[1]!, e) }
+          // P1-IB2: sink 行实参中的内嵌跨类调用(Log.e(tag, ToolHelper.postData(u, params)))
+          // ——整行被 sink 分支吞掉,postData 的调用边丢失;按行内方法名逐个建边。
+          for (const mm of clean.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)) {
+            const nm = mm[1]!
+            if (nm === "Log" || STRING_METHODS.has(nm)) continue
+            if (!(local.has(nm) || nameIndex.has(nm))) continue
+            const iargs = argsFrom(clean.slice(mm.index + mm[0].length), lineno, env)
+            for (const t of resolveAll(u.cls, nm)) {
+              const cs = lookup(t[0], t[1]); if (!cs) continue
+              for (const { line: sl, api: s2, info: sinfo } of cs.sinks) {
+                for (const p of sinfo.params) {
+                  const aa = iargs[p]
+                  if (aa) for (const src of aa.srcs) {
+                    const kk = `${u.cls}:${src}->${t[0]}:${sl}`
+                    if (!seen.has(kk)) { seen.add(kk); flows.push({ source_line: src, sink_line: sl, src_api: sourceApi(u.lines[src - 1] ?? "") ?? "", sink_api: s2, src_class: u.cls, sink_class: t[0] }) }
+                  }
+                }
+              }
+            }
+          }
           continue
         }
         const call = resolveCall(clean, lineno, n => local.has(n) || nameIndex.has(n), env)
@@ -912,7 +982,8 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
         if (lhs) {
           const refs = rhsVars(clean)
           const info = emptyVal()
-          for (const v of refs) { const e = env.get(v.replace(/^this\./, "")); if (e) mergeVal(info, e) }
+          // P1-IB5: rhs 裸名 miss 时查 this. 键(自引用链 this.x = this.x.replace(...))
+          for (const v of refs) { const e = env.get(v.replace(/^this\./, "")) ?? env.get(`this.${v}`); if (e) mergeVal(info, e) }
           // P1-c: RHS 字段读(h.data)按 "x.f" 键并入(this.f 归一为 this.f 键)
           for (const [o, f] of fieldReads(clean.slice(clean.search(/=(?!=)/) + 1))) {
             const key = o === "this" ? `this.${f}` : `${o}.${f}`
@@ -922,9 +993,30 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
           const fa = fieldAssign(clean)
           if (fa) {
             const key = fa[0] === "this" ? `this.${fa[1]}` : `${fa[0]}.${fa[1]}`
-            if (!isEmptyVal(info)) env.set(key, info); else env.delete(key)
-          } else if (isEmptyVal(info) && refs.length) env.delete(lhs)
-          else if (!isEmptyVal(info)) env.set(lhs, info)
+            if (!isEmptyVal(info)) {
+              env.set(key, info)
+              let pb = fieldPool.get(u.cls); if (!pb) { pb = new Map(); fieldPool.set(u.cls, pb) }
+              pb.set(key, { params: new Set(info.params), srcs: new Set(info.srcs) })
+            } else env.delete(key)
+          } else if (isEmptyVal(info) && refs.length) { env.delete(lhs); fieldPool.get(u.cls)?.delete(lhs) }
+          else if (!isEmptyVal(info)) {
+            env.set(lhs, info)
+            // P1-IB11: 裸名 lhs 写入池(静态字段跨方法/匿名方法读取)
+            let pb = fieldPool.get(u.cls); if (!pb) { pb = new Map(); fieldPool.set(u.cls, pb) }
+            pb.set(lhs, { params: new Set(info.params), srcs: new Set(info.srcs) })
+          }
+        } else {
+          // P1-IB2: 语句行 receiver 继承——x.setEntity(y)/x.add(y)(无赋值的调用语句,
+          // resolveCall 对未知方法名返回 null)→ x 污点 ← y;否则 httpRequest ← params 链断。
+          // P1-IB7: 不设 env.has 前置——List<X> params = new ArrayList() 的声明行
+          // (info 空)会 delete 掉键,首次 x.add(y) 时 receiver 必须能凭空建键。
+          const rm = /^[\w.$]*?\b([A-Za-z_$][\w$]*)\.(\w+)\(/.exec(clean)
+          if (rm && rm[1] !== "Log" && !STRING_METHODS.has(rm[2] ?? "")) {
+            const e = env.get(rm[1]!) ?? emptyVal()
+            for (const v of varsInCall(clean)) { if (v === rm[1]) continue; const x = env.get(v.replace(/^this\./, "")); if (x) mergeVal(e, x) }
+            for (const [o, f] of fieldReads(clean)) { const kk = o === "this" ? `this.${f}` : `${o}.${f}`; const x = env.get(kk); if (x && kk !== `${rm[1]}.${rm[2]}`) mergeVal(e, x) }
+            env.set(rm[1]!, e)
+          }
         }
       }
     // P1-a: 字段终态回写 env0(生命周期链用);非生命周期路径无 env0,无副作用。
@@ -955,10 +1047,17 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
     if (lc.length >= 2) {
       // 链式执行:前者的字段终态 = 后者的初始 env(dummy-main 语义的同类内子集)
       const chainEnv = new Map<string, ValInfo>()
+      const lcNames = new Set(lc.map(m => m.name))
       for (const m of lc) {
         if (process.env.DS_DEBUG_LIFECYCLE) console.error(`DBG chain ${u.cls}::${m.name} env0=${JSON.stringify([...chainEnv.keys()])}`)
         runMethodBody(u, m, chainEnv)
         if (process.env.DS_DEBUG_LIFECYCLE) console.error(`DBG after ${m.name} env0=${JSON.stringify([...chainEnv.keys()])}`)
+      }
+      // P1-IB3: 链上方法之外的方法(匿名 Thread.run 等)也要执行——此前 continue
+      // 把它们全跳过(GoogleService 的污点链全在匿名 run 里,6 条 GT 流全断)。
+      for (const m of u.meths) {
+        if (lcNames.has(m.name)) continue
+        runMethodBody(u, m, undefined)
       }
       continue // 链上方法已按序执行,不再单独跑
     }
@@ -966,5 +1065,6 @@ export function analyzeCrossclass(files: Array<{ cls: string; content: string }>
       runMethodBody(u, m, undefined)
     }
   }
+  if (process.env.DS_DEBUG_IA) console.error(`DBG-IA timing exec=${tSumsStart ? Date.now() - tSumsStart : 0}ms flows=${flows.length}`)
   return flows
 }
