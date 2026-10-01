@@ -1,17 +1,26 @@
 // P2 服务端挑战参考实现(参考实现——生产部署请加限流/鉴权/HTTPS 终止)。
 //
-// 用法: bun scripts/challenge-server.ts <server-challenge.json 路径> [端口]
+// 用法: bun scripts/challenge-server.ts <server-challenge.json 路径> [端口] [--tls <cert.pem> <key.pem>]
+//
+//   --tls 时以 HTTPS 监听(证书链 + 私钥由调用方提供;CA 需已注入设备系统信任库)。
+//   模拟器矩阵用例:模拟器经 10.0.2.2 直达本机回环,URL 形如 https://10.0.2.2:8443。
 //
 // 客户端(DroidSealLoader.fetchPart3)POST 表单字段 manifestSha256=<hex>;
 // 服务器校验其与挑战文档中的 manifestSha256 一致后返回 {"part3":"<64 hex>"}。
 // 校验失败/未知 APK 一律返回 403,不泄露任何信息。
 import { readFileSync } from "node:fs"
-import { createServer } from "node:http"
+import { createServer, type Server } from "node:http"
+import { createServer as createHttpsServer } from "node:https"
 
-const docPath = process.argv[2]
-const port = Number(process.argv[3] ?? 8080)
+const args = process.argv.slice(2)
+const docPath = args[0]
+const portArg = args[1] && !args[1]!.startsWith("--") ? Number(args[1]) : undefined
+const port = portArg ?? 8080
+const tlsIdx = args.indexOf("--tls")
+const tlsCert = tlsIdx >= 0 ? args[tlsIdx + 1] : undefined
+const tlsKey = tlsIdx >= 0 ? args[tlsIdx + 2] : undefined
 if (!docPath) {
-  console.error("用法: bun scripts/challenge-server.ts <server-challenge.json> [端口]")
+  console.error("用法: bun scripts/challenge-server.ts <server-challenge.json> [端口] [--tls <cert.pem> <key.pem>]")
   process.exit(1)
 }
 
@@ -25,7 +34,7 @@ if (!/^[0-9a-f]{64}$/.test(doc.manifestSha256) || !/^[0-9a-f]{64}$/.test(doc.par
   process.exit(1)
 }
 
-createServer((req, res) => {
+const handler = (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => {
   if (req.method !== "POST") {
     res.writeHead(405).end()
     return
@@ -44,7 +53,20 @@ createServer((req, res) => {
       res.writeHead(403).end()
     }
   })
-}).listen(port, "127.0.0.1", () => {
-  console.log(`DroidSeal 挑战服务器已启动: http://127.0.0.1:${port}(仅本机回环——part3 是密钥材料,绝不能暴露到局域网;公网部署请置于 HTTPS 反代之后,反代只转发本机回环)`)
-  console.log(`校验锚 manifestSha256: ${doc.manifestSha256.slice(0, 16)}…`)
-})
+}
+
+// --tls 时以 HTTPS 监听(构建期校验门强制 challenge URL 为 https://,模拟器矩阵必须走 TLS);
+// 无 --tls 保持原 HTTP 回环行为(经 adb reverse 的本机用例)
+const scheme = tlsCert && tlsKey ? "https" : "http"
+if (scheme === "https") {
+  const server: Server = createHttpsServer({ cert: readFileSync(tlsCert!), key: readFileSync(tlsKey!) }, handler)
+  server.listen(port, "127.0.0.1", () => {
+    console.log(`DroidSeal 挑战服务器已启动: https://127.0.0.1:${port}(TLS——证书链 ${tlsCert};模拟器经 https://10.0.2.2:${port} 访问,CA 需已注入设备系统信任库)`)
+    console.log(`校验锚 manifestSha256: ${doc.manifestSha256.slice(0, 16)}…`)
+  })
+} else {
+  createServer(handler).listen(port, "127.0.0.1", () => {
+    console.log(`DroidSeal 挑战服务器已启动: http://127.0.0.1:${port}(仅本机回环——part3 是密钥材料,绝不能暴露到局域网;公网部署请置于 HTTPS 反代之后,反代只转发本机回环)`)
+    console.log(`校验锚 manifestSha256: ${doc.manifestSha256.slice(0, 16)}…`)
+  })
+}

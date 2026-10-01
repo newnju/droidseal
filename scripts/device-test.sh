@@ -40,8 +40,8 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-ADB=adb
-command -v "$ADB" >/dev/null 2>&1 || { echo "FAIL: 找不到 adb——安装 Android Platform-Tools 并加入 PATH"; exit 2; }
+ADB=${ADB:-adb}
+"$ADB" version >/dev/null 2>&1 || { echo "FAIL: adb 不可用($ADB)——安装 Android Platform-Tools 并加入 PATH"; exit 2; }
 
 # 自动模拟器(--auto-emulator):仅当当前无已连接设备时才触发;有设备则零影响。
 if ! "$ADB" get-state >/dev/null 2>&1; then
@@ -96,10 +96,18 @@ else
 fi
 
 # D3 启动 + 5 秒存活(挑战离线场景方向反转:不存活 = fail-closed 正确)
+# 启动用 monkey——不依赖 resolve-activity(adbd 抖动时该子命令会挂空,am start
+# 拿到空 activity 名 → 启动指令无效 → D2 假失败);pidof 为空时重试一次
 "$ADB" logcat -c 2>/dev/null
-"$ADB" shell am start -n "$PKG/$( "$ADB" shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$PKG" 2>/dev/null | tail -1 | tr -d '\r' )" >/dev/null 2>&1
+"$ADB" shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
 sleep 5
 PID=$("$ADB" shell pidof "$PKG" 2>/dev/null | tr -d '\r')
+if [ -z "$PID" ] && [ -z "$CHALLENGE_OFFLINE" ]; then
+  sleep 2
+  "$ADB" shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+  sleep 5
+  PID=$("$ADB" shell pidof "$PKG" 2>/dev/null | tr -d '\r')
+fi
 if [ -n "$CHALLENGE_OFFLINE" ]; then
   [ -z "$PID" ] && check D2 0 "进程 5s 内不存活(挑战离线,fail-closed 语义正确)" || check D2 1 "进程仍存活 pid=$PID——离线挑战模式下解密应失败(fail-closed 被绕过?核实 challengeUrl 是否被端点外供给)"
 else
@@ -116,7 +124,7 @@ echo "$LOG" | grep -qi "integrityFailed\|BadTag" || check D3 0 "无完整性/GCM
 if [ -n "$KS_RELAUNCH" ]; then
   "$ADB" shell am force-stop "$PKG" 2>/dev/null
   sleep 1
-  "$ADB" shell am start -n "$PKG/$( "$ADB" shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$PKG" 2>/dev/null | tail -1 | tr -d '\r' )" >/dev/null 2>&1
+  "$ADB" shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
   sleep 5
   PID2=$("$ADB" shell pidof "$PKG" 2>/dev/null | tr -d '\r')
   [ -n "$PID2" ] && check D5 0 "二次启动存活(unseal→XOR part3 路径正确)" || check D5 1 "二次启动失败——KS 封存/还原路径异常"
