@@ -200,3 +200,23 @@
 - **剩余断链形态(IA3 目标)**:positive 流中 partialFlow(文件中转二段)63 条——写端(writeConfig(k, 污点)→osw.write)与读端(openFileInput(k)→execute→网络写)经文件 key 桥接,引擎无此通道;探针实证 backflash 剩余 5 条断链全部属此形态;
 - 验证链:tsc 0、全量 394 tests/0 fail(含新增 execute 边 2 用例)、15 轮探针逐一定位后修复、bench 前后对照复跑;
 - 实现位置:`src/core/dataflow.ts`(SOURCES/SINKS 扩表、`resolveCall` execute 边与 STRING_METHODS、`resolveAll` 后缀匹配、intentKeys 消费、source 合并 RHS);单测 `tests/dataflow.test.ts`(execute 边跨类连通/无污点不建边)。
+
+**IA3:传播机制三刀(原定「文件 key 桥接」经探针诊断落地为三个断链修复)**(宽松档 83→**88(64.7%)**、锚定档 34→**37(27.2%)**,负例 FP 41 恒定;backflash 单 app lenient 8→**13 全连**):
+
+1. **mutating-call receiver 继承**:`x.append(污点)` 是 sink 也是"容器变污"——receiver 不继承则容器后续读/返回全断(readConfig 的 stringBuilder 链),summarize/analyzeInterproc/runMethodBody 三处 sink 分支补齐;
+2. **execute 实参内嵌调用污点**:`execute(new String[]{... + readConfig("k", ctx) + ...})` 的污点来自内嵌调用的返回值,argsFrom 只提变量提不到——runMethodBody 的 call 分支按方法名查摘要 retSrcs 注入(执行期 allSums 已建全);
+3. **return 变量污点按 env 终态回填**:`while(true){readLine; if(null) return sb; append}` 的 return 在 append 前(循环回边未建模),线性行处理时 sb 尚无污点——summarize 末尾按 env 终态回填 return 表达式变量(sanitizer 净化不回填)。
+
+探针诊断链(16-17 号):FlashW+FlashVirtual 两文件最小复现 → receiver 继承后 FlashY 类对 7 条产出 → execute 行全文核对发现实参内嵌 readConfig → 最小复现仍 0 → FlashW.java 全文核对锁定 `return stringBuilder.toString()` 位于 `append` 之前(循环回边)→ 回填后 7 条全连。
+
+**IA 轮全量对照(基线 → IA1 → IA2 → IA3)**:
+
+| 档位 | 基线 | IA1(表扩充) | IA2(摘要传播) | IA3(传播三刀) |
+|---|---|---|---|---|
+| 端点级 TP | 136 | 136 | 136 | 136 |
+| 宽松档 | 73(53.7%) | 81(59.6%) | 83(61.0%) | **88(64.7%)** |
+| 锚定档 | 8(5.9%) | 29(21.3%) | 34(25.0%) | **37(27.2%)** |
+| 负例 FP | 41 | 41 | 41 | 41 |
+
+- 剩余断链:宽松档 88 → 端点级 136 差 48 条;距验收目标 100+ 差 12,待下轮探针诊断(逐 app 明细定位新形态);
+- IA3 实现位置:`src/core/dataflow.ts`(三处 sink 分支 receiver 继承、call 分支内嵌调用注入、summarize 末尾 return 回填);验证链:tsc 0、全量 394 tests/0 fail。
