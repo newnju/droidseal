@@ -964,7 +964,21 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       ? createHash("sha256").update(config.certSha256).digest("hex").slice(0, 16)
       : "droidseal123"
     const keyAlias = "droidseal"
-    const genOk = generateKeystore(ksPath, { keyAlias, storePassword: ksPassword, keyPassword: ksPassword, validity: 36500 })
+    // 复用已存在的同源 keystore:重跑同一输出目录时 keytool -genkeypair 会因
+    // alias 已存在而失败,导致产物静默不签名(INSTALL_PARSE_FAILED_NO_CERTIFICATES)。
+    let genOk = false
+    if (existsSync(ksPath)) {
+      genOk = true
+      findings.push({
+        severity: "info", confidence: "high", code: "KEYSTORE_GENERATED",
+        title: "复用已存在的自签名密钥库",
+        detail: `路径: ${ksPath};同一输出目录重复加固时复用,保证多次产物签名一致。`,
+        recommendation: "自签名 keystore 仅用于开发测试——正式发布请使用专用 release 密钥。",
+        evidence: ksPath,
+      })
+    } else {
+      genOk = generateKeystore(ksPath, { keyAlias, storePassword: ksPassword, keyPassword: ksPassword, validity: 36500 })
+    }
     if (genOk) {
       signingConfig = { mode: "keystore", keystorePath: ksPath, keyAlias, storePassword: ksPassword, keyPassword: ksPassword }
       findings.push({
