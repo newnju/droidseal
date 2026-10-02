@@ -87,7 +87,14 @@ if [ -n "$WANT_API" ]; then
   [ "$DEV_API" = "$WANT_API" ] && check D1a 0 "设备 API $DEV_API = 期望 $WANT_API" || check D1a 1 "设备 API $DEV_API ≠ 期望 $WANT_API——矩阵用例拿错设备"
 fi
 
-# D2 安装
+# D2 安装(签名冲突的残留包先卸载——上次非本流水线签名的安装会让 install -r 报
+# UPDATE_INCOMPATIBLE;卸载是破坏性最小的清理,只针对本用例包名)
+if ! "$ADB" install -r "$APK" >/tmp/ds-install.log 2>&1; then
+  if grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE" /tmp/ds-install.log; then
+    "$ADB" uninstall "$PKG" >/dev/null 2>&1
+    "$ADB" install -r "$APK" >/tmp/ds-install.log 2>&1 || true
+  fi
+fi
 if "$ADB" install -r "$APK" >/tmp/ds-install.log 2>&1; then
   check D1 0 "install -r 成功"
 else
@@ -109,7 +116,15 @@ if [ -z "$PID" ] && [ -z "$CHALLENGE_OFFLINE" ]; then
   PID=$("$ADB" shell pidof "$PKG" 2>/dev/null | tr -d '\r')
 fi
 if [ -n "$CHALLENGE_OFFLINE" ]; then
-  [ -z "$PID" ] && check D2 0 "进程 5s 内不存活(挑战离线,fail-closed 语义正确)" || check D2 1 "进程仍存活 pid=$PID——离线挑战模式下解密应失败(fail-closed 被绕过?核实 challengeUrl 是否被端点外供给)"
+  # fail-closed 判据 = 原始 Activity 未渲染(功能级),而非进程死亡:无头模拟器上崩溃后
+  # "Application Error" 对话框会挂住进程(binder_thread_read),pidof 恒非空——
+  # docs/device-testing.md 纪律:fail-closed 生效的证明是"原始 Activity 不渲染"。
+  FOCUS=$("$ADB" shell dumpsys window windows 2>/dev/null | grep -i "mCurrentFocus" | tr -d '\r')
+  case "$FOCUS" in
+    *"Application Error: $PKG"*) check D2 0 "原始 Activity 未渲染(崩溃对话框挂起,离线挑战 fail-closed 语义正确)" ;;
+    *"$PKG"*) check D2 1 "焦点窗口属于本包($FOCUS)——离线挑战下原始 Activity 疑似渲染,fail-closed 被绕过?" ;;
+    *) check D2 0 "原始 Activity 未渲染(焦点: ${FOCUS:-无}——离线挑战 fail-closed 语义正确)" ;;
+  esac
 else
   [ -n "$PID" ] && check D2 0 "进程存活 pid=$PID(解密+壳启动闭环完成)" || check D2 1 "启动 5s 后进程不存在——解密失败或壳被杀(见 D3 logcat)"
 fi

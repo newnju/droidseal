@@ -213,7 +213,9 @@ export function signApk(
     "--key-pass", `pass:${config.keyPassword}`,
     apkPath,
   ]
-  const result = spawnSync(findBuildTool("apksigner"), args, { timeout: 120000, stdio: "pipe" })
+  // Windows .bat 必须经 cmd 解析:spawnSync 直接调 .bat 在 Node≥20/bun 下静默失败(status null)
+  const isBat = findBuildTool("apksigner").toLowerCase().endsWith(".bat")
+  const result = spawnSync(findBuildTool("apksigner"), args, { timeout: 120000, stdio: "pipe", shell: isBat })
   const output = (result.stdout?.toString() ?? "") + (result.stderr?.toString() ?? "")
   return { success: result.status === 0, output }
 }
@@ -243,7 +245,8 @@ export function signApkJarsigner(
  * 使用 zipalign 对齐 APK。
  */
 export function zipalignApk(inputPath: string, outputPath: string): boolean {
-  const result = spawnSync("zipalign", ["-p", "4", inputPath, outputPath], { timeout: 30000, stdio: "pipe" })
+  const isBat = findBuildTool("zipalign").toLowerCase().endsWith(".bat")
+  const result = spawnSync(findBuildTool("zipalign"), ["-p", "4", inputPath, outputPath], { timeout: 30000, stdio: "pipe", shell: isBat })
   return result.status === 0
 }
 
