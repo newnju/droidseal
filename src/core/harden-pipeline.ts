@@ -33,7 +33,8 @@ import { generateSplitKeyInjectionData } from "./split-key-inject.ts"
 import { recompileAndInjectManifest } from "./axml-recompile.ts"
 import { injectRuntimeProtection, generateRuntimeInitCall } from "./runtime-inject.ts"
 import { runStringWritebackCycle } from "./string-callsite-rewrite.ts"
-import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings, compileVmSubset, generateVmInterpreterC } from "./vmp-compiler.ts"
+import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings, compileVmSubset, generateVmInterpreterC, generateVmRegisterBridgeC } from "./vmp-compiler.ts"
+import { markVmMethodsNative, resolveVmBridgeEntries } from "./vmp-native-mark.ts"
 import { compileNativeSo, generateCmakeListsForShell } from "./native-so-compile.ts"
 import { generateEnhancedRuntimeSmali, generateEnhancedNativeC, buildEnhancedGuardFindings } from "./enhanced-guard.ts"
 import { buildCodeItemTable, encryptCodeItemTable, generateCodeItemRestoreHeader } from "./codeitem-table.ts"
@@ -641,36 +642,35 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   if (config.enableVmProtection) {
     const vmSmali = generateVmInterpreterSmali(packageName, DEFAULT_VM_CONFIG)
     generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealVmInterpreter.smali`, content: vmSmali })
-    // 方法级 VM 子集:对被抽取方法的原始 CodeItem 真实编译为 VM 字节码,
-    // payload 作为独立产物落盘(数据真实、可单测);解释器 smali 仍是参考产物不注入,
-    // vmProtected 维持如实 false——编译产物 ≠ 运行时生效,不因编译成功而翻绿。
+    // 方法级 VM 子集:编译+ACC_NATIVE 标记已在 processDexFile 内完成(挖空后、加密前,
+    // payload 与壳 DEX 一致)——此处消费接线产物:payload 落盘 + 桥 C/解释器 C 随 SO 编译链落盘。
+    // 诚实边界:标记成功 ≠ 运行时生效——RegisterNatives 需真机验收(链路 3),
+    // vmProtected 维持如实 false,直到 device-test.sh --vm-mode 通过。
+    const vmInfo = dexResult?.vmSubset
     const hollow = dexResult?.hollowResult
-    if (hollow && hollow.stubMethods.length > 0) {
-      const subset = compileVmSubset(hollow.extractedCodeItems, hollow.stubMethods)
-      if (subset.compiled.length > 0) {
-        const vmPayload = serializeVmPayload(subset.compiled)
-        generatedFiles.push({ name: "native/vm-payload.bin.b64", content: Buffer.from(vmPayload).toString("base64") })
-        // 里程碑 A 执行端:解释器 C 随 native 壳编译链落盘(可编译可单测),
-        // 但方法路由未接(ArtMethod 替换 = 里程碑 B)——运行时仍无 VM 执行路径,
-        // vmProtected 恒 false,直到注入链落地并通过真机验收。
-        generatedFiles.push({ name: "native/vm_interpreter.c", content: generateVmInterpreterC() })
-        findings.push(...buildVmpCompilerFindings(subset.compiled.length, vmPayload.length))
-        findings.push({
-          severity: "medium", confidence: "high", code: "VMP_SUBSET_COMPILED_NOT_INJECTED",
-          title: `方法级 VM 子集编译完成:${subset.compiled.length} 个方法(payload+解释器 C 落盘,未注入)`,
-          detail: `VM 字节码 payload 已生成(${vmPayload.length}B,跳过 ${subset.skipped} 个翻译不完整的方法)并落盘;叶子方法解释器执行端(里程碑 A,const/算术/return 子集)已随产物落盘,TS/C 两侧语义对拍有单测背书。但方法路由未接线(ArtMethod 替换 = 里程碑 B)——运行时无 VM 执行路径,对产物安全性无实际贡献,vmProtected 如实报 false。`,
-          recommendation: "不要将该 payload 计入防护能力;里程碑 B(注入)落地并通过真机验收后重新加固。",
-          evidence: `compiled=${subset.compiled.length} skipped=${subset.skipped} bytes=${subset.translatedBytes}`,
-        })
-      } else {
-        findings.push({
-          severity: "medium", confidence: "high", code: "VMP_SUBSET_EMPTY",
-          title: "方法级 VM 子集编译零产出(如实降级)",
-          detail: `抽取的 ${hollow.stubMethods.length} 个方法全部翻译失败(操作码覆盖不足)——不产出半成品 payload。`,
-          recommendation: "扩展 translateDalvikInstruction 的操作码覆盖后重试。",
-          evidence: `stubs=${hollow.stubMethods.length}`,
-        })
-      }
+    if (hollow && vmInfo && vmInfo.entries.length > 0) {
+      const subset = vmInfo.subset
+      const vmPayload = serializeVmPayload(subset.compiled)
+      generatedFiles.push({ name: "native/vm-payload.bin.b64", content: Buffer.from(vmPayload).toString("base64") })
+      // 里程碑 B 执行端+桥:随 native 壳编译链落盘(链路 2 接线)
+      generatedFiles.push({ name: "native/vm_interpreter.c", content: generateVmInterpreterC() })
+      generatedFiles.push({ name: "native/vm_bridge.c", content: generateVmRegisterBridgeC(vmInfo.entries.map((e) => ({ stubName: e.methodName, signature: e.signature, methodIdx: e.methodIdx, className: e.className })), jniClassPath.replace(/\//g, ".")) })
+      findings.push(...buildVmpCompilerFindings(subset.compiled.length, vmPayload.length))
+      findings.push({
+        severity: "medium", confidence: "high", code: "VMP_NATIVE_MARKED_NOT_VERIFIED",
+        title: `VMP 接线完成:${vmInfo.entries.length} 个 (I)I 叶子方法已 native 化(未真机验收)`,
+        detail: `VM 子集编译 ${subset.compiled.length} 个方法(payload ${vmPayload.length}B),其中 ${vmInfo.entries.length} 个签名恰为 (I)I 已置 ACC_NATIVE+code_off=0(等长补丁,${vmInfo.marked.length} 成功/${vmInfo.skippedMark.length} 跳过),桥 C+解释器 C 随壳 SO 编译。排除 ${vmInfo.excluded.length} 个非 (I)I 方法(保持 stub+惰性还原)。但 RegisterNatives 注册与 VM 执行未过真机断言——运行时是否生效未知,vmProtected 如实报 false。`,
+        recommendation: "运行 device-test.sh --vm-mode 真机断言;通过前不得将该接线计入防护能力。",
+        evidence: `compiled=${subset.compiled.length} marked=${vmInfo.marked.length} excluded=${vmInfo.excluded.length}`,
+      })
+    } else if (hollow && hollow.stubMethods.length > 0 && (!vmInfo || vmInfo.subset.compiled.length === 0)) {
+      findings.push({
+        severity: "medium", confidence: "high", code: "VMP_SUBSET_EMPTY",
+        title: "方法级 VM 子集编译零产出(如实降级)",
+        detail: `抽取的 ${hollow.stubMethods.length} 个方法全部翻译失败(操作码覆盖不足)或无 (I)I 可注册方法——不产出半成品 payload,不置 ACC_NATIVE。`,
+        recommendation: "扩展 translateDalvikInstruction 的操作码覆盖后重试;fixture 需补 (I)I 叶子方法。",
+        evidence: `stubs=${hollow.stubMethods.length}`,
+      })
     }
     findings.push(...buildVmpFindings(true, false, false))
   }
@@ -705,6 +705,8 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     // Split-Key part2 异位注入 SO:密钥从"一个 DEX 字段"变为"SO 内嵌数组"
     keyPart2Hex: keyMaterial.splitKey ? Buffer.from(keyMaterial.splitKey.part2).toString("hex") : undefined,
     jniClassPath,
+    // VMP 里程碑 B:VM 解释器+桥随壳 SO 编译(有已注册桥表条目才开)
+    includeVm: Boolean(dexResult?.vmSubset && dexResult.vmSubset.entries.length > 0),
   }
   const nativeFiles = generateNativeShellFiles(nativeConfig)
   generatedFiles.push(...nativeFiles)
@@ -716,6 +718,14 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     mkdirSync(nativeSrcDir, { recursive: true })
     for (const nf of nativeFiles) {
       await writeFile(path.join(nativeSrcDir, path.basename(nf.name)), nf.content, "utf-8")
+    }
+    // VMP 里程碑 B:VM 解释器+桥 C 属 generatedFiles(native/ 前缀),编译需要它们
+    // 在源目录——includeVm 开启时一并写入(CMakeLists 已按开关链接)
+    if (nativeConfig.includeVm) {
+      for (const vf of ["native/vm_interpreter.c", "native/vm_bridge.c"]) {
+        const gf = generatedFiles.find((g) => g.name === vf)
+        if (gf) await writeFile(path.join(nativeSrcDir, path.basename(vf)), gf.content, "utf-8")
+      }
     }
     const soResult = await compileNativeSo({
       packageName, soName: randomSo, sourceDir: nativeSrcDir, outputDir: path.join(config.outputDir, "native-libs"),

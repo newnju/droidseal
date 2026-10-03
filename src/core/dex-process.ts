@@ -5,8 +5,21 @@
 import type { Finding } from "./types.ts"
 import { hollowMethods, encryptDex, parseClassExclusionRules, serializePayload, type MethodHollowResult, type EncryptedDex, buildDexProtectionFindings } from "./dex-protection.ts"
 import { generateKeyMaterial, type KeyMaterial } from "./dex-protection-keys.ts"
+import { compileVmSubset, type VmSubsetResult } from "./vmp-compiler.ts"
+import { markVmMethodsNative, resolveVmBridgeEntries, type VmBridgeEntry } from "./vmp-native-mark.ts"
 
 // ── DEX 处理配置 ──────────────────────────────────────────────────────
+
+/** VMP 里程碑 B 接线产物:编译/标记结果 + 桥表(RegisterNatives 元组) */
+export interface VmSubsetInfo {
+  subset: VmSubsetResult
+  entries: VmBridgeEntry[]
+  /** 签名非 (I)I 被如实排除的方法 idx */
+  excluded: number[]
+  marked: number[]
+  /** 标记失败(长度无法平衡)的方法 idx */
+  skippedMark: number[]
+}
 
 export interface DexProcessConfig {
   algorithm: "aes-256-gcm" | "chacha20-poly1305"
@@ -27,6 +40,8 @@ export interface DexProcessResult {
   hollowResult?: MethodHollowResult | undefined
   hollowDexIndex: number // hollowResult 对应的 dexFiles 下标(-1 = 无抽取;多 DEX 时抽取结果合并取最后一个)
   encryptedDex?: EncryptedDex | undefined
+  vmSubset?: VmSubsetInfo | undefined
+  vmSubsetDexIndex: number // vmSubset 对应的 dexFiles 下标(-1 = 无 VM 子集)
   findings: Finding[]
 }
 
@@ -38,17 +53,34 @@ export function processDexFile(
   dexBytes: Uint8Array,
   config: DexProcessConfig,
   keyMaterial: KeyMaterial,
-): { processedDex: Uint8Array; hollowResult?: MethodHollowResult | undefined; encryptedDex?: EncryptedDex | undefined; payloadBlob?: Uint8Array | undefined } {
+): { processedDex: Uint8Array; hollowResult?: MethodHollowResult | undefined; encryptedDex?: EncryptedDex | undefined; payloadBlob?: Uint8Array | undefined; vmSubset?: VmSubsetInfo } {
   let processedBytes = dexBytes
   let hollowResult: MethodHollowResult | undefined
   let encryptedDex: EncryptedDex | undefined
   let payloadBlob: Uint8Array | undefined
+  let vmSubset: { subset: VmSubsetResult; entries: VmBridgeEntry[]; excluded: number[]; marked: number[]; skippedMark: number[] } | undefined
 
   // 1. 方法抽取(Method Hollowing)
   if (config.enableMethodHollow) {
     const excludePatterns = parseClassExclusionRules(JSON.stringify(config.classExclusionPatterns))
     hollowResult = hollowMethods(processedBytes, excludePatterns)
     processedBytes = hollowResult.hollowedDex
+    // 1.5 VMP 里程碑 B:VM 子集编译 + ACC_NATIVE 标记(必须在加密前——payload 与
+    // 壳 DEX 必须一致;必须等长原地补丁——restoreCode/CodeItem 表依赖偏移不变量)。
+    // 只注册 (I)I 叶子方法(thunk 固定 (JNIEnv*,jclass,jint));其余保持 stub+惰性还原。
+    if (hollowResult.stubMethods.length > 0) {
+      const subset = compileVmSubset(hollowResult.extractedCodeItems, hollowResult.stubMethods)
+      if (subset.compiled.length > 0) {
+        const { entries, excluded } = resolveVmBridgeEntries(processedBytes, subset.compiled.map((c) => c.methodIdx))
+        if (entries.length > 0) {
+          const markResult = markVmMethodsNative(processedBytes, entries.map((e) => e.methodIdx))
+          processedBytes = markResult.dex
+          vmSubset = { subset, entries, excluded, marked: markResult.marked, skippedMark: markResult.skipped }
+        } else {
+          vmSubset = { subset, entries: [], excluded, marked: [], skippedMark: [] }
+        }
+      }
+    }
   }
 
   // 2. DEX 整体加密
@@ -65,7 +97,9 @@ export function processDexFile(
     payloadBlob = serializePayload(encryptedDex.encryptedPayload)
   }
 
-  return { processedDex: processedBytes, hollowResult, encryptedDex, payloadBlob }
+  return vmSubset === undefined
+    ? { processedDex: processedBytes, hollowResult, encryptedDex, payloadBlob }
+    : { processedDex: processedBytes, hollowResult, encryptedDex, payloadBlob, vmSubset }
 }
 
 /**
@@ -91,6 +125,8 @@ export function processAllDexFiles(
   let hollowResult: MethodHollowResult | undefined
   let hollowDexIndex = -1
   let encryptedDex: EncryptedDex | undefined
+  let vmSubset: VmSubsetInfo | undefined
+  let vmSubsetDexIndex = -1
 
   for (let di = 0; di < dexFiles.length; di += 1) {
     const result = processDexFile(dexFiles[di]!.bytes, config, keyMaterial)
@@ -98,6 +134,8 @@ export function processAllDexFiles(
     payloadBlobs.push(result.payloadBlob)
     if (result.hollowResult) { hollowResult = result.hollowResult; hollowDexIndex = di }
     if (result.encryptedDex) encryptedDex = result.encryptedDex
+    // VM 子集与挖空结果一一对应,跟随 hollowDexIndex 记录
+    if (result.vmSubset) { vmSubset = result.vmSubset; vmSubsetDexIndex = di }
   }
 
   // 3. 生成 Finding
@@ -116,5 +154,5 @@ export function processAllDexFiles(
     })
   }
 
-  return { processedDex, payloadBlobs, keyMaterial, hollowResult, hollowDexIndex, encryptedDex, findings }
+  return { processedDex, payloadBlobs, keyMaterial, hollowResult, hollowDexIndex, encryptedDex, vmSubset, vmSubsetDexIndex, findings }
 }
