@@ -48,3 +48,4 @@ __pycache__/
 # Node bundle 构建中间产物
 .droidseal-node-build/
 runtime/build/
+out/

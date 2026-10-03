@@ -17,9 +17,9 @@ const ENTRIES: VmBridgeEntry[] = [
 describe("generateVmRegisterBridgeC", () => {
   const c = generateVmRegisterBridgeC(ENTRIES)
 
-  test("注册表含 stub 名/签名/methodIdx 三元组", () => {
-    expect(c).toContain('{ "ds_vm_1", "(II)I", 7 }')
-    expect(c).toContain('{ "ds_vm_2", "(I)I", 13 }')
+  test("注册表含 stub 名/签名二元组(fnPtr 构建期为 NULL,运行时 g_thunks 回填)", () => {
+    expect(c).toContain('{ "ds_vm_1", "(II)I", NULL }')
+    expect(c).toContain('{ "ds_vm_2", "(I)I", NULL }')
   })
 
   test("含 RegisterNatives 调用与 payload 查表(magic 校验)", () => {
