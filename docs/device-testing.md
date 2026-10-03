@@ -108,6 +108,34 @@ fixture APK(ds-hello,8589B,minSdk 24)三变体逐格功能级验收(判据升级
 5. **离线格端点未真杀**:challenge 在线/离线两格共用构建,原脚本在两格跑完后才杀 server → 离线格端点可达、解密成功、判据方向反转失败;改为在线格验收后立即杀端点(netstat 拿监听 PID → `Stop-Process` 兜底,MSYS kill 对 Windows 侧进程无效、`cmd //c` 在 w64devkit 下挂死均已实证)并断言端口释放;
 6. **环境探测**:adb 预检改直接试跑 `"$ADB" version`(支持 `ADB` 环境变量覆盖——WSL bash 劫持 `bash` 命令名时不继承 Windows 环境变量,须用 w64devkit bash 全路径调脚本)。
 
+## 实测记录(2026-10-02,API 26 + API 24 x86_64 双模拟器,多设备 8 格全绿轮)
+
+双模拟器并存(`emulator-5556`=API 26,`emulator-5558`=API 24)首次跑完整 `--api 26,24` 矩阵,**8 格全绿**:
+
+| 格位(API 26) | 判据 | 结果 |
+|---|---|---|
+| standard | D1a/D1/D2/D3/D6 | 5/5 PASS |
+| keystore(`--ks-relaunch`) | D1a/D1/D2/D3/D5/D6 | 6/6 PASS(D5 二次启动存活) |
+| challenge 在线 | D1a/D1/D2/D3/D6 | 5/5 PASS(TLS 端点可达) |
+| challenge 离线 | D1a/D1/D2/D3/D6 | 5/5 PASS(原始 Activity 未渲染,fail-closed 正确) |
+
+| 格位(API 24) | 判据 | 结果 |
+|---|---|---|
+| standard | D1a/D1/D2/D3/D6 | 5/5 PASS(落盘降级路径解密闭环) |
+| keystore(`--ks-relaunch`) | D1a/D1/D2/D3/D5/D6 | 6/6 PASS(D5 二次启动存活) |
+| challenge 在线 | D1a/D1/D2/D3/D6 | 5/5 PASS |
+| challenge 离线 | D1a/D1/D2/D3/D6 | 5/5 PASS(原始 Activity 未渲染,fail-closed 正确) |
+
+本轮修掉的缺陷(两个流水线级 + 三个脚本级):
+
+1. **加固产物静默不签名(流水线级,最严重)**:`signApk`/`zipalignApk` 经 `spawnSync` 直接调 `.bat`,在 bun/Node≥20 下静默失败(status null)→ 产物缺 META-INF → 安装判据必然 `INSTALL_PARSE_FAILED_NO_CERTIFICATES`。修复:Windows `.bat` 工具调用加 `shell: true`(src/core/apk-repack.ts);
+2. **重复加固同目录时 keystore 生成失败(流水线级)**:输出目录残留上次的自签名 keystore,`keytool -genkeypair` 因 alias 已存在而失败 → `signingConfig` 变 undefined → 产物再次不签名。修复:同一输出目录复用已存在 keystore(保证多次产物签名一致)(src/core/harden-pipeline.ts);
+3. **多设备并存误判"无设备"(脚本级)**:两台模拟器在线时 `adb get-state`(无 `-s`)报 "more than one device" 而失败,被误判为无设备 → 全部格位假失败。修复:device-test.sh 新增 `--serial` 定向(全部 adb 调用经 ADBWRAP 包装),device-matrix.sh 新增 `DEV_SERIAL()` 按 API 级自动选格;
+4. **选格函数管道吞 stdin(脚本级)**:`DEV_SERIAL` 初版用管道 `while read` 循环,循环体内 `adb shell` 吞掉管道剩余 stdin,检查完第一台设备后循环提前结束,第二台永远匹配不到(API 24 四格全报"无已连接设备")。修复:改 `for` 循环 + `</dev/null`;
+5. **离线格 fail-closed 判据失真(脚本级)**:无头模拟器上崩溃后 "Application Error" 对话框挂住进程(binder_thread_read),`pidof` 恒非空,旧"进程 5s 内不存活"判据永远误报。修复:改焦点窗口断言——`Application Error: <pkg>` 或非本包焦点均判"原始 Activity 未渲染 = fail-closed 生效",与本文档"fail-closed 生效的证明是原始 Activity 不渲染"纪律一致(scripts/device-test.sh D2 离线分支)。
+
+另:CI/计划任务等无 stdin 会话里 `adb shell` 会挂在 stdin 转发上永久阻塞(61 个 adb.exe 孤儿进程实证),ADBWRAP 现恒以 `</dev/null` 调用。
+
 ## 手动用例(脚本不覆盖)
 
 ### 重签必败(P0-A 锚点)
