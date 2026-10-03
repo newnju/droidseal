@@ -11,6 +11,13 @@ import type { Finding } from "./types.ts"
 // ── NDK 检测 ──────────────────────────────────────────────────────
 
 function findNdk(): { ndkRoot: string; cmakeBin: string; ndkBuild: string } | undefined {
+  // NDK r26b 起不再自带 cmake——SDK cmake 目录/系统 PATH cmake 作为回退
+  const findSystemCmake = (): string | undefined => {
+    const { spawnSync } = require("node:child_process") as typeof import("node:child_process")
+    const r = spawnSync(process.platform === "win32" ? "where" : "which", ["cmake"], { encoding: "utf-8" })
+    const first = r.stdout?.toString().split(/\r?\n/)[0]?.trim()
+    return first || undefined
+  }
   const candidates = [
     process.env.ANDROID_NDK_HOME,
     process.env.NDK_HOME,
@@ -30,8 +37,24 @@ function findNdk(): { ndkRoot: string; cmakeBin: string; ndkBuild: string } | un
         const ndkBuild = path.join(ndkRoot, "ndk-build")
         const cmakeExe = process.platform === "win32" ? cmakeBin + ".exe" : cmakeBin
         const ndkBuildExe = process.platform === "win32" ? ndkBuild + ".cmd" : ndkBuild
+        // NDK 内无 cmake 时回退系统 cmake(NDK r26b+ 不自带;工具链文件仍在 NDK 内)
         if (existsSync(cmakeExe) || existsSync(ndkBuildExe)) {
-          return { ndkRoot, cmakeBin: cmakeExe, ndkBuild: ndkBuildExe }
+          const sdkCmakeDir = path.join(path.dirname(ndkRoot), "..", "cmake")
+          let cmakeResolved = cmakeExe
+          if (!existsSync(cmakeExe)) {
+            const sdkCmake = (() => {
+              try {
+                const vers = readdirSync(sdkCmakeDir).sort().reverse()
+                for (const v of vers) {
+                  const p = path.join(sdkCmakeDir, v, "bin", "cmake.exe")
+                  if (existsSync(p)) return p
+                }
+              } catch { /* SDK 无独立 cmake 组件 */ }
+              return undefined
+            })()
+            cmakeResolved = sdkCmake ?? findSystemCmake() ?? cmakeExe
+          }
+          return { ndkRoot, cmakeBin: cmakeResolved, ndkBuild: ndkBuildExe }
         }
       }
     } catch { continue }
@@ -82,22 +105,31 @@ export async function compileNativeSo(config: CompileSoConfig): Promise<CompileS
 
   const soFiles: Array<{ abi: string; path: string; size: number }> = []
 
-  // 逐 ABI 编译
+  // 逐 ABI 编译(路径全部绝对化:configure 的 cwd 是 sourceDir,build 阶段 cwd 是
+  // 进程根——相对路径在两阶段会解析到不同目录,导致 "missing CMakeCache.txt")
   for (const abi of abis) {
-    const buildDir = path.join(config.outputDir, `build-${abi}`)
-    const outputSo = path.join(config.outputDir, "lib", abi, config.soName)
+    const buildDir = path.resolve(config.outputDir, `build-${abi}`)
+    const outputSo = path.resolve(config.outputDir, "lib", abi, config.soName)
 
     await mkdir(path.dirname(outputSo), { recursive: true })
     await mkdir(buildDir, { recursive: true })
 
     // CMake 构建
+    // Windows 上 cmake 默认 VS 生成器需要 MSVC+nmake;NDK 交叉编译必须用
+    // Unix Makefiles + NDK 自带 make(与手工验证过的组合一致)
+    const makeExe = path.join(ndk.ndkRoot, "prebuilt", process.platform === "win32" ? "windows-x86_64" : "linux-x86_64", "bin", "make.exe")
+    const genArgs = process.platform === "win32" && existsSync(makeExe)
+      ? ["-G", "Unix Makefiles", `-DCMAKE_MAKE_PROGRAM=${makeExe}`]
+      : []
     const cmakeArgs = [
+      ...genArgs,
       `-DCMAKE_TOOLCHAIN_FILE=${path.join(ndk.ndkRoot, "build", "cmake", "android.toolchain.cmake")}`,
       `-DANDROID_ABI=${abi}`,
       `-DANDROID_PLATFORM=android-${minSdk}`,
       `-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${path.dirname(outputSo)}`,
       `-B`, buildDir,
-      config.sourceDir,
+      // 源目录必须绝对路径:spawn cwd 下传相对路径会被 cmake 当 "extra path" 忽略,配置即败
+      path.resolve(config.sourceDir),
     ]
 
     const cmakeResult = spawnSync(ndk.cmakeBin, cmakeArgs, {
@@ -112,9 +144,10 @@ export async function compileNativeSo(config: CompileSoConfig): Promise<CompileS
         confidence: "high",
         code: "SO_COMPILE_CMAKE_FAILED",
         title: `CMake 配置失败(${abi})`,
-        detail: cmakeResult.stderr?.toString().slice(0, 500) ?? "未知错误",
+        // 错误在 stderr 末尾(前面是 deprecation 警告)——取尾部而非头部
+        detail: cmakeResult.stderr?.toString().slice(-800) ?? "未知错误",
         recommendation: "检查 CMakeLists.txt 语法；确认 NDK 版本兼容。",
-        evidence: cmakeResult.stderr?.toString().slice(0, 200) ?? "",
+        evidence: cmakeResult.stderr?.toString().slice(-200) ?? "",
       })
       continue
     }

@@ -19,6 +19,9 @@
 #   D2 启动后 5 秒进程存活——stub 引导 → loader 解密 → 壳启动闭环未中断
 #      (--challenge-offline 时反转为"5s 内不存活 = 预期")
 #   D3 logcat 无 DroidSeal 完整性失败标记(integrityFailed / GCM BadTag)
+#   V1 VMP 注册断言(仅 --vm-mode):logcat 出现 "vm bridge: N methods
+#      registered total" 且 N≥1,且无 UnsatisfiedLinkError/NoSuchMethodError——
+#      通过前构建侧 vmProtected 恒 false
 #   D4 API 版本断言(仅 --api)
 #   D5 卸载干净(为下一用例让路)
 #   D6 Keystore 绑定二次启动(仅 --ks-relaunch)
@@ -31,7 +34,7 @@ APK="${1:?用法: device-test.sh <hardened.apk> <package.name> [flags]}"
 shift
 PKG="${1:?缺少包名(如 com.example.app)}"
 shift || true
-KS_RELAUNCH=""; WANT_API=""; CHALLENGE_OFFLINE=""; AUTO_EMU=""; SERIAL=""
+KS_RELAUNCH=""; WANT_API=""; CHALLENGE_OFFLINE=""; AUTO_EMU=""; SERIAL=""; VM_MODE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ks-relaunch) KS_RELAUNCH=1 ;;
@@ -39,6 +42,7 @@ while [ $# -gt 0 ]; do
     --challenge-offline) CHALLENGE_OFFLINE=1 ;;
     --auto-emulator) AUTO_EMU=1 ;;
     --serial) SERIAL="${2:?--serial 需要设备串号}"; shift ;;
+    --vm-mode) VM_MODE=1 ;;
     *) echo "FAIL: 未知参数 $1"; exit 2 ;;
   esac
   shift
@@ -145,6 +149,25 @@ LOG=$(ADBWRAP logcat -d 2>/dev/null)
 echo "$LOG" | grep -qi "integrityFailed" && check D3 1 "logcat 出现 integrityFailed(证书/manifest 校验失败)" || true
 echo "$LOG" | grep -qi "BadTag\|AEADBadTagException" && check D3 1 "logcat 出现 GCM BadTag(密钥错误)" || true
 echo "$LOG" | grep -qi "integrityFailed\|BadTag" || check D3 0 "无完整性/GCM 失败标记"
+
+# V1 VMP 真机断言(仅 --vm-mode;里程碑 B 验收门禁——通过前 vmProtected 恒 false)
+# 判据(两条都过才算通过,单条不过即 fail):
+#   V1a 注册:logcat 出现 "vm bridge: N methods registered total" 且 N ≥ 1
+#   V1b 执行:app 类未被排除的 (I)I 方法调用后无 UnsatisfiedLinkError/
+#            NoSuchMethodError(native 路由生效的必要条件)
+# 诚实边界:fail-open 语义下注册失败不崩——V1a 缺失即说明 VM 路由未生效,
+# 不得以"app 正常启动"替代本断言。
+if [ -n "$VM_MODE" ]; then
+  REG=$(echo "$LOG" | grep -o "vm bridge: [0-9]* methods registered total" | grep -o "[0-9]*" | head -1)
+  if [ -n "$REG" ] && [ "$REG" -ge 1 ] 2>/dev/null; then
+    check V1 0 "RegisterNatives 注册生效:${REG} 个 VM 方法已注册"
+  else
+    check V1 1 "logcat 无 vm bridge 注册成功记录(vmProtected 不得置 true)"
+  fi
+  echo "$LOG" | grep -qi "UnsatisfiedLinkError\|NoSuchMethodError" \
+    && check V1 1 "logcat 出现链接错误——native 声明/注册签名不匹配" \
+    || true
+fi
 
 # D5 Keystore 绑定二次启动(可选;仅 --keystore-bind 产物)
 if [ -n "$KS_RELAUNCH" ]; then

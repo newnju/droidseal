@@ -561,6 +561,11 @@ public final class DroidSealLoader {
      *  返回 1=命中,0=干净。仅在 SO 成功加载后调用(NDK 缺失回退路径无 SO,该源自动缺席)。 */
     private static native int nativeGuardVote();
 
+    /** VMP 里程碑 B:RegisterNatives 注册入口(壳 SO vm_bridge.c 实现,导出符号随本类
+     *  随机化名参数化)。按类分组注册 VM 化 (I)I 叶子方法,返回成功注册数;SO 未加载
+     *  或无 VM 方法时调用方需 fail-open(返回 0 不阻断启动)。 */
+    static native int dsvmRegisterAll();
+
     /** P2 服务端挑战:向 SERVER_URL(构建期嵌入)POST manifestSha256,取回 part3(hex 64 字符 → 32B)。
      *  服务器按 manifest 摘要校验后发放——其他 APK / 被篡改的包拿不到本构建的 part3。
      *  子线程执行(init 在 attachBaseContext 主线程,直接联网抛 NetworkOnMainThread);

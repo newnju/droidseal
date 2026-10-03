@@ -93,6 +93,7 @@ export function generateArtHookC(packageName: string): string {
 
 #include <jni.h>
 #include <string.h>
+#include <stdlib.h>
 #include <dlfcn.h>
 #include <android/log.h>
 #include <sys/mman.h>
@@ -283,7 +284,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* reserved) {
 /**
  * 生成 CMakeLists.txt 用于编译壳 SO。
  */
-export function generateCmakeLists(soName: string, includeKeyPart2 = false): string {
+export function generateCmakeLists(soName: string, includeKeyPart2 = false, includeVm = false): string {
   return `cmake_minimum_required(VERSION 3.18)
 project(droidseal-shell C)
 
@@ -293,7 +294,7 @@ set(CMAKE_C_STANDARD 11)
 add_library(${soName} SHARED
     crc32.c
     text_integrity.c
-    art_hook.c${includeKeyPart2 ? "\n    key_part2.c\n    guard_vote.c" : ""}
+    art_hook.c${includeKeyPart2 ? "\n    key_part2.c\n    guard_vote.c" : ""}${includeVm ? "\n    vm_interpreter.c\n    vm_bridge.c" : ""}
 )
 
 # Android 日志库
@@ -309,8 +310,11 @@ target_compile_options(${soName} PRIVATE
     -Wformat-security
 )
 
-# strip release
+# strip release + 输出名控制(target 名已含 lib/.so,禁 CMake 再加前缀——否则产物
+# 变成 liblibdsshell.so.so,注入与运行时 System.loadLibrary 双双失配)
 set_target_properties(${soName} PROPERTIES
+    PREFIX ""
+    SUFFIX ""
     C_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
 )
@@ -372,6 +376,8 @@ export interface NativeShellConfig {
   keyPart2Hex?: string | undefined
   /** Split-Key 模式:JNI 方法所属类的完整路径(如 droidseal/runtime/DroidSealLoader) */
   jniClassPath?: string | undefined
+  /** VMP 里程碑 B:vm_interpreter.c + vm_bridge.c 随壳 SO 编译(由管线注入内容) */
+  includeVm?: boolean
 }
 
 /**
@@ -725,8 +731,8 @@ export function generateNativeShellFiles(config: NativeShellConfig): Array<{ nam
     files.push({ name: `${dir}/art_hook.c`, content: generateArtHookC(config.packageName) })
   }
 
-  // CMake 构建文件
-  files.push({ name: `${dir}/CMakeLists.txt`, content: generateCmakeLists(config.soName, withKeyPart2) })
+  // CMake 构建文件(includeVm 时链接 vm_interpreter.c/vm_bridge.c——文件由管线写入)
+  files.push({ name: `${dir}/CMakeLists.txt`, content: generateCmakeLists(config.soName, withKeyPart2, config.includeVm === true) })
 
   // 配置头文件
   files.push({

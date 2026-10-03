@@ -554,6 +554,8 @@ export interface VmBridgeEntry {
   signature: string
   /** VM payload 中该方法的 method_idx(运行时查表键) */
   methodIdx: number
+  /** 所属类点分路径(多类分组注册用;dsvmRegisterAll 入口) */
+  className?: string
 }
 
 /**
@@ -561,9 +563,9 @@ export interface VmBridgeEntry {
  * 分发函数按 methodIdx 从 payload 表查 VM 字节码,调 dsvm_execute_leaf 执行;
  * 未收录的方法 idx 如实返回 0 并打日志(fail-open 保可用,与惰性还原同口径)。
  */
-export function generateVmRegisterBridgeC(entries: VmBridgeEntry[]): string {
+export function generateVmRegisterBridgeC(entries: VmBridgeEntry[], loaderClassPath = "droidseal.runtime.DroidSealLoader"): string {
   const tableRows = entries
-    .map((e) => `    { "${e.stubName}", "${e.signature}", ${e.methodIdx} },`)
+    .map((e) => `    { "${e.stubName}", "${e.signature}", NULL },`)
     .join("\n")
   return `// DroidSeal VMP-lite RegisterNatives 桥(里程碑 B,构建期自动生成,勿手动修改)
 // 语义:注册 VM 化方法为 native 实现,dispatch 进解释器(与 executeVmLeaf 对拍)。
@@ -647,6 +649,42 @@ int dsvm_register_vm_bridge(JNIEnv* env, jclass stub_class) {
     }
     LOGI("vm bridge: %d methods registered", (int)n);
     return 0;
+}
+
+/* Java 可调用的注册入口(dsvmRegisterAll):JNI_OnLoad 时 app 类未加载,
+ * RegisterNatives 必败——由壳 loader 在 app classloader 就绪后显式调用。
+ * JNI 导出符号随 loaderClassPath 参数化(loader 类名构建期随机化,硬编码必败)。
+ * 按类分组:每类 FindClass → 注册该类条目 → DeleteLocalRef;任一类失败如实记日志
+ * 继续其余类(fail-open 保可用,与惰性还原同口径),返回成功注册的方法总数。 */
+JNIEXPORT jint JNICALL
+Java_${loaderClassPath.replace(/\./g, "_")}_dsvmRegisterAll(JNIEnv* env, jclass clazz) {
+    (void)clazz;
+    for (size_t i = 0; i < sizeof(g_bridge_table) / sizeof(g_bridge_table[0]); i++) {
+        g_bridge_table[i].fnPtr = g_thunks[i];
+    }
+    int total = 0;
+${[...new Set(entries.map((e) => e.className ?? ""))].filter((c) => c !== "").map((cls) => {
+  const clsEntries = entries.map((e, i) => ({ e, i })).filter(({ e }) => (e.className ?? "") === cls)
+  return `    { /* 类 ${cls} */
+        jclass c = (*env)->FindClass(env, "${cls.replace(/\./g, "/")}");
+        if (c != NULL) {
+            JNINativeMethod t[] = {
+${clsEntries.map(({ e }) => `                { "${e.stubName}", "${e.signature}", (void*)vm_thunk_${entries.indexOf(e)} },`).join("\n")}
+            };
+            if ((*env)->RegisterNatives(env, c, t, ${clsEntries.length}) == JNI_OK) {
+                total += ${clsEntries.length};
+            } else {
+                LOGI("vm bridge: register failed for ${cls}");
+            }
+            (*env)->DeleteLocalRef(env, c);
+        } else {
+            (*env)->ExceptionClear(env);
+            LOGI("vm bridge: class not found: ${cls}");
+        }
+    }`
+}).join("\n")}
+    LOGI("vm bridge: %d methods registered total", total);
+    return total;
 }
 
 /* payload 注入点(壳 setCodeTable 侧调用) */
