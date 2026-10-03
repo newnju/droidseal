@@ -118,10 +118,23 @@ export function hollowMethods(dexBytes: Uint8Array, excludePatterns: RegExp[] = 
   const types: string[] = []; for (let i = 0; i < Math.min(header.typeIdsSize, 1 << 20); i += 1) types.push(strings[v.getUint32(header.typeIdsOff + i * 4, true)] ?? "")
   const out = new Uint8Array(dexBytes)
   let total = 0, hollowed = 0, skipped = 0, extractedBytes = 0
+  // 权威校验:method_ids 按 class_idx 排序,每个类的 methodIdx 区间必然连续。
+  // class_data 解析一旦漂移(旧 bug:字段/方法条目交错解析错位),mIdx 会落到
+  // 无关类(如 Ljava/net/URL;)——逐条目校验区间,漂移即如实跳过(fail-closed,
+  // 不产出错位 stub:错位 stub 会让 dump-code/恢复链/桥表全部指错方法)。
+  const methodRuns = new Map<number, { first: number; last: number }>()
+  for (let mi = 0; mi < header.methodIdsSize; mi += 1) {
+    const cls = v.getUint16(header.methodIdsOff + mi * 8, true)
+    const r = methodRuns.get(cls)
+    if (r) r.last = mi
+    else methodRuns.set(cls, { first: mi, last: mi })
+  }
   for (let c = 0; c < header.classDefsSize; c += 1) {
     const cdOff = v.getUint32(header.classDefsOff + c * 32 + 24, true); if (!cdOff) continue
-    const cls = types[v.getUint32(header.classDefsOff + c * 32, true)] ?? ""
+    const clsIdx = v.getUint32(header.classDefsOff + c * 32, true)
+    const cls = types[clsIdx] ?? ""
     if (excludePatterns.some((p) => p.test(cls))) continue
+    const run = methodRuns.get(clsIdx)
     // class_data_item 布局: static_fields + instance_fields + direct_methods + virtual_methods
     // 必须先跳过两个字段列表(每项 fieldIdx+accessFlags 各一个 uleb128),否则方法解析从字段数据开始 → 全部漂移
     const counts = readUleb128Arr(dexBytes, cdOff, 4); let p = counts.next; let mIdx = 0
@@ -135,13 +148,19 @@ export function hollowMethods(dexBytes: Uint8Array, excludePatterns: RegExp[] = 
         const access = readUleb128(dexBytes, p); p = access.next
         const code = readUleb128(dexBytes, p); p = code.next
         total += 1
+        // 漂移检测:解析出的 methodIdx 超出本类在 method_ids 的权威区间 →
+        // class_data 解析已错位,该类剩余条目全部不可信,如实跳过(fail-closed)
+        if (run && (mIdx < run.first || mIdx > run.last)) { skipped += 1; continue }
         if (!code.value || (access.value & 0x100)) { skipped += 1; continue }
         const insnsSize = v.getUint32(code.value + 12, true); const sz = 16 + insnsSize * 2
         // 防护:code_item 越界或 insnsSize 为垃圾值(单方法指令区不超过 64K insns=128KB+16B 头)
         if (code.value + 16 > dexBytes.length || insnsSize > 0x10000 || code.value + sz > dexBytes.length) { skipped += 1; continue }
         // SEC-011a:带 try/catch(tries_size>0)的方法跳过抽取——恢复时需完整重建
         // tries/handler 表,当前恢复逻辑只整块覆盖 insns 区,恢复后方法会丢失异常表。
-        const triesSize = v.getUint32(code.value + 8, true)
+        // tries_size 是 u16(code_item +6;布局: registers_size@0 ins_size@2 outs_size@4
+        // tries_size@6 debug_info_off@8 insns_size@12——此前先误用 getUint32(+8)、再误用
+        // getUint16(+8),实际 +8 是 debug_info_off 低半段,所有方法被误判带 try 全跳过)
+        const triesSize = v.getUint16(code.value + 6, true)
         if (triesSize > 0) { skipped += 1; continue }
         extracted.set(code.value, dexBytes.slice(code.value, code.value + sz)); extractedBytes += sz
         // SEC-011b:足迹不变 stub(保留 insns_size、nop 填充,不留非零 padding)

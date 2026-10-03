@@ -72,7 +72,9 @@ export function dumpExtractedCodeItems(
     const params: string[] = []
     if (paramsOff !== 0) {
       const n = u32(paramsOff)
-      for (let k = 0; k < n; k += 1) params.push(typeAt(u32(paramsOff + 4 + k * 2)))
+      // type_list 条目是 u16(此前误用 u32:k=0 时把 entries[0]|entries[1]<<16
+      // 拼成越界索引 → 参数全解成 "?",如 (??)[B)
+      for (let k = 0; k < n; k += 1) params.push(typeAt(v.getUint16(paramsOff + 4 + k * 2, true)))
     }
     return `(${params.join("")})${ret}`
   }

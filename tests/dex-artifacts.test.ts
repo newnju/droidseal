@@ -20,7 +20,7 @@ describe("dex-artifacts · dump-code", () => {
       const e = entries[i]!
       expect(e.classDescriptor).toMatch(/^L[\w/$-]+;$/)
       expect(e.methodName.length).toBeGreaterThan(0)
-      expect(e.proto).toMatch(/^\([\[\w/$;]*\)\[[\w/[$;]+$/)
+      expect(e.proto).toMatch(/^\([\[\w/$;]*\)[\w/[$;]+$/)
       expect(e.codeHex.length).toBe(e.codeSize * 2)
       // codeHex 必须与 extractedCodeItems 原始字节一致(key = originalCodeOff)
       expect(hr.extractedCodeItems.has(e.codeOff)).toBe(true)
