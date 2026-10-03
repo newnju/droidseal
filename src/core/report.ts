@@ -4,6 +4,7 @@ import { EDITION } from "../brand.ts"
 import { writeRemediationBundle } from "./remediation.ts"
 import { mappedMastgFindings, decompileSuggestions } from "./mastg-map.ts"
 import { buildMastgChecklist, mastgComplianceSummary } from "./mastg-checklist.ts"
+import * as mastgCoverageModule from "./mastg-coverage.ts"
 import { buildPocCommands } from "./poc-commands.ts"
 import { writeReleaseEvidence, type ReleaseEvidenceResult } from "./release-evidence.ts"
 import {
@@ -642,6 +643,24 @@ ${(() => {
   return mapped.length > 0 ? mapped.map((m) => `- \`${m.code}\` ${m.title} → ${m.reference}`).join("\n") : "- 无映射发现。"
 })()}
 
+## MASTG 全集对照（按 MASVS 域 × 测试主题，三态）
+
+口径：对照粒度为 MASVS 域 × 测试主题，**不做逐 MASTG-xxx-ID 核定映射**（版本漂移与核定偏差风险，与 MASTG 参考节同纪律）。三态如实：静态可查（审计引擎确定性检测面）/ 静态启发（存在性/模式匹配，非确定性）/ 需动态（真机或运行时观测，与 device-testing 衔接）/ 范围外（服务端侧或物理接触攻击者）。命中列 = 本次审计发现命中该主题的关联检测面。
+
+${(() => {
+  const { mastgCoverageWithFindings, mastgCoverageStateLabel } = mastgCoverageModule
+  const covered = mastgCoverageWithFindings(sortedFindings)
+  const domains = [...new Set(covered.map((t) => t.domain))]
+  return domains.map((domain) => {
+    const items = covered.filter((t) => t.domain === domain)
+    const hits = items.filter((t) => t.hit).length
+    const lines = items.map((t) =>
+      `  - ${mastgCoverageStateLabel(t.state)}${t.hit ? " ·✓已检出" : ""} ${t.topic}${t.note ? `（${t.note}）` : ""}`,
+    )
+    return `**${domain}**（${hits}/${items.length} 检出）\n${lines.join("\n")}`
+  }).join("\n\n")
+})()}
+
 ## 反编译核验建议
 
 ${(() => {
@@ -681,6 +700,17 @@ ${(() => {
   return taint.length > 0
     ? taint.slice(0, 10).map((f) => `- ${f.code} ${f.title}：${f.evidence}`).join("\n")
     : "- 无数据流发现。"
+})()}
+
+## Native 数据流（JNI 桥参数追踪）
+
+native 侧半语义数据流发现——JNI 导出函数体内「桥参数 accessor →（拷贝传播）→ 外发/执行 sink」的解码调用级链路；解码不可用时如实降级为字符串共现口径（confidence: low）：
+
+${(() => {
+  const nativeFlow = sortedFindings.filter((f) => f.code === "NATIVE_DATAFLOW_SUSPECT")
+  return nativeFlow.length > 0
+    ? nativeFlow.slice(0, 10).map((f) => `- [${f.confidence === "medium" ? "解码调用级" : "共现降级"}] ${f.title}：${f.evidence}`).join("\n")
+    : "- 无 native 数据流发现（或 SO 无 JNI 导出符号/已 stripped，如实不报）。"
 })()}
 
 ## 执行步骤

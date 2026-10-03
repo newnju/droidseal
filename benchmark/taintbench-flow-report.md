@@ -270,3 +270,18 @@
 | 严格档 | 1 | 1(原理性受限,结论如上) |
 
 - 实现位置:`src/core/dataflow.ts`(SOURCES/SINKS IB12 四条)、`src/core/bench-flow.ts`(matchesStrict 匿名剥尾、fpNegativeAnchored 全链路);验证链:tsc 0、全量 394 tests/0 fail、bench 三轮对照复跑。
+
+### 12. P2 native 半语义 IC 实测(2026-10-02)——Java 流引擎无回归确认
+
+P2 轮改的是 native 侧(`src/core/native-dataflow.ts` 重写:ARM64 PLT/JUMP_SLOT 解码调用级 + JNI 桥参数 accessor/拷贝传播/sink 半语义链,confidence low→medium,独立报告节),不触碰 Java 流引擎。TaintBench 复跑(bench-p2.log)确认无回归:
+
+| 档位 | IC 终 | P2 后 |
+|---|---|---|
+| 端点级 TP | 136 | 136 |
+| 宽松档 | 101(74.3%) | 101(74.3%) |
+| 锚定档 | 56(41.2%) | 56(41.2%) |
+| 负例 FP | 41(锚定口径 9) | 41(锚定口径 9) |
+
+结论如实:P2 是 native 侧能力增量(此前 native 数据流只有字符串共现启发式),TaintBench 的 GT 全部在 Java 层,数字持平即预期——Java 流引擎零改动零回归。
+
+- 实现位置:`src/core/native-dataflow.ts`(解码级全量重写)、`src/core/apk-audit.ts`(NATIVE_DATAFLOW_SUSPECT 按 via 双口径分级 + JNI_OnLoad×动态注册关联)、`src/core/report.ts`(「Native 数据流(JNI 桥参数追踪)」独立节);验证链:tsc 0、全量 400 tests/0 fail(+6 解码路径单测:BTI 前缀 stub/降级口径标注/关联判定)。
