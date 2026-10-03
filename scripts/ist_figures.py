@@ -148,5 +148,27 @@ def fig_eff():
     save(fig, "fig4_efficiency")
 
 
-fig_arch(); fig_pipeline(); fig_pr(); fig_eff()
+# ---------- Fig 5: three-tier adjudication (严格/宽松/锚定 并列,IC 轮终数字) ----------
+def fig_tiers():
+    tiers = ["Strict", "Lenient", "Anchored"]
+    # 2026-10-01 IC 轮终(benchmark/taintbench-flow-report.md §11):端点级 TP=136 分母
+    vals = [1, 101, 56]
+    pct = [v / 136 * 100 for v in vals]
+    colors = [C_GRAY, C_GREEN, C_ORANGE]
+
+    fig, ax = plt.subplots(figsize=(4.6, 2.7))
+    bars = ax.bar(tiers, vals, color=colors, ec="#1a1a1a", lw=0.5, width=0.55)
+    for b, v, p in zip(bars, vals, pct):
+        ax.text(b.get_x() + b.get_width() / 2, v + 2.5,
+                f"{v}\n({p:.1f}%)", ha="center", va="bottom", fontsize=8.5)
+    ax.set_ylabel("Connected-flow TP (of 136 endpoint TP)")
+    ax.set_ylim(0, 130)
+    ax.annotate("principled limit:\nGT lineNo not co-sourced",
+                xy=(0, 1), xytext=(0.02, 30), textcoords="axes fraction",
+                fontsize=7.5, color=C_GRAY)
+    fig.tight_layout()
+    save(fig, "fig5_tiers")
+
+
+fig_arch(); fig_pipeline(); fig_pr(); fig_eff(); fig_tiers()
 print("all figures ->", OUT)

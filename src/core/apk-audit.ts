@@ -18,7 +18,7 @@ import { buildPermissionRiskFindings, linkPermissionDataflow } from "./permissio
 import { scanStringsForSecrets, strongestSecretConfidence, containsPrivateKey, type SecretPattern } from "./secret-scan.ts"
 import { extractDexStrings, scanDex, detectSdkPackages, detectSdkFingerprints } from "./dex-scan.ts"
 import { scanJniDynamicRegistrations, crossValidateWithDex } from "./jni-register-scan.ts"
-import { scanNativeDataflow } from "./native-dataflow.ts"
+import { scanNativeDataflow, associateDynamicEndpoints } from "./native-dataflow.ts"
 import { extractCalledMethods, extractCallGraph, callersOf } from "./dex-callgraph.ts"
 import { disassembleNamed } from "./dex-disassembler.ts"
 import { matchBehaviorRules, maliciousScore, buildBehaviorFindings, matchDeobfuscatedRules, type BehaviorRule, BUILTIN_BEHAVIOR_RULES, type MaliciousScoreThresholds, DEFAULT_SCORE_THRESHOLDS } from "./behavior-rules.ts"
@@ -1180,27 +1180,51 @@ async function scanNativeLibraries(
       const secretHits = scanStringsForSecrets(extractAsciiStrings(bytes))
       // P1a: RegisterNatives 动态注册端点恢复(签名表 × DEX 交叉验证)
       const jniCandidates = scanJniDynamicRegistrations(extractAsciiStrings(bytes))
-      // P3: native 线性数据流(JNI 导出函数 source→sink 共现,线性启发式口径)
+      // P2: native 半语义数据流(ARM64 解码调用级;不可解码时如实降级字符串共现)
       const dfHits = scanNativeDataflow(bytes)
       if (dfHits.length > 0) {
-        findings.push({
-          severity: "medium",
-          confidence: "low",
-          code: "NATIVE_DATAFLOW_SUSPECT",
-          title: `JNI 导出函数疑似 source→sink 数据流:${dfHits.length} 个(线性启发式)`,
-          detail:
-            `在 ${base} 的 JNI 导出函数(JNI_OnLoad/Java_*)函数体范围内观察到网络/文件读类 API 与` +
-            `外发/执行类 API 的导入符号共现: ` +
-            dfHits.slice(0, 6).map((h) => `${h.symbol}[${h.sources.join("+")}→${h.sinks.join("+")}]`).join("、") +
-            (dfHits.length > 6 ? ` 等 ${dfHits.length} 个` : "") +
-            "。如实边界:线性启发式非指针分析——按符号表函数体范围共现判定,PLT 间接调用不解析,误报可能存在,仅作人工核验线索。",
-          recommendation: "优先人工核验共现函数的网络外发逻辑(尤其与动态注册端点重合的);确认恶意后建议加壳检测或服务端管控。",
-          evidence: dfHits.slice(0, 5).map((h) => `${base}:${h.symbol}`).join(", "),
-        })
+        const decoded = dfHits.filter((h) => h.via === "decoded-calls")
+        const legacy = dfHits.filter((h) => h.via === "string-cooccurrence")
+        if (decoded.length > 0) {
+          findings.push({
+            severity: "medium",
+            confidence: "medium",
+            code: "NATIVE_DATAFLOW_SUSPECT",
+            title: `JNI 导出函数 source→sink 数据流:${decoded.length} 个(解码调用级,半语义)`,
+            detail:
+              `在 ${base} 的 JNI 导出函数(JNI_OnLoad/Java_*)函数体内解码 bl 调用并经 PLT/JUMP_SLOT ` +
+              `重定位解析到真实导入符号,观察到 JNI 桥参数 accessor(Get*Chars/Get*Elements 等,` +
+              `Java 层参数进入点)与外发/执行类 sink 直连或经拷贝族(memcpy/strcpy 等)传播: ` +
+              decoded.slice(0, 6).map((h) => `${h.symbol}[${h.sources.join("+")}${h.propagators.length > 0 ? `⇢${h.propagators.join("+")}` : ""}→${h.sinks.join("+")}]`).join("、") +
+              (decoded.length > 6 ? ` 等 ${decoded.length} 个` : "") +
+              "。如实边界:半语义——参数 accessor 与 sink 在同一函数内解码命中即成链,不重建调用顺序、" +
+              "不做指针分析/跨函数传播;解码不可用的函数如实不报。",
+            recommendation: "逐个核验命中函数的桥参数外发逻辑(尤其与动态注册端点重合的);解码级命中置信度高于字符串共现,可直接作为人工审计入口。",
+            evidence: decoded.slice(0, 5).map((h) => `${base}:${h.symbol}`).join(", "),
+          })
+        }
+        if (legacy.length > 0) {
+          findings.push({
+            severity: "medium",
+            confidence: "low",
+            code: "NATIVE_DATAFLOW_SUSPECT",
+            title: `JNI 导出函数疑似 source→sink 数据流:${legacy.length} 个(线性启发式降级口径)`,
+            detail:
+              `在 ${base} 的 JNI 导出函数函数体范围内观察到读类 API 与外发/执行类 API 的导入符号共现: ` +
+              legacy.slice(0, 6).map((h) => `${h.symbol}[${h.sources.join("+")}→${h.sinks.join("+")}]`).join("、") +
+              (legacy.length > 6 ? ` 等 ${legacy.length} 个` : "") +
+              "。如实边界:线性启发式——ARM64 PLT 解码不可用(非 arm64/stripped/重定位缺失)时的降级口径," +
+              "按符号表函数体范围字符串共现判定,误报可能存在,仅作人工核验线索。",
+            recommendation: "人工核验共现函数的网络外发逻辑;如需更高置信度请保留符号表重新构建后再扫。",
+            evidence: legacy.slice(0, 5).map((h) => `${base}:${h.symbol}`).join(", "),
+          })
+        }
       }
       if (jniCandidates.length > 0) {
         const validated = crossValidateWithDex(jniCandidates, await loadDexStringSet())
         if (validated.length > 0) {
+          // P2:JNI_OnLoad 域内解码链 × 动态注册端点关联(注册与数据流同域提示,不给逐端点映射)
+          const onloadLinked = associateDynamicEndpoints(dfHits, validated.length)
           findings.push({
             severity: "info",
             confidence: "medium",
@@ -1212,7 +1236,8 @@ async function scanNativeLibraries(
               `DEX 侧仅有 native 声明、无 Java_ 前缀静态导出符号,静态符号扫描不可见: ` +
               validated.slice(0, 10).map((c) => `${c.classDotted}.${c.method}${c.signature}`).join("、") +
               (validated.length > 10 ? ` 等 ${validated.length} 个` : "") +
-              "。如实边界:仅恢复注册清单,不含实现地址与行号。",
+              (onloadLinked ? "。关联:JNI_OnLoad 解码级数据流链与注册同域——注册实现函数可能复用同域 sink,核验时优先覆盖。" : "") +
+              "。如实边界:仅恢复注册清单,不含实现地址与行号;fnPtr 无法从字符串池恢复。",
             recommendation: "动态注册是 native 攻击面的常见隐藏入口,逐个核验实现逻辑(尤其网络/加密/反调试相关);交叉验证未命中的候选已如实丢弃。",
             evidence: validated.slice(0, 5).map((c) => `${c.classPath}->${c.method}${c.signature}`).join(", "),
           })
