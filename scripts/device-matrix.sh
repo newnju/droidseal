@@ -41,6 +41,19 @@ PKG_BASE=$(basename "$INPUT" .apk)
 mkdir -p "$OUTDIR"
 FAILED=0; RAN=0
 
+# 多设备并存:按 API 级自动选格——一台设备一个串号,device-test.sh 经 --serial 定向。
+# 单设备时退化为原行为(serial 为空,设备检查沿用 get-state)。
+# 注意:不能用管道 while 循环——循环体内 adb shell 会吞掉管道剩余 stdin,
+# 导致检查完第一台设备后循环提前结束,第二台永远匹配不到。
+DEV_SERIAL() { # $1=api → echo 串号(无匹配设备输出空)
+  local api="$1" serial s_api
+  for serial in $("$ADB" devices 2>/dev/null | tail -n +2 | awk '$2=="device"{print $1}'); do
+    s_api=$("$ADB" -s "$serial" shell getprop ro.build.version.sdk 2>/dev/null </dev/null | tr -d '\r')
+    [ "$s_api" = "$api" ] && { echo "$serial"; return 0; }
+  done
+  return 1
+}
+
 run_case() { # $1=标签 $2=api $3=构建flags $4=验收flags
   local label="$1" api="$2" build_flags="$3" test_flags="$4"
   local apk="$OUTDIR/${PKG_BASE}.${label}.hardened.apk"
@@ -61,7 +74,11 @@ run_case() { # $1=标签 $2=api $3=构建flags $4=验收flags
   if [ -z "$pkg" ]; then echo "FAIL: $label 包名解析失败(aapt 不可用或产物损坏)"; FAILED=$((FAILED+1)); return; fi
   echo "=== [$label API $api] device-test (pkg=$pkg) ==="
   RAN=$((RAN+1))
-  if ! bash scripts/device-test.sh "$hardened" "$pkg" --api "$api" $test_flags; then
+  local serial_for_api
+  serial_for_api=$(DEV_SERIAL "$api")
+  local serial_args=""
+  [ -n "$serial_for_api" ] && serial_args="--serial $serial_for_api"
+  if ! bash scripts/device-test.sh "$hardened" "$pkg" --api "$api" $serial_args $test_flags; then
     echo "FAIL: [$label API $api]"; FAILED=$((FAILED+1))
   fi
 }
@@ -94,7 +111,10 @@ for api in $(echo "$APIS" | tr ',' ' '); do
       pkg=$("$AAPT_BIN" dump badging "$hardened" 2>/dev/null | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -1)
       if [ -n "$hardened" ] && [ -n "$pkg" ]; then
         RAN=$((RAN+1))
-        bash scripts/device-test.sh "$hardened" "$pkg" --api "$api" || { echo "FAIL: [challenge-online API $api]"; FAILED=$((FAILED+1)); }
+        serial_args=""
+        serial_for_api=$(DEV_SERIAL "$api")
+        [ -n "$serial_for_api" ] && serial_args="--serial $serial_for_api"
+        bash scripts/device-test.sh "$hardened" "$pkg" --api "$api" $serial_args || { echo "FAIL: [challenge-online API $api]"; FAILED=$((FAILED+1)); }
         # 离线格前必须真正杀掉端点:MSYS kill 对 Windows 侧 bun 可能无效,
         # 用 netstat 拿监听 PID 后经 cmd taskkill 兜底,并断言端口已释放
         kill $SRV_PID 2>/dev/null || true
@@ -107,7 +127,7 @@ for api in $(echo "$APIS" | tr ',' ' '); do
         fi
         netstat -ano 2>/dev/null | grep ":8443" | grep -qi LISTEN && echo "WARN: 8443 仍监听——离线格判据可能失真" || true
         RAN=$((RAN+1))
-        bash scripts/device-test.sh "$hardened" "$pkg" --api "$api" --challenge-offline || { echo "FAIL: [challenge-offline API $api]"; FAILED=$((FAILED+1)); }
+        bash scripts/device-test.sh "$hardened" "$pkg" --api "$api" $serial_args --challenge-offline || { echo "FAIL: [challenge-offline API $api]"; FAILED=$((FAILED+1)); }
       fi
       kill $SRV_PID 2>/dev/null || true
     else

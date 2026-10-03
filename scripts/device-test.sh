@@ -12,6 +12,8 @@
 #                         经 PowerShell Start-Process 分离启动,避免模拟器随脚本
 #                         会话结束而消亡;启动后轮询 adb 等待 boot 完成(上限 180s)。
 #                         不加此 flag 时维持原行为:无设备直接 FAIL 并给出指引。
+#   --serial <serial>     定向到指定设备(多设备并存必需——不指定时 adb get-state
+#                         报 "more than one device",会被误判为无设备)。
 # 判据(全部通过 exit 0,任一失败 exit 1):
 #   D1 安装成功(adb install -r)
 #   D2 启动后 5 秒进程存活——stub 引导 → loader 解密 → 壳启动闭环未中断
@@ -29,13 +31,14 @@ APK="${1:?用法: device-test.sh <hardened.apk> <package.name> [flags]}"
 shift
 PKG="${1:?缺少包名(如 com.example.app)}"
 shift || true
-KS_RELAUNCH=""; WANT_API=""; CHALLENGE_OFFLINE=""; AUTO_EMU=""
+KS_RELAUNCH=""; WANT_API=""; CHALLENGE_OFFLINE=""; AUTO_EMU=""; SERIAL=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ks-relaunch) KS_RELAUNCH=1 ;;
     --api) WANT_API="${2:?--api 需要版本号}"; shift ;;
     --challenge-offline) CHALLENGE_OFFLINE=1 ;;
     --auto-emulator) AUTO_EMU=1 ;;
+    --serial) SERIAL="${2:?--serial 需要设备串号}"; shift ;;
     *) echo "FAIL: 未知参数 $1"; exit 2 ;;
   esac
   shift
@@ -43,8 +46,16 @@ done
 ADB=${ADB:-adb}
 "$ADB" version >/dev/null 2>&1 || { echo "FAIL: adb 不可用($ADB)——安装 Android Platform-Tools 并加入 PATH"; exit 2; }
 
+# 串口定向:多设备并存时 adb get-state(无 -s)报 "more than one device" 而失败,
+# 会被误判为"无设备"。所有调用统一经 adbwrap 注入 -s。
+# stdin 恒重定向 /dev/null:无 stdin 的会话(CI/计划任务)里 adb shell 会挂在
+# stdin 转发上永久阻塞;本套件所有调用均不需要 stdin。
+ADBWRAP() { if [ -n "$SERIAL" ]; then "$ADB" -s "$SERIAL" "$@" </dev/null; else "$ADB" "$@" </dev/null; fi; }
+
 # 自动模拟器(--auto-emulator):仅当当前无已连接设备时才触发;有设备则零影响。
-if ! "$ADB" get-state >/dev/null 2>&1; then
+if [ -n "$SERIAL" ]; then
+  ADBWRAP get-state >/dev/null 2>&1 || { echo "FAIL: 指定设备 $SERIAL 未连接(核对 adb devices 串号)"; exit 2; }
+elif ! "$ADB" get-state >/dev/null 2>&1; then
   if [ -z "$AUTO_EMU" ]; then
     echo "FAIL: 无已连接设备(adb devices 为空)——连接设备、启动模拟器,或加 --auto-emulator 自动启动 AVD"
     exit 2
@@ -72,14 +83,14 @@ if ! "$ADB" get-state >/dev/null 2>&1; then
   [ "$boot_ok" -eq 0 ] || { echo "FAIL: 模拟器 180s 内未完成 boot"; exit 2; }
   echo ">> 模拟器已就绪"
 fi
-"$ADB" get-state >/dev/null 2>&1 || { echo "FAIL: 设备仍未连接"; exit 2; }
+ADBWRAP get-state >/dev/null 2>&1 || { echo "FAIL: 设备仍未连接"; exit 2; }
 
 pass=0; fail=0
 check() { # check <id> <ok: 0|1> <detail>
   if [ "$2" -eq 0 ]; then echo "  ✓ $1 $3"; pass=$((pass+1)); else echo "  ✗ $1 $3"; fail=$((fail+1)); fi
 }
 
-DEV_API=$("$ADB" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')
+DEV_API=$(ADBWRAP shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')
 echo "真机验收: $APK (包 $PKG, 设备 API $DEV_API, 场景: ${CHALLENGE_OFFLINE:+挑战离线/}${KS_RELAUNCH:+KS重启动/}${WANT_API:+期望API=$WANT_API})"
 
 # D1 API 版本断言(矩阵参数化:先断言拿对了设备再跑场景)
@@ -89,13 +100,13 @@ fi
 
 # D2 安装(签名冲突的残留包先卸载——上次非本流水线签名的安装会让 install -r 报
 # UPDATE_INCOMPATIBLE;卸载是破坏性最小的清理,只针对本用例包名)
-if ! "$ADB" install -r "$APK" >/tmp/ds-install.log 2>&1; then
+if ! ADBWRAP install -r "$APK" >/tmp/ds-install.log 2>&1; then
   if grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE" /tmp/ds-install.log; then
-    "$ADB" uninstall "$PKG" >/dev/null 2>&1
-    "$ADB" install -r "$APK" >/tmp/ds-install.log 2>&1 || true
+    ADBWRAP uninstall "$PKG" >/dev/null 2>&1
+    ADBWRAP install -r "$APK" >/tmp/ds-install.log 2>&1 || true
   fi
 fi
-if "$ADB" install -r "$APK" >/tmp/ds-install.log 2>&1; then
+if ADBWRAP install -r "$APK" >/tmp/ds-install.log 2>&1; then
   check D1 0 "install -r 成功"
 else
   check D1 1 "install 失败: $(tail -2 /tmp/ds-install.log | tr '\n' ' ')"
@@ -105,21 +116,21 @@ fi
 # D3 启动 + 5 秒存活(挑战离线场景方向反转:不存活 = fail-closed 正确)
 # 启动用 monkey——不依赖 resolve-activity(adbd 抖动时该子命令会挂空,am start
 # 拿到空 activity 名 → 启动指令无效 → D2 假失败);pidof 为空时重试一次
-"$ADB" logcat -c 2>/dev/null
-"$ADB" shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+ADBWRAP logcat -c 2>/dev/null
+ADBWRAP shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
 sleep 5
-PID=$("$ADB" shell pidof "$PKG" 2>/dev/null | tr -d '\r')
+PID=$(ADBWRAP shell pidof "$PKG" 2>/dev/null | tr -d '\r')
 if [ -z "$PID" ] && [ -z "$CHALLENGE_OFFLINE" ]; then
   sleep 2
-  "$ADB" shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+  ADBWRAP shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
   sleep 5
-  PID=$("$ADB" shell pidof "$PKG" 2>/dev/null | tr -d '\r')
+  PID=$(ADBWRAP shell pidof "$PKG" 2>/dev/null | tr -d '\r')
 fi
 if [ -n "$CHALLENGE_OFFLINE" ]; then
   # fail-closed 判据 = 原始 Activity 未渲染(功能级),而非进程死亡:无头模拟器上崩溃后
   # "Application Error" 对话框会挂住进程(binder_thread_read),pidof 恒非空——
   # docs/device-testing.md 纪律:fail-closed 生效的证明是"原始 Activity 不渲染"。
-  FOCUS=$("$ADB" shell dumpsys window windows 2>/dev/null | grep -i "mCurrentFocus" | tr -d '\r')
+  FOCUS=$(ADBWRAP shell dumpsys window windows 2>/dev/null | grep -i "mCurrentFocus" | tr -d '\r')
   case "$FOCUS" in
     *"Application Error: $PKG"*) check D2 0 "原始 Activity 未渲染(崩溃对话框挂起,离线挑战 fail-closed 语义正确)" ;;
     *"$PKG"*) check D2 1 "焦点窗口属于本包($FOCUS)——离线挑战下原始 Activity 疑似渲染,fail-closed 被绕过?" ;;
@@ -130,23 +141,23 @@ else
 fi
 
 # D4 logcat 完整性/解密失败标记
-LOG=$("$ADB" logcat -d 2>/dev/null)
+LOG=$(ADBWRAP logcat -d 2>/dev/null)
 echo "$LOG" | grep -qi "integrityFailed" && check D3 1 "logcat 出现 integrityFailed(证书/manifest 校验失败)" || true
 echo "$LOG" | grep -qi "BadTag\|AEADBadTagException" && check D3 1 "logcat 出现 GCM BadTag(密钥错误)" || true
 echo "$LOG" | grep -qi "integrityFailed\|BadTag" || check D3 0 "无完整性/GCM 失败标记"
 
 # D5 Keystore 绑定二次启动(可选;仅 --keystore-bind 产物)
 if [ -n "$KS_RELAUNCH" ]; then
-  "$ADB" shell am force-stop "$PKG" 2>/dev/null
+  ADBWRAP shell am force-stop "$PKG" 2>/dev/null
   sleep 1
-  "$ADB" shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+  ADBWRAP shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
   sleep 5
-  PID2=$("$ADB" shell pidof "$PKG" 2>/dev/null | tr -d '\r')
+  PID2=$(ADBWRAP shell pidof "$PKG" 2>/dev/null | tr -d '\r')
   [ -n "$PID2" ] && check D5 0 "二次启动存活(unseal→XOR part3 路径正确)" || check D5 1 "二次启动失败——KS 封存/还原路径异常"
 fi
 
 # D6 卸载
-"$ADB" uninstall "$PKG" >/dev/null 2>&1 && check D6 0 "卸载干净" || check D6 1 "卸载失败(手动: adb uninstall $PKG)"
+ADBWRAP uninstall "$PKG" >/dev/null 2>&1 && check D6 0 "卸载干净" || check D6 1 "卸载失败(手动: adb uninstall $PKG)"
 
 echo "────"
 if [ "$fail" -eq 0 ]; then echo "PASS: $pass 项判据全部通过"; exit 0
