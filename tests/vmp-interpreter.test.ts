@@ -102,10 +102,10 @@ describe("C 执行端生成器(里程碑 A,寄存器式)", () => {
     expect(c).toContain("DSVM_ERR_NO_RETURN")
   })
 
-  test("寄存器机形态:16 寄存器 + v0 入参(与 TS 参考一致)", () => {
+  test("寄存器机形态:16 寄存器 + payload 指定入参寄存器(与 TS 参考一致)", () => {
     const c = generateVmInterpreterC()
-    expect(c).toContain("#define DSVM_REGS 16")
-    expect(c).toContain("regs[0] = initial")
+    expect(c).toContain("dsvm_execute_leaf")
+    expect(c).toContain("regs[initial_reg] = initial")
   })
 
   test("诚实边界声明:不含方法路由,注释明示 vmProtected=false", () => {

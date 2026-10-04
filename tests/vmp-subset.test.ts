@@ -2,19 +2,23 @@
 import { describe, test, expect } from "bun:test"
 import { compileVmSubset, serializeVmPayload } from "../src/core/vmp-compiler.ts"
 
-// 构造 Dalvik CodeItem:return-void(0x0e)+ 15 字节 nop padding(dex code_item 4 字节对齐惯例)
-function returnVoidCode(): Uint8Array {
-  const code = new Uint8Array(16)
-  code[0] = 0x0e
-  for (let i = 1; i < 16; i += 1) code[i] = 0x00 // nop
+// 构造带 16B 头的 code_item:registers_size=2, ins_size=1(static (I)I),
+// insns 区 = return-void(0x0e) + nop 填充(8B,4 字节对齐)
+function codeItemWithHeader(insns: number[]): Uint8Array {
+  const code = new Uint8Array(16 + insns.length)
+  const v = new DataView(code.buffer)
+  v.setUint16(0, 2, true) // registers_size
+  v.setUint16(2, 1, true) // ins_size
+  code.set(insns, 16)
   return code
+}
+function returnVoidCode(): Uint8Array {
+  return codeItemWithHeader([0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 }
 
 // 不可翻译:非法操作码(0xfd 未覆盖)
 function unsupportedCode(): Uint8Array {
-  const code = new Uint8Array(16)
-  code[0] = 0xfd
-  return code
+  return codeItemWithHeader([0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 }
 
 // 注:未知操作码会走 VM_OPCODES.EXTENDED(0xFF) 兜底路径被"翻译"收录——
@@ -31,11 +35,11 @@ describe("compileVmSubset 方法级 VM 子集", () => {
       { methodIdx: 9, originalCodeOff: 0x300 }, // 无 CodeItem
     ]
     const res = compileVmSubset(items, stubs)
-    expect(res.compiled.length).toBe(2) // 0xfd 走 EXTENDED 兜底,同样收录
+    expect(res.compiled.length).toBe(1) // 0xfd 未覆盖 → fail-closed 如实跳过,不收录半成品
     expect(res.compiled[0]!.methodIdx).toBe(7)
     expect(res.compiled[0]!.vmCode.length).toBeGreaterThan(0)
-    expect(res.skipped).toBe(1)
-    expect(res.translatedBytes).toBe(32)
+    expect(res.skipped).toBe(2)
+    expect(res.translatedBytes).toBe(8) // 仅收录方法的 insns 区(不含 16B 头)
   })
 
   test("maxMethods 上限生效,超限计入 skipped", () => {
@@ -50,14 +54,15 @@ describe("compileVmSubset 方法级 VM 子集", () => {
 describe("serializeVmPayload 格式", () => {
   test("magic + count + 逐条 (methodIdx + len + code) 往返一致", () => {
     const code = new Uint8Array([0x01, 0x02, 0x03])
-    const payload = serializeVmPayload([{ methodIdx: 42, vmCode: code }])
+    const payload = serializeVmPayload([{ methodIdx: 42, vmCode: code, initialReg: 0 }])
     const magic = new TextDecoder().decode(payload.slice(0, 13))
     expect(magic).toBe("DROIDSEAL_VMP")
     const view = new DataView(payload.buffer)
     expect(view.getUint32(14, true)).toBe(1)
     expect(view.getUint32(18, true)).toBe(42)
     expect(view.getUint32(22, true)).toBe(3)
-    expect(Array.from(payload.slice(26, 29))).toEqual([1, 2, 3])
-    expect(payload.length).toBe(18 + 8 + 3)
+    expect(view.getUint32(26, true)).toBe(0) // initial_reg
+    expect(Array.from(payload.slice(30, 33))).toEqual([1, 2, 3])
+    expect(payload.length).toBe(18 + 12 + 3)
   })
 })

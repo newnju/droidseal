@@ -654,7 +654,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       generatedFiles.push({ name: "native/vm-payload.bin.b64", content: Buffer.from(vmPayload).toString("base64") })
       // 里程碑 B 执行端+桥:随 native 壳编译链落盘(链路 2 接线)
       generatedFiles.push({ name: "native/vm_interpreter.c", content: generateVmInterpreterC() })
-      generatedFiles.push({ name: "native/vm_bridge.c", content: generateVmRegisterBridgeC(vmInfo.entries.map((e) => ({ stubName: e.methodName, signature: e.signature, methodIdx: e.methodIdx, className: e.className })), jniClassPath.replace(/\//g, ".")) })
+      generatedFiles.push({ name: "native/vm_bridge.c", content: generateVmRegisterBridgeC(vmInfo.entries.map((e) => ({ stubName: e.methodName, signature: e.signature, methodIdx: e.methodIdx, className: e.className })), jniClassPath.replace(/\//g, "."), vmPayload) })
       findings.push(...buildVmpCompilerFindings(subset.compiled.length, vmPayload.length))
       findings.push({
         severity: "medium", confidence: "high", code: "VMP_NATIVE_MARKED_NOT_VERIFIED",

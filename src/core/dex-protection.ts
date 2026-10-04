@@ -152,6 +152,13 @@ export function hollowMethods(dexBytes: Uint8Array, excludePatterns: RegExp[] = 
         // class_data 解析已错位,该类剩余条目全部不可信,如实跳过(fail-closed)
         if (run && (mIdx < run.first || mIdx > run.last)) { skipped += 1; continue }
         if (!code.value || (access.value & 0x100)) { skipped += 1; continue }
+        // 构造器永不挖空:stub <init> 是纯 return-void,若 ART 从 base.apk 副本
+        // (classloader 置换未覆盖的加载路径)验证该类,必报
+        // "Constructor returning without calling superclass constructor" VerifyError。
+        // 挖空收益只覆盖普通方法,构造器保持原方法体(如实降级,不计入防护)。
+        const nameIdx = v.getUint32(header.methodIdsOff + mIdx * 8 + 4, true)
+        const mName = strings[nameIdx] ?? ""
+        if (mName === "<init>" || mName === "<clinit>") { skipped += 1; continue }
         const insnsSize = v.getUint32(code.value + 12, true); const sz = 16 + insnsSize * 2
         // 防护:code_item 越界或 insnsSize 为垃圾值(单方法指令区不超过 64K insns=128KB+16B 头)
         if (code.value + 16 > dexBytes.length || insnsSize > 0x10000 || code.value + sz > dexBytes.length) { skipped += 1; continue }

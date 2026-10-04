@@ -61,9 +61,9 @@ describe("stub native 标记", () => {
 
 describe("桥与 payload 布局一致性", () => {
   test("serializeVmPayload 的 magic/查表偏移与桥 C 的假设一致", () => {
-    // 桥 C:14B magic + 4B count,条目 8B 头——TS 侧序列化必须同布局
-    const payload = serializeVmPayload([{ methodIdx: 7, vmCode: new Uint8Array([0x02, 0x00, 0x05, 0x00, 0x1d, 0x00]) }])
-    expect(payload.byteLength).toBe(14 + 4 + 4 + 4 + 6)
+    // 桥 C:14B magic + 4B count,条目 12B 头(idx+len+initial_reg)——TS 侧序列化必须同布局
+    const payload = serializeVmPayload([{ methodIdx: 7, vmCode: new Uint8Array([0x02, 0x00, 0x05, 0x00, 0x1d, 0x00]), initialReg: 0 }])
+    expect(payload.byteLength).toBe(14 + 4 + 4 + 4 + 4 + 6)
     const magic = new TextDecoder().decode(payload.slice(0, 13))
     expect(magic).toBe("DROIDSEAL_VMP")
     const view = new DataView(payload.buffer)

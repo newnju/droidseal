@@ -49,6 +49,10 @@ export const VM_OPCODES = {
   THROW: 0x26,
   MONITOR_ENTER: 0x27,
   MONITOR_EXIT: 0x28,
+  LIT_ADD: 0x2A,
+  LIT_SUB: 0x2B,
+  LIT_MUL: 0x2C,
+  LIT_DIV: 0x2D,
   EXTENDED: 0xFF,
 } as const
 
@@ -139,6 +143,26 @@ function translateDalvikInstruction(
     const src1 = dexBytes[offset + 2]!
     const src2 = dexBytes[offset + 3]!
     return { vmBytes: new Uint8Array([VM_OPCODES.DIV, dst, src1, src2]), dalvikSize: 4 }
+  }
+
+  // add/sub/mul/div-int/2addr vA, vB(A+=B 等原地语义):发射 OP A, A, B
+  if (opcode >= 0xb0 && opcode <= 0xb3) {
+    const regA = dexBytes[offset + 1]! & 0x0f
+    const regB = (dexBytes[offset + 1]! >> 4) & 0x0f
+    const op = [VM_OPCODES.ADD, VM_OPCODES.SUB, VM_OPCODES.MUL, VM_OPCODES.DIV][opcode - 0xb0]!
+    return { vmBytes: new Uint8Array([op, regA, regA, regB]), dalvikSize: 2 }
+  }
+
+  // add/sub/mul/div-int/lit8 vAA, vBB, #+CC:发射 LIT_* dst, src, imm8(符号扩展)。
+  // 0xd9 是 rsub-int/lit8(操作数交换语义),本子集不支持——返回 undefined 让整个
+  // 方法如实跳过(fail-closed),绝不能错译成 SUB。
+  if (opcode >= 0xd8 && opcode <= 0xdb) {
+    if (opcode === 0xd9) return undefined
+    const dst = dexBytes[offset + 1]!
+    const src = dexBytes[offset + 2]!
+    const lit = dexBytes[offset + 3]!
+    const op = [VM_OPCODES.LIT_ADD, VM_OPCODES.LIT_MUL, VM_OPCODES.LIT_DIV][opcode - 0xd8 - (opcode > 0xd9 ? 1 : 0)]!
+    return { vmBytes: new Uint8Array([op, dst, src, (lit << 24) >> 24 & 0xff]), dalvikSize: 4 }
   }
 
   // if-eq vA, vB, +CCCC
@@ -295,8 +319,9 @@ function translateDalvikInstruction(
     return { vmBytes: new Uint8Array([VM_OPCODES.MONITOR_EXIT, reg]), dalvikSize: 2 }
   }
 
-  // 未识别的操作码 → NOP
-  return { vmBytes: new Uint8Array([VM_OPCODES.NOP]), dalvikSize: 2 }
+  // 未识别的操作码 → 返回 undefined(fail-closed):整个方法如实跳过。
+  // 绝不能发 NOP 兜底——那会把不认识的指令静默变空操作,执行结果错而不自知。
+  return undefined
 }
 
 /**
@@ -327,14 +352,15 @@ export function compileMethodToVm(
 
 /**
  * 生成 VM 字节码 payload（追加到 DEX 末尾）。
- * 格式: "DROIDSEAL_VMP" (14B magic) + method_count(4B) + [method_idx(4B) + code_len(4B) + code]*
+ * 格式: "DROIDSEAL_VMP" (14B magic) + method_count(4B)
+ *       + [method_idx(4B) + code_len(4B) + initial_reg(4B) + code]*
  */
 export function serializeVmPayload(
-  methods: Array<{ methodIdx: number; vmCode: Uint8Array }>,
+  methods: Array<{ methodIdx: number; vmCode: Uint8Array; initialReg: number }>,
 ): Uint8Array {
   const magic = new TextEncoder().encode("DROIDSEAL_VMP")
   const headerSize = 14 + 4 // magic + method_count
-  const bodySize = methods.reduce((sum, m) => sum + 4 + 4 + m.vmCode.length, 0)
+  const bodySize = methods.reduce((sum, m) => sum + 4 + 4 + 4 + m.vmCode.length, 0)
   const result = new Uint8Array(headerSize + bodySize)
 
   result.set(magic.slice(0, 14), 0)
@@ -345,8 +371,9 @@ export function serializeVmPayload(
   for (const m of methods) {
     view.setUint32(pos, m.methodIdx, true)
     view.setUint32(pos + 4, m.vmCode.length, true)
-    result.set(m.vmCode, pos + 8)
-    pos += 4 + 4 + m.vmCode.length
+    view.setUint32(pos + 8, m.initialReg, true)
+    result.set(m.vmCode, pos + 12)
+    pos += 4 + 4 + 4 + m.vmCode.length
   }
 
   return result
@@ -356,7 +383,7 @@ export function serializeVmPayload(
 
 export interface VmSubsetResult {
   /** methodIdx → VM 字节码(仅收录翻译完整覆盖的方法;翻译中断/空体不收录) */
-  compiled: Array<{ methodIdx: number; vmCode: Uint8Array }>
+  compiled: Array<{ methodIdx: number; vmCode: Uint8Array; initialReg: number }>
   skipped: number
   /** 翻译后原始 Dalvik 尺寸(供覆盖率指标) */
   translatedBytes: number
@@ -379,9 +406,18 @@ export function compileVmSubset(
   let translatedBytes = 0
   for (const stub of stubMethods) {
     if (compiled.length >= maxMethods) { skipped += 1; continue }
-    const dalvik = extractedCodeItems.get(stub.originalCodeOff)
-    if (!dalvik || dalvik.length === 0) { skipped += 1; continue }
-    // 完整性校验:逐条翻译必须覆盖整个 CodeItem(16 字节对齐尾部 padding 除外)
+    const item = extractedCodeItems.get(stub.originalCodeOff)
+    if (!item || item.length <= 16) { skipped += 1; continue }
+    // code_item 头(16B): registers_size@0 ins_size@2;只翻译 insns 区,
+    // 头字节绝不是指令(此前整 item 翻译会把头当指令发射垃圾 VM 码)。
+    const hv = new DataView(item.buffer, item.byteOffset, item.byteLength)
+    const registersSize = hv.getUint16(0, true)
+    const insSize = hv.getUint16(2, true)
+    // static (I)I 单 int 入参寄存器 = registers_size - ins_size(桥注册已按签名过滤)
+    const initialReg = registersSize - insSize
+    if (initialReg < 0 || initialReg >= 16) { skipped += 1; continue }
+    const dalvik = item.subarray(16)
+    // 完整性校验:逐条翻译必须覆盖整个 insns 区(尾部 padding 除外)
     let offset = 0
     let complete = true
     const vmInstructions: Uint8Array[] = []
@@ -396,7 +432,9 @@ export function compileVmSubset(
     const vmCode = new Uint8Array(totalLen)
     let pos = 0
     for (const inst of vmInstructions) { vmCode.set(inst, pos); pos += inst.length }
-    compiled.push({ methodIdx: stub.methodIdx, vmCode })
+    // initialReg:入参寄存器 = registers_size - ins_size(上方已从 code_item 头解析;
+    // static (I)I → v1。非单 int 形态已由 resolveVmBridgeEntries 按签名过滤)
+    compiled.push({ methodIdx: stub.methodIdx, vmCode, initialReg })
     translatedBytes += dalvik.length
   }
   return { compiled, skipped, translatedBytes }
@@ -412,9 +450,9 @@ export function compileVmSubset(
 
 // TS 参考解释器:与 C 执行端同语义(单测对拍基准,防两侧漂移)
 // v0 预置入参 initial;寄存器 16 个(int32)。
-export function executeVmLeaf(code: Uint8Array, arg: number): { ok: boolean; result?: number } {
+export function executeVmLeaf(code: Uint8Array, arg: number, initialReg = 0): { ok: boolean; result?: number } {
   const regs = new Int32Array(16)
-  regs[0] = arg | 0
+  regs[initialReg] = arg | 0
   let pc = 0
   const view = new DataView(code.buffer, code.byteOffset, code.byteLength)
   while (pc < code.length) {
@@ -443,6 +481,24 @@ export function executeVmLeaf(code: Uint8Array, arg: number): { ok: boolean; res
         if (op === VM_OPCODES.ADD) regs[dst] = (a + b) | 0
         else if (op === VM_OPCODES.SUB) regs[dst] = (a - b) | 0
         else if (op === VM_OPCODES.MUL) regs[dst] = Math.imul(a, b)
+        else {
+          if (b === 0) return { ok: false } // 除零如实失败,不兜底假值
+          regs[dst] = Math.trunc(a / b) | 0
+        }
+        pc += 3
+        break
+      }
+      case VM_OPCODES.LIT_ADD: case VM_OPCODES.LIT_SUB: case VM_OPCODES.LIT_MUL: case VM_OPCODES.LIT_DIV: {
+        // LIT_* dst, src, imm8(符号扩展)
+        if (pc + 3 > code.length) return { ok: false }
+        const dst = code[pc]!
+        const s1 = code[pc + 1]!
+        const b = (code[pc + 2]! << 24) >> 24
+        if (dst >= 16 || s1 >= 16) return { ok: false }
+        const a = regs[s1]!
+        if (op === VM_OPCODES.LIT_ADD) regs[dst] = (a + b) | 0
+        else if (op === VM_OPCODES.LIT_SUB) regs[dst] = (a - b) | 0
+        else if (op === VM_OPCODES.LIT_MUL) regs[dst] = Math.imul(a, b)
         else {
           if (b === 0) return { ok: false } // 除零如实失败,不兜底假值
           regs[dst] = Math.trunc(a / b) | 0
@@ -490,12 +546,17 @@ export function generateVmInterpreterC(): string {
 #define DSVM_OP_SUB     0x04
 #define DSVM_OP_MUL     0x05
 #define DSVM_OP_DIV     0x06
+#define DSVM_OP_LIT_ADD 0x2A
+#define DSVM_OP_LIT_SUB 0x2B
+#define DSVM_OP_LIT_MUL 0x2C
+#define DSVM_OP_LIT_DIV 0x2D
 #define DSVM_OP_RETURN  0x1D
 
 int dsvm_execute_leaf(const uint8_t* code, size_t code_len,
-                      int32_t initial, int32_t* out_result) {
+                      int32_t initial, uint32_t initial_reg, int32_t* out_result) {
     int32_t regs[DSVM_REGS];
-    regs[0] = initial; /* v0 预置入参(与 TS 参考一致) */
+    if (initial_reg >= DSVM_REGS) return DSVM_ERR_REG;
+    regs[initial_reg] = initial; /* 入参寄存器由 payload 指定(与 TS 参考一致) */
     size_t pc = 0;
     while (pc < code_len) {
         uint8_t op = code[pc++];
@@ -517,6 +578,21 @@ int dsvm_execute_leaf(const uint8_t* code, size_t code_len,
                 if (op == DSVM_OP_ADD) regs[dst] = (int32_t)((uint32_t)a + (uint32_t)b);
                 else if (op == DSVM_OP_SUB) regs[dst] = (int32_t)((uint32_t)a - (uint32_t)b);
                 else if (op == DSVM_OP_MUL) regs[dst] = (int32_t)((uint32_t)a * (uint32_t)b);
+                else {
+                    if (b == 0) return DSVM_ERR_DIVZERO;
+                    regs[dst] = a / b;
+                }
+                pc += 3;
+                break;
+            }
+            case DSVM_OP_LIT_ADD: case DSVM_OP_LIT_SUB: case DSVM_OP_LIT_MUL: case DSVM_OP_LIT_DIV: {
+                if (pc + 3 > code_len) return DSVM_ERR_TRUNCATED;
+                uint8_t dst = code[pc], s1 = code[pc + 1];
+                if (dst >= DSVM_REGS || s1 >= DSVM_REGS) return DSVM_ERR_REG;
+                int32_t a = regs[s1], b = (int32_t)(int8_t)code[pc + 2]; /* imm8 符号扩展 */
+                if (op == DSVM_OP_LIT_ADD) regs[dst] = (int32_t)((uint32_t)a + (uint32_t)b);
+                else if (op == DSVM_OP_LIT_SUB) regs[dst] = (int32_t)((uint32_t)a - (uint32_t)b);
+                else if (op == DSVM_OP_LIT_MUL) regs[dst] = (int32_t)((uint32_t)a * (uint32_t)b);
                 else {
                     if (b == 0) return DSVM_ERR_DIVZERO;
                     regs[dst] = a / b;
@@ -563,10 +639,28 @@ export interface VmBridgeEntry {
  * 分发函数按 methodIdx 从 payload 表查 VM 字节码,调 dsvm_execute_leaf 执行;
  * 未收录的方法 idx 如实返回 0 并打日志(fail-open 保可用,与惰性还原同口径)。
  */
-export function generateVmRegisterBridgeC(entries: VmBridgeEntry[], loaderClassPath = "droidseal.runtime.DroidSealLoader"): string {
+export function generateVmRegisterBridgeC(
+  entries: VmBridgeEntry[],
+  loaderClassPath = "droidseal.runtime.DroidSealLoader",
+  vmPayload?: Uint8Array,
+): string {
   const tableRows = entries
     .map((e) => `    { "${e.stubName}", "${e.signature}", NULL },`)
     .join("\n")
+  // payload 以 C 数组直接嵌入 SO,注册入口处初始化——杜绝"g_vm_payload 恒 NULL"断链
+  // JNI 导出符号名转义(JNI 规约):'_'→"_1"、';'→"_2"、'['→"_3"、非 ASCII →"_0xxxx"。
+  // 随机化类名可含 '_'(如 EmDxhk_OmIfyR53),不转义则运行时按 _1 解析,链接必败。
+  // 单遍替换:必须一次处理 '.'→'_' 与 '_'→'_1'——若先替换 '.' 再转义 '_',
+  // 新产生的 '_' 会被二次转义成 _1(链接符号错位必败)
+  const jniSymbolPath = loaderClassPath.replace(/[._;\[]|[^ -~]/g, (ch) =>
+    ch === "." ? "_" : ch === "_" ? "_1" : ch === ";" ? "_2" : ch === "[" ? "_3" : `_0${ch.codePointAt(0)!.toString(16).padStart(4, "0")}`,
+  )
+  const payloadArray = vmPayload
+    ? `static const unsigned char g_vm_payload_data[] = {${Array.from(vmPayload).join(",")}};\nstatic const size_t g_vm_payload_data_len = sizeof(g_vm_payload_data);`
+    : `/* 无 payload(构建侧未传)——运行期 vm_lookup 恒 NULL,如实 fail-open */`
+  const payloadInit = vmPayload
+    ? `    dsvm_set_vm_payload(g_vm_payload_data, g_vm_payload_data_len);`
+    : `    /* no embedded payload */`
   return `// DroidSeal VMP-lite RegisterNatives 桥(里程碑 B,构建期自动生成,勿手动修改)
 // 语义:注册 VM 化方法为 native 实现,dispatch 进解释器(与 executeVmLeaf 对拍)。
 // 诚实边界:未过真机矩阵验收前,构建侧 vmProtected 保持 false——本文件存在
@@ -580,28 +674,31 @@ export function generateVmRegisterBridgeC(entries: VmBridgeEntry[], loaderClassP
 
 /* 与 vmp-compiler.ts generateVmInterpreterC 同一执行端(链接期合并) */
 extern int dsvm_execute_leaf(const uint8_t* code, size_t code_len,
-                             int32_t initial, int32_t* out_result);
+                             int32_t initial, uint32_t initial_reg, int32_t* out_result);
 
 /* VM payload 运行时布局(与 serializeVmPayload 一致):
- * "DROIDSEAL_VMP"(14B) + method_count(4B LE) + [method_idx(4B) + code_len(4B) + code]* */
+ * "DROIDSEAL_VMP"(14B) + method_count(4B LE) + [method_idx(4B) + code_len(4B) + initial_reg(4B) + code]* */
+${payloadArray}
 static const uint8_t* g_vm_payload = NULL;
 static size_t g_vm_payload_len = 0;
+void dsvm_set_vm_payload(const uint8_t* data, size_t len); /* 前置声明:定义在文件尾,dsvmRegisterAll 先用 */
 
 /* 查表:method_idx → VM 字节码;未收录返回 NULL(如实,不假执行) */
-static const uint8_t* vm_lookup(uint32_t method_idx, size_t* out_len) {
-    if (g_vm_payload == NULL || g_vm_payload_len < 18) return NULL;
+static const uint8_t* vm_lookup(uint32_t method_idx, size_t* out_len, uint32_t* out_initial_reg) {
+    if (g_vm_payload == NULL || g_vm_payload_len < 22) return NULL;
     if (memcmp(g_vm_payload, "DROIDSEAL_VMP", 13) != 0) return NULL;
     uint32_t count;
     memcpy(&count, g_vm_payload + 14, 4);
     size_t pos = 18;
     for (uint32_t i = 0; i < count; i++) {
-        if (pos + 8 > g_vm_payload_len) return NULL;
-        uint32_t idx, len;
+        if (pos + 12 > g_vm_payload_len) return NULL;
+        uint32_t idx, len, ireg;
         memcpy(&idx, g_vm_payload + pos, 4);
         memcpy(&len, g_vm_payload + pos + 4, 4);
-        pos += 8;
+        memcpy(&ireg, g_vm_payload + pos + 8, 4);
+        pos += 12;
         if (pos + len > g_vm_payload_len) return NULL;
-        if (idx == method_idx) { *out_len = len; return g_vm_payload + pos; }
+        if (idx == method_idx) { *out_len = len; *out_initial_reg = ireg; return g_vm_payload + pos; }
         pos += len;
     }
     return NULL;
@@ -611,13 +708,14 @@ static const uint8_t* vm_lookup(uint32_t method_idx, size_t* out_len) {
 static jint vm_dispatch_leaf(JNIEnv* env, jclass clazz, jint arg, jint method_idx) {
     (void)env; (void)clazz;
     size_t len = 0;
-    const uint8_t* code = vm_lookup((uint32_t)method_idx, &len);
+    uint32_t ireg = 0;
+    const uint8_t* code = vm_lookup((uint32_t)method_idx, &len, &ireg);
     if (code == NULL) {
         LOGI("vm_dispatch_leaf: method %u not in payload (fail-open)", method_idx);
         return 0;
     }
     int32_t result = 0;
-    if (dsvm_execute_leaf(code, len, arg, &result) != 0) {
+    if (dsvm_execute_leaf(code, len, arg, ireg, &result) != 0) {
         LOGI("vm_dispatch_leaf: method %u execution failed (fail-closed)", method_idx);
         return 0;
     }
@@ -659,8 +757,9 @@ int dsvm_register_vm_bridge(JNIEnv* env, jclass stub_class) {
  * 按类分组:每类 loadClass → 注册该类条目 → DeleteLocalRef;任一类失败如实记日志
  * 继续其余类(fail-open 保可用,与惰性还原同口径),返回成功注册的方法总数。 */
 JNIEXPORT jint JNICALL
-Java_${loaderClassPath.replace(/\./g, "_")}_dsvmRegisterAll(JNIEnv* env, jclass clazz, jobject app_loader) {
+Java_${jniSymbolPath}_dsvmRegisterAll(JNIEnv* env, jclass clazz, jobject app_loader) {
     (void)clazz;
+    ${payloadInit}
     for (size_t i = 0; i < sizeof(g_bridge_table) / sizeof(g_bridge_table[0]); i++) {
         g_bridge_table[i].fnPtr = g_thunks[i];
     }
@@ -700,7 +799,7 @@ ${clsEntries.map(({ e }) => `                    { "${e.stubName}", "${e.signatu
     return total;
 }
 
-/* payload 注入点(壳 setCodeTable 侧调用) */
+/* payload 注入点(壳 setCodeTable 侧调用,亦供嵌入数组初始化复用) */
 void dsvm_set_vm_payload(const uint8_t* data, size_t len) {
     g_vm_payload = data;
     g_vm_payload_len = len;
