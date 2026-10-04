@@ -173,9 +173,6 @@ export function generateShellAppComponentFactorySmali(packageName: string): stri
     invoke-static {}, L${pkg}/DroidSealDecryptor;->ensureDecrypted()V
     invoke-super {p0, p1, p2}, Landroid/app/AppComponentFactory;->instantiateApplication(Ljava/lang/ClassLoader;Ljava/lang/String;)Landroid/app/Application;
     move-result-object v0
-    # VMP 里程碑 B:app 类已随 classloader 就绪,此时 RegisterNatives 才能成功
-    # (JNI_OnLoad 时 app 类未加载,注册必败)。dsvmRegisterAll 返回注册数,fail-open。
-    invoke-static {}, L${pkg}/DroidSealLoader;->dsvmRegisterAll()I
     return-object v0
 .end method
 

@@ -127,18 +127,25 @@ export function buildCodeItemTable(
   extractedCodeItems: Map<number, Uint8Array>,
   stubMethods: Array<{ classIdx: number; methodIdx: number; originalCodeOff: number; originalCodeSize: number }>,
 ): Uint8Array {
+  const entries: Array<{ stub: typeof stubMethods[number]; codeBytes: Uint8Array }> = []
+  for (const stub of stubMethods) {
+    const codeBytes = extractedCodeItems.get(stub.originalCodeOff)
+    if (codeBytes) entries.push({ stub, codeBytes })
+  }
+  // codeOffset 是表内绝对偏移:Java restoreCodeItems 直接 arraycopy(table, codeOff, ...)。
+  // 旧实现写的是相对 codeData 的偏移(从 0 起),还原时把表头/记录字段当方法体拷进
+  // DEX → ART 校验拒载(outs_size=origOff 之类幻影 code_item 头)。
+  const codeBase = 20 + entries.length * CODE_ITEM_RECORD_SIZE // header(12+4+4) + records
   const records: CodeItemRecord[] = []
   const codeChunks: Uint8Array[] = []
   let currentOffset = 0
 
-  for (const stub of stubMethods) {
-    const codeBytes = extractedCodeItems.get(stub.originalCodeOff)
-    if (!codeBytes) continue
+  for (const { stub, codeBytes } of entries) {
     records.push({
       classIdx: stub.classIdx,
       methodIdx: stub.methodIdx,
       originalCodeOff: stub.originalCodeOff,
-      codeOffset: currentOffset,
+      codeOffset: codeBase + currentOffset,
       codeSize: codeBytes.length,
     })
     codeChunks.push(codeBytes)

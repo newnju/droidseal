@@ -54,6 +54,7 @@ bash scripts/device-test.sh out/hardened/app-release.hardened.apk com.example.ap
 | D3 无失败标记 | logcat 无 `integrityFailed`(证书/manifest 校验失败)与 `BadTag`(密钥错误) | 安装包是否被重签;设备是否离线(挑战模式 fail-closed 是预期) |
 | D4 二次启动 | KS 绑定产物 unseal → XOR part3 → 还原路径正确 | 仅 `--keystore-bind` 产物需测;首启后清数据会使其失效(设计如此) |
 | D5 卸载 | 为下一用例让路 | — |
+| V1 VM 桥注册(仅 `--vm-mode`) | logcat 出现 `vm bridge: N methods registered total` 且 N≥1,且无 UnsatisfiedLinkError/NoSuchMethodError | 挖空是否命中方法;`vm bridge: class not found` 说明 loadClass 失败;通过前 vmProtected 恒 false |
 
 ## 实测记录(2026-09,API 26 x86_64 模拟器)
 
@@ -135,6 +136,27 @@ fixture APK(ds-hello,8589B,minSdk 24)三变体逐格功能级验收(判据升级
 5. **离线格 fail-closed 判据失真(脚本级)**:无头模拟器上崩溃后 "Application Error" 对话框挂住进程(binder_thread_read),`pidof` 恒非空,旧"进程 5s 内不存活"判据永远误报。修复:改焦点窗口断言——`Application Error: <pkg>` 或非本包焦点均判"原始 Activity 未渲染 = fail-closed 生效",与本文档"fail-closed 生效的证明是原始 Activity 不渲染"纪律一致(scripts/device-test.sh D2 离线分支)。
 
 另:CI/计划任务等无 stdin 会话里 `adb shell` 会挂在 stdin 转发上永久阻塞(61 个 adb.exe 孤儿进程实证),ADBWRAP 现恒以 `</dev/null` 调用。
+
+## 实测记录(2026-10-04,API 26 x86_64 模拟器,VMP 里程碑 B --vm-mode 首次真机验收)
+
+**5/5 全绿**(`device-test.sh --vm-mode --serial emulator-5554`):
+
+| 判据 | 结果 |
+|---|---|
+| D1 install -r | ✓(三 ABI 产物) |
+| D2 进程存活 | ✓ pid=3518(解密+壳启动闭环完成) |
+| D3 无完整性/GCM 失败标记 | ✓ |
+| V1 VM 桥注册 | ✓ logcat `vm bridge: 1 methods registered total`(vmLeaf (I)I) |
+| D6 卸载干净 | ✓ |
+
+本轮修掉的缺陷(两个存量对拍 bug + 两个接线缺口):
+
+1. **CodeItem 表 codeOffset 语义错位(流水线级,最严重)**:TS 侧 `buildCodeItemTable` 写的 `codeOffset` 是相对 codeData 区的偏移(从 0 起),Java 侧 `restoreCodeItems` 按**表内绝对偏移** `arraycopy(table, codeOff, dex, origOff, ...)` 消费——第一条记录把表头+记录字段当方法体拷进 DEX,ART 校验拒载(`outs_size(520) > registers_size(4)`,520/4 恰是 record0 的 origOff/methodIdx)。此前 tries_size 误判使挖空恒 0,还原链从未真机激活,故一直未暴露。修复:codeOffset 改为表内绝对偏移(codeBase = header+records)(src/core/codeitem-table.ts);
+2. **hollowMethods tries_size 读取错误(流水线级)**:误用 `getUint32(code_item+8)` 读 tries_size——实际布局是 u16@+6(registers@0 ins@2 outs@4 tries@6 debug_info@8),+8 起是 debug_info_off,所有方法被误判带 try/catch 全跳过(0/3)。修复为 `getUint16(+6)`(src/core/dex-protection.ts);
+3. **注册入口时序(接线缺口)**:初版 `dsvmRegisterAll()` 挂在 AppComponentFactory.instantiateApplication——该入口 API 28+ 才存在,API 26 设备根本不执行;且 JNI FindClass 用壳 loader 的加载器,定位不到 InMemoryDexClassLoader 里的 app 类。修复:签名改 `dsvmRegisterAll(ClassLoader appLoader)`(C 侧经 loadClass 定位 VM 类),调用点移到 init() 的 replaceClassLoader 之后(SO 已在 fetchPart2 时加载,顺序在前),fail-open(src/core/vmp-compiler.ts、runtime/java/.../DroidSealLoader.java);
+4. **加固产物缺 x86_64 ABI(流水线级)**:Step 12.1 只编 arm64-v8a/armeabi-v7a,模拟器为 x86_64 → `INSTALL_FAILED_NO_MATCHING_ABIS`(壳 SO 首次真机编出才暴露,此前 NDK 缺失时 APK 无 lib/ 条目反而不受影响)。修复:ABI 列表补 x86_64(src/core/harden-pipeline.ts)。
+
+环境注:本会话内 PowerShell Start-Process 分离启动的模拟器四次均在 boot 前消亡(默认/无快照/软渲染/无窗口组合一致),改 schtasks 计划任务方式启动后稳定(API 26 boot 成功)——与会话回收相关的启动路径问题,计划任务是当前可靠方式。
 
 ## 手动用例(脚本不覆盖)
 
