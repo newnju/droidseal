@@ -61,6 +61,7 @@ const ignoredDirectories = new Set([
   "dependencies",
   "dist",
   "node_modules",
+  "out",
   "verification-output",
   "wheelhouse",
 ])

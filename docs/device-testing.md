@@ -54,7 +54,8 @@ bash scripts/device-test.sh out/hardened/app-release.hardened.apk com.example.ap
 | D3 无失败标记 | logcat 无 `integrityFailed`(证书/manifest 校验失败)与 `BadTag`(密钥错误) | 安装包是否被重签;设备是否离线(挑战模式 fail-closed 是预期) |
 | D4 二次启动 | KS 绑定产物 unseal → XOR part3 → 还原路径正确 | 仅 `--keystore-bind` 产物需测;首启后清数据会使其失效(设计如此) |
 | D5 卸载 | 为下一用例让路 | — |
-| V1 VM 桥注册(仅 `--vm-mode`) | logcat 出现 `vm bridge: N methods registered total` 且 N≥1,且无 UnsatisfiedLinkError/NoSuchMethodError | 挖空是否命中方法;`vm bridge: class not found` 说明 loadClass 失败;通过前 vmProtected 恒 false |
+| V1 VM 桥注册(仅 `--vm-mode`) | logcat 出现 `vm bridge: N methods registered total` 且 N≥1,且无 UnsatisfiedLinkError/NoSuchMethodError | 挖空是否命中方法;`vm bridge: class not found` 说明 loadClass 失败 |
+| V2 VM 执行语义(仅 `--vm-mode`) | UI 文本 `vmLeaf(21)` 输出与原版 ground truth 一致(fixture: 120;dump 断言: `uiautomator dump` 后 grep `text="DroidSeal fixture hello 120"`) | `vm_dispatch_leaf: method N not in payload` = payload 断链;`execution failed` = 字节码/initial_reg 错;显示 0 = fail-open(注册生效但 payload 未嵌入) |
 
 ## 实测记录(2026-09,API 26 x86_64 模拟器)
 
@@ -157,6 +158,29 @@ fixture APK(ds-hello,8589B,minSdk 24)三变体逐格功能级验收(判据升级
 4. **加固产物缺 x86_64 ABI(流水线级)**:Step 12.1 只编 arm64-v8a/armeabi-v7a,模拟器为 x86_64 → `INSTALL_FAILED_NO_MATCHING_ABIS`(壳 SO 首次真机编出才暴露,此前 NDK 缺失时 APK 无 lib/ 条目反而不受影响)。修复:ABI 列表补 x86_64(src/core/harden-pipeline.ts)。
 
 环境注:本会话内 PowerShell Start-Process 分离启动的模拟器四次均在 boot 前消亡(默认/无快照/软渲染/无窗口组合一致),改 schtasks 计划任务方式启动后稳定(API 26 boot 成功)——与会话回收相关的启动路径问题,计划任务是当前可靠方式。
+
+## 实测记录(2026-10-04,API 26 x86_64 模拟器,V2 执行语义验收 + vmProtected 翻绿)
+
+V1 之后发现 payload 传递链断裂与翻译缺陷链,修复后复测:
+
+| 判据 | 结果 | 备注 |
+|---|---|---|
+| D1/D2/D3/V1/D6 | ✓ 5/5 | `device-test.sh --vm-mode --serial emulator-5554` |
+| V2 执行语义 | ✓ | UI 实测 `DroidSeal fixture hello 120`,与原版 ground truth 一致(原版对拍同为 120) |
+| vmProtected | true | 证据门:VM 化方法数 >0 且桥+嵌入 payload 随壳 SO 编译并注入 APK;V1/V2 真机断言背书 |
+
+本轮修掉的缺陷链(5 个叠加 bug + 2 个构建期陷阱):
+
+1. **VM payload 传递链断裂**:payload 仅落盘 `vm-payload.bin.b64` 旁路产物,无任何代码嵌入 SO,`g_vm_payload` 恒 NULL,dispatch 对所有调用 fail-open 返回 0——"注册生效"但"字节码缺失"。修复:payload 以 C 数组嵌入 vm_bridge.c,`dsvmRegisterAll` 入口自动 `dsvm_set_vm_payload`(src/core/vmp-compiler.ts);
+2. **翻译器未知操作码发 NOP 兜底**:lit8 算术(0xd8-0xdb)与 /2addr(0xb0-0xb3)不覆盖,fallback 静默发 NOP → 翻译产物全零且 dalvikSize 错位。修复:补 lit8//2addr 翻译,未知操作码改 fail-closed 返回 undefined(整个方法如实跳过,不收录半成品);
+3. **0xd9 错译**:rsub-int/lit8 是操作数交换语义,曾错映射为 SUB——改为 fail-closed 跳过;
+4. **code_item 16B 头被当指令翻译**:compileVmSubset 从 item 头开始翻译,头字节(registers/ins/outs/tries_size)发射成垃圾 VM 码。修复:只翻译 +16 起的 insns 区;
+5. **入参寄存器硬编码 v0**:static (I)I 的入参在 v1(= registers_size - ins_size),解释器预置 v0 导致计算错。修复:payload 布局 v2(idx+len+initial_reg+code),initial_reg 从 code_item 头解析,TS/C 两侧解释器同步(src/core/vmp-compiler.ts);
+6. **JNI 导出符号未转义**(构建期陷阱,~概率必现):随机化 loader 类名可含 `_`(如 `EmDxhk_OmIfyR53`),JNI 规约 `_`→`_1`,不转义 UnsatisfiedLinkError;且 `.`→`_` 与 `_`→`_1` 必须单遍替换,两遍会把新产生的 `_` 二次转义;
+7. **随机化类路径空段**(构建期陷阱,~5% 构建):槽内随机名只保字典序,`/` 落在首/尾/连续位置 → 剥壳点分后空段(`pkg.Class.`)→ ART 拒载 CNFE 崩溃。修复:逐候选 JLS 形态校验(src/core/loader-class-rename.ts);
+8. **dsvm_set_vm_payload 使用先于定义**:ISO C99 隐式声明报错,三 ABI 编译全失败且壳 SO 静默缺失(加固 APK 无 lib/ 条目)。修复:前置声明 + 失败如实 finding(不再静默)。
+
+另:构造器(`<init>`/`<clinit>`)永不挖空——stub 构造器是纯 return-void,classloader 置换未覆盖的加载路径(base.apk 副本)验证必 VerifyError 崩溃(`Constructor returning without calling superclass constructor`)。防护口径如实收窄:挖空只覆盖普通方法。
 
 ## 手动用例(脚本不覆盖)
 

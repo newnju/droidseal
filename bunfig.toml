@@ -2,3 +2,7 @@ preload = ["@opentui/solid/preload"]
 
 [test]
 preload = ["@opentui/solid/preload"]
+# 全局测试超时 60s:快测试(纯逻辑)在满载流水线级测试并行运行时也会被拖慢,
+# 默认 5s 会产生非确定性抖动失败(单跑全绿、全量偶发超时)——60s 保留悬挂保护
+# 的同时消除重载抖动;个别流水线级测试(signing-integrity)自带 240s 显式超时
+timeout = 60000
