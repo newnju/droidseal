@@ -78,7 +78,7 @@ Android 安全工具分两条赛道：**审计**（MobSF、AndroBugs、APKiD—�
 
 **DroidSeal 不参与竞争的场景（如实边界）**：
 
-- 需要"master 密钥被内存 dump 后仍不可读"的 VMP 级防护？用 nmmp 或 DexGuard——DroidSeal 明确不投入白盒 AES 与 VM 保护；root + 持久物理接触下，技术足够强的攻击者最终仍能得手。
+- 需要"master 密钥被内存 dump 后仍不可读"的 VMP 级防护？用 nmmp 或 DexGuard——DroidSeal 已交付 VMP-lite 层（(I)I 叶子方法，执行语义过真机验收），但明确不投入白盒 AES 与全指令集 VM 保护；root + 持久物理接触下，技术足够强的攻击者最终仍能得手。
 - 做恶意 App 鉴别或动态行为分析？用 MobSF + APKiD——DroidSeal 只审计与加固，不做沙箱。
 - 高风险产品需要合同化支持/SLA？项目尚早期（真机验收、独立安全审计、社区规模都还在路上）——这类需求选商业厂商更稳妥。
 
@@ -105,7 +105,7 @@ Android 安全工具分两条赛道：**审计**（MobSF、AndroBugs、APKiD—�
 | DEX payload 加密(AES-256-GCM + HKDF,密钥化锚点 P0-A/B/C) | 已交付;模拟器验收通过(SEC-010/011/012 经真机闭环修复) |
 | 方法抽取(code-item hollowing)+ 惰性还原 | 已交付;fail-open 回落全量还原 |
 | 字符串加密 + 调用点改写(MUTF-8 安全密文 + 校验和重算) | 已交付;写回 apktool fail-closed |
-| VMP-lite | 里程碑 A 已交付(叶子方法解释器,TS/C 对拍 12 测试);**里程碑 B(RegisterNatives 桥 + stub `ACC_NATIVE` 标记)仅为构建期代码——真机矩阵(API 24–35)验收通过前 `vmProtected` 恒 false** |
+| VMP-lite | 已接线子集交付:(I)I 叶子方法编译为 VM 字节码嵌入壳 SO,运行时经 `RegisterNatives` 注册;API 26 x86_64 真机验收(V1 注册 5/5 + V2 执行语义 `vmLeaf(21)=120` 与原版一致)——`vmProtected` 仅在桥+payload SO 实际编译注入 APK 时如实翻绿(证据门);非 (I)I 方法保持 stub+惰性还原;更宽 API 矩阵(API 24–35)未跑 |
 | 密钥化防御(完整性锚点/环境门控/密钥分片/服务端写战) | 已交付,如实边界见下文加固章节 |
 
 **数字的如实边界**:TaintBench 行号与 jadx 行号不同源(230 端点仅 6 个精确)——连通级对判因此分严格档(行号 ±2,历史上为 0)与宽松档(类词干对齐,66/249)双档呈现;宽松档不可单独引用。混淆 GT 方法名(`i`,31 处)仅当包装方法体恰含一个已知 source/sink API 时才恢复;歧义情形如实放弃,不猜。

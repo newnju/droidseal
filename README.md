@@ -78,7 +78,7 @@ Android security tooling splits into two tracks: **audit** (MobSF, AndroBugs, AP
 
 **Where DroidSeal does NOT compete (honest boundaries)**:
 
-- Need VMP-grade protection that survives a memory dump of the master key? Use nmmp or DexGuard — DroidSeal explicitly does not invest in white-box AES or VM-based protection; on rooted devices with sustained physical access, a sufficiently skilled attacker eventually wins.
+- Need VMP-grade protection that survives a memory dump of the master key? Use nmmp or DexGuard — DroidSeal ships a VMP-lite layer for (I)I leaf methods (device-verified execution semantics), but explicitly does not invest in white-box AES or full-instruction-set VM protection; on rooted devices with sustained physical access, a sufficiently skilled attacker eventually wins.
 - Doing malware triage or dynamic behavior analysis? Use MobSF + APKiD — DroidSeal only audits and hardens, it never sandboxes.
 - Need contractual support/SLA for a high-stakes product? The project is early (real-device acceptance, independent security review, and community size are all still ahead of it) — commercial vendors are the safer bet there.
 
@@ -105,7 +105,7 @@ Numbers below come from reproducible harnesses in [`benchmark/`](benchmark/READM
 | DEX payload encryption (AES-256-GCM, HKDF, keyed anchors P0-A/B/C) | shipped; emulator-accepted (SEC-010/011/012 fixed via real-device loop) |
 | Method extraction (code-item hollowing) + lazy restoration | shipped; fail-open fallback to full restore |
 | String encryption with call-site rewrite (MUTF-8 safe ciphertext + checksum recompute) | shipped; apktool fail-closed on write-back |
-| VMP-lite | milestone A shipped (leaf-method interpreter, TS/C cross-checked 12 tests); **milestone B (RegisterNatives bridge + stub `ACC_NATIVE` marking) is build-time code only — `vmProtected` stays `false` until a real-device matrix (API 24–35) passes** |
+| VMP-lite | shipped for the wired subset: (I)I leaf methods compile to VM bytecode embedded in the shell SO, registered via `RegisterNatives` at runtime; device-verified on API 26 x86_64 (V1 registration 5/5 + V2 execution semantics: `vmLeaf(21)=120` matches ground truth) — `vmProtected` reports `true` only when the bridge+payload SO is actually compiled and injected into the APK (honest evidence gate); non-(I)I methods keep stub+lazy-restore; wider API matrix (API 24–35) not yet run |
 | Keyed defenses (integrity anchor / environment gate / key sharding / server challenge) | shipped, with honest caveats in the hardening section below |
 
 **Honest boundaries of the numbers**: TaintBench line numbers and jadx line numbers are different sources (230 endpoints, only 6 exact) — connected-level matching therefore offers a strict tier (line ±2, historically 0) and a lenient tier (class-stem alignment, 66/249); the lenient tier must never be quoted alone. Obfuscated GT method names (`i`, 31 occurrences) are recovered only when the wrapping method body contains exactly one known source/sink API; ambiguous cases are dropped, not guessed.

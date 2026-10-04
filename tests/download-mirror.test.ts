@@ -75,9 +75,17 @@ describe("resolveDownloadCandidates 多源候选列表", () => {
 
 describe("promptMirrorSwitch 交互切换提示", () => {
   test("非 TTY(CI/管道)→ 直接 false,不询问不阻塞", async () => {
-    // 测试进程 stdin 非 TTY——这正是要保障的行为:无人值守环境自动拒绝
-    const r = await promptMirrorSwitch("gradle-8.13-bin.zip")
-    expect(r).toBe(false)
+    // 显式 stub isTTY=false:不依赖测试运行器环境(控制台/计划任务/管道下
+    // stdin 状态不同)——本用例保障的是"非 TTY 分支自动拒绝"这一确定性行为
+    const desc = Object.getOwnPropertyDescriptor(process.stdin, "isTTY")
+    Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true })
+    try {
+      const r = await promptMirrorSwitch("gradle-8.13-bin.zip")
+      expect(r).toBe(false)
+    } finally {
+      if (desc) Object.defineProperty(process.stdin, "isTTY", desc)
+      else delete (process.stdin as unknown as { isTTY?: boolean }).isTTY
+    }
   })
 
   test("isInteractiveStdin 与 TTY 状态一致", () => {
