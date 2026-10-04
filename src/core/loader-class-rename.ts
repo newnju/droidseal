@@ -90,12 +90,18 @@ export function randomizeLoaderClassNames(loaderDex: Uint8Array, enable: boolean
   // 槽内生成是"整串等长随机",L/; 结构字符可能被随机成字母/斜杠 → DEX 真名与
   // 调用方 slice(1,-1) 剥壳后的 manifest 名错一位(CNFE)。生成后强制重塑为
   // L...; 形态(仅首尾替换,长度不变),再验槽;失败重试。
+  // 形态校验:剥壳后的类路径必须每段非空且首字符为 JLS 首字符。
+  // genNameInSlot 只保证字典序落槽,'/' 落在首/尾/连续位置会产生空段
+  // (如 "pkg/.Class" / "pkg.Class." / "a//b")→ ART 类名校验拒载 → CNFE。
+  // 这是概率性陷阱(~5% 构建),必须逐候选过滤,不能靠重试撞运气。
+  const LEGAL_PATH = /^[A-Za-z_$][A-Za-z0-9_$]*(\/[A-Za-z_$][A-Za-z0-9_$]*)*$/
   const reshapeDescriptor = (s: string): string => `L${s.slice(1, -1)};`
   let newShellPath: string | undefined
   if (slotShell.prev !== undefined || slotShell.next !== undefined) {
     for (let i = 0; i < 256 && newShellPath === undefined; i += 1) {
       const c = genNameInSlot(oldShellPath.length, slotShell)
       if (c === undefined || !c.includes("/")) continue
+      if (!LEGAL_PATH.test(c.slice(1, -1))) continue
       const r = reshapeDescriptor(c)
       if (fitsBoth(r)) newShellPath = r
     }
@@ -108,6 +114,7 @@ export function randomizeLoaderClassNames(loaderDex: Uint8Array, enable: boolean
         for (let i = 0; i < 256; i += 1) {
           const c = genNameInSlot(oldLoaderPath.length, slotLoader)
           if (c === undefined) return undefined
+          if (!LEGAL_PATH.test(c.slice(1, -1))) continue
           const r = reshapeDescriptor(c)
           if (nameFitsSlot(r, slotLoader)) return r
         }
