@@ -654,32 +654,45 @@ int dsvm_register_vm_bridge(JNIEnv* env, jclass stub_class) {
 /* Java 可调用的注册入口(dsvmRegisterAll):JNI_OnLoad 时 app 类未加载,
  * RegisterNatives 必败——由壳 loader 在 app classloader 就绪后显式调用。
  * JNI 导出符号随 loaderClassPath 参数化(loader 类名构建期随机化,硬编码必败)。
- * 按类分组:每类 FindClass → 注册该类条目 → DeleteLocalRef;任一类失败如实记日志
+ * FindClass 用的是调用方(壳 loader)的类加载器,找不到 InMemoryDexClassLoader
+ * 里的 app 类——所以入参是 app ClassLoader,经 loadClass 逐类定位后再注册。
+ * 按类分组:每类 loadClass → 注册该类条目 → DeleteLocalRef;任一类失败如实记日志
  * 继续其余类(fail-open 保可用,与惰性还原同口径),返回成功注册的方法总数。 */
 JNIEXPORT jint JNICALL
-Java_${loaderClassPath.replace(/\./g, "_")}_dsvmRegisterAll(JNIEnv* env, jclass clazz) {
+Java_${loaderClassPath.replace(/\./g, "_")}_dsvmRegisterAll(JNIEnv* env, jclass clazz, jobject app_loader) {
     (void)clazz;
     for (size_t i = 0; i < sizeof(g_bridge_table) / sizeof(g_bridge_table[0]); i++) {
         g_bridge_table[i].fnPtr = g_thunks[i];
     }
+    if (app_loader == NULL) { LOGI("vm bridge: app loader null, skip"); return 0; }
+    jclass clsCls = (*env)->FindClass(env, "java/lang/ClassLoader");
+    if (clsCls == NULL) { (*env)->ExceptionClear(env); LOGI("vm bridge: ClassLoader not found"); return 0; }
+    jmethodID loadClass = (*env)->GetMethodID(env, clsCls, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
+    (*env)->DeleteLocalRef(env, clsCls);
+    if (loadClass == NULL) { (*env)->ExceptionClear(env); LOGI("vm bridge: loadClass mid not found"); return 0; }
     int total = 0;
 ${[...new Set(entries.map((e) => e.className ?? ""))].filter((c) => c !== "").map((cls) => {
   const clsEntries = entries.map((e, i) => ({ e, i })).filter(({ e }) => (e.className ?? "") === cls)
   return `    { /* 类 ${cls} */
-        jclass c = (*env)->FindClass(env, "${cls.replace(/\./g, "/")}");
-        if (c != NULL) {
-            JNINativeMethod t[] = {
-${clsEntries.map(({ e }) => `                { "${e.stubName}", "${e.signature}", (void*)vm_thunk_${entries.indexOf(e)} },`).join("\n")}
-            };
-            if ((*env)->RegisterNatives(env, c, t, ${clsEntries.length}) == JNI_OK) {
-                total += ${clsEntries.length};
+        jstring jn = (*env)->NewStringUTF(env, "${cls}");
+        if (jn != NULL) {
+            jclass c = (jclass)(*env)->CallObjectMethod(env, app_loader, loadClass, jn);
+            (*env)->DeleteLocalRef(env, jn);
+            if (c != NULL) {
+                JNINativeMethod t[] = {
+${clsEntries.map(({ e }) => `                    { "${e.stubName}", "${e.signature}", (void*)vm_thunk_${entries.indexOf(e)} },`).join("\n")}
+                };
+                if ((*env)->RegisterNatives(env, c, t, ${clsEntries.length}) == JNI_OK) {
+                    total += ${clsEntries.length};
+                } else {
+                    (*env)->ExceptionClear(env);
+                    LOGI("vm bridge: register failed for ${cls}");
+                }
+                (*env)->DeleteLocalRef(env, c);
             } else {
-                LOGI("vm bridge: register failed for ${cls}");
+                (*env)->ExceptionClear(env);
+                LOGI("vm bridge: class not found: ${cls}");
             }
-            (*env)->DeleteLocalRef(env, c);
-        } else {
-            (*env)->ExceptionClear(env);
-            LOGI("vm bridge: class not found: ${cls}");
         }
     }`
 }).join("\n")}

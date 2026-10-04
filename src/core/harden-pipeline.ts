@@ -729,7 +729,9 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     }
     const soResult = await compileNativeSo({
       packageName, soName: randomSo, sourceDir: nativeSrcDir, outputDir: path.join(config.outputDir, "native-libs"),
-      abi: ["arm64-v8a", "armeabi-v7a"], minSdk: 21,
+      // x86_64 必含:模拟器(AVD)均为 x86_64——只编 ARM 系会让加固包在模拟器上
+      // INSTALL_FAILED_NO_MATCHING_ABIS;x86 保留给老镜像兼容
+      abi: ["arm64-v8a", "armeabi-v7a", "x86_64"], minSdk: 21,
     })
     findings.push(...soResult.findings)
     if (soResult.success) {

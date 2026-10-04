@@ -425,6 +425,10 @@ public final class DroidSealLoader {
             ciTable = null;
             if (loadedLoader == null) return;
             replaceClassLoader(loadedLoader);
+            // VMP 里程碑 B:app ClassLoader 就绪后注册 VM 桥(RegisterNatives 必须
+            // 在 app 类可经 loadClass 定位后;JNI_OnLoad 时必败)。fail-open:注册
+            // 失败不影响启动,方法保持 stub+惰性还原路径。
+            try { dsvmRegisterAll(loadedLoader); } catch (Throwable ignore) { }
         } catch (Throwable t) {
             // 失败关闭:保持 loadedLoader == null,壳 Application 走 fallback
         }
@@ -562,9 +566,10 @@ public final class DroidSealLoader {
     private static native int nativeGuardVote();
 
     /** VMP 里程碑 B:RegisterNatives 注册入口(壳 SO vm_bridge.c 实现,导出符号随本类
-     *  随机化名参数化)。按类分组注册 VM 化 (I)I 叶子方法,返回成功注册数;SO 未加载
-     *  或无 VM 方法时调用方需 fail-open(返回 0 不阻断启动)。 */
-    static native int dsvmRegisterAll();
+     *  随机化名参数化)。入参 app ClassLoader——JNI FindClass 用壳 loader 的加载器,
+     *  找不到 InMemoryDexClassLoader 里的 app 类,必须经 loadClass 定位。返回成功注册数;
+     *  SO 未加载/无 VM 方法时调用方 fail-open(异常吞掉,不阻断启动)。 */
+    static native int dsvmRegisterAll(ClassLoader appLoader);
 
     /** P2 服务端挑战:向 SERVER_URL(构建期嵌入)POST manifestSha256,取回 part3(hex 64 字符 → 32B)。
      *  服务器按 manifest 摘要校验后发放——其他 APK / 被篡改的包拿不到本构建的 part3。
