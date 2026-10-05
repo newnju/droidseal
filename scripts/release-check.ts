@@ -511,6 +511,60 @@ if (await exists(executablePath) && await exists(buildMetadataPath)) {
   }
 }
 
+// ── 对抗审计 verdict 消费(发布门禁 × 设备端闭环对账)──────────────────────
+// 消费最新加固报告目录里的 verdicts/adversarial-audit.json(对抗审计探针回写):
+//   - 存在且有 fail → 门禁 fail(篡改/泄漏类对抗判据失守,不可发布)
+//   - 存在且全 pass → 门禁通过并计入发布证据
+//   - 不存在 → 如实提示但默认不阻断(对抗审计是设备依赖步骤,CI/新 checkout 无设备;
+//     设 DROIDSEAL_REQUIRE_AUDIT=1 可强制——有设备跑过探针的发布机应开启)
+//   - skip 判据不算 pass:summary.skip 如实计入提示,策略由环境变量决定
+const auditVerdictPolicy = (process.env.DROIDSEAL_AUDIT_SKIP_POLICY ?? "allow").toLowerCase()
+const auditRunsRoot = path.join(root, "out")
+let auditVerdictRead = false
+if (await exists(auditRunsRoot)) {
+  // 最新一次加固运行 = runs 目录按名字排序(时间戳前缀)取尾;verdict 目录固定 naming
+  const runDirs = (await readdir(auditRunsRoot, { withFileTypes: true }))
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+  for (const runDir of runDirs) {
+    const verdictPath = path.join(auditRunsRoot, runDir, ".droidseal", "runs")
+    if (!(await exists(verdictPath))) continue
+    const runs = (await readdir(verdictPath, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name).sort()
+    for (const run of runs.reverse()) {
+      const file = path.join(verdictPath, run, "reports", "verdicts", "adversarial-audit.json")
+      if (!(await exists(file))) continue
+      try {
+        const verdict = JSON.parse(await readFile(file, "utf8")) as {
+          summary?: { pass?: number; fail?: number; skip?: number }
+          verdicts?: Array<{ id?: string; verdict?: string }>
+        }
+        const fail = verdict.summary?.fail ?? 0
+        const pass = verdict.summary?.pass ?? 0
+        const skip = verdict.summary?.skip ?? 0
+        if (fail > 0) {
+          findings.push(`对抗审计 verdict 存在 fail(${fail} 项,pass=${pass} skip=${skip}):${path.relative(root, file)}——篡改/泄漏类对抗判据失守,不可发布`)
+        } else {
+          console.log(`- adversarial audit verdict: pass=${pass} fail=0 skip=${skip}${skip > 0 && auditVerdictPolicy === "strict" ? " (strict: skip 计为未通过)" : " (skip 不阻断)"}`)
+          if (skip > 0 && auditVerdictPolicy === "strict") {
+            findings.push(`对抗审计存在 ${skip} 项 skip(DROIDSEAL_AUDIT_SKIP_POLICY=strict:skip 计为未通过):${path.relative(root, file)}`)
+          }
+        }
+      } catch (error) {
+        findings.push(`对抗审计 verdict 无法解析(${error instanceof Error ? error.message : String(error)}):${path.relative(root, file)}`)
+      }
+      auditVerdictRead = true
+      break // 只消费最新 run
+    }
+    if (auditVerdictRead) break
+  }
+}
+if (!auditVerdictRead) {
+  const requireAudit = process.env.DROIDSEAL_REQUIRE_AUDIT === "1"
+  const msg = "对抗审计 verdict 缺失(out/ 下无 adversarial-audit.json)——设备端对抗复核未运行或未回写"
+  if (requireAudit) findings.push(`${msg};DROIDSEAL_REQUIRE_AUDIT=1 已开启,门禁强制要求`)
+  else console.log(`- ${msg}(默认不阻断;发布机有设备时应设 DROIDSEAL_REQUIRE_AUDIT=1)`)
+}
+
 if (findings.length > 0) {
   console.error("Open-source binary release check failed:")
   for (const finding of [...new Set(findings)]) console.error(`- ${finding}`)
