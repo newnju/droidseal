@@ -197,6 +197,38 @@ API 34 V1 失败根因取证:壳 SO(`libnhekq.so`)已随包安装并解压到 ap
 
 环境注:本地 android-37.1 镜像为残缺安装(仅 `.installer` 占位),API 30+ 格经 sdkmanager 补装 `system-images;android-34;google_apis;x86_64`(1.5GB 下载+4.2GB 解压)后达成;首次解压曾因运行中模拟器锁 `crashpad_handler.exe` 失败,关闭模拟器后重跑成功——sdkmanager 安装期间须先关闭全部模拟器实例。
 
+## 对抗审计(自动化闭环)
+
+真机在手后的对抗性验收:一条命令跑完"部署 → 对抗验证 → verdict 回写"环,
+结果 JSON 落到最新加固报告目录 `verdicts/adversarial-audit.json`,与构建 findings
+形成"构建期声明 ↔ 设备端对抗复核"的双向对账。
+
+```bash
+bash scripts/adversarial-audit.sh --apk out/hardened/app.hardened.apk --pkg com.example.app [--serial emulator-5556] [--api 34]
+```
+
+判据集(全部可运行才出 verdict;设备/工具缺失 → skip,不产假绿):
+
+| 判据 | 语义 | 方向 |
+|---|---|---|
+| A1 篡改必败 | 攻击 keystore 重签产物安装启动 → 进程未存活或 integrity 标记可见 = pass;存活且无失败标记 = **fail**(锚点被绕过) | 反向判据:失败才是正确 |
+| A2 泄漏零容忍 | 私有目录 + /sdcard 扫明文 dex/apk,出现即 fail | 反向判据 |
+| A3 防护在场 | 壳 SO 出现在进程 maps(加密 payload 版已加载) | 正向判据 |
+| A4 调试面收敛 | ro.debuggable=0;模拟器常为 1,如实 skip 不判 | 环境门控 |
+| A5 巡检在场 | logcat 可见 patrol 线程启动标记;产物未含巡检时 skip | 正向判据 |
+
+退出码:0=无 fail(可含 skip);1=任一 fail。**skip 不算 pass**——报告 JSON 里
+如实保留 skip 计数,闭环消费方(发布门禁)可按需把 skip 视为不通过。
+
+前置:`~/ds-fixtures/attack-test.jks`(攻击重签 key,生成命令见下)。攻击 key
+绝不能放进取材 keystore 目录,更不能用于签任何正式产物。
+
+```bash
+keytool -genkeypair -keystore ~/ds-fixtures/attack-test.jks -alias attack-test \
+  -keyalg RSA -keysize 2048 -validity 3650 -storepass attack-test -keypass attack-test \
+  -dname "CN=Attack Test, O=DroidSeal"
+```
+
 ## 手动用例(脚本不覆盖)
 
 ### 重签必败(P0-A 锚点)
