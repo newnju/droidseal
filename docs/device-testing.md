@@ -182,6 +182,21 @@ V1 之后发现 payload 传递链断裂与翻译缺陷链,修复后复测:
 
 另:构造器(`<init>`/`<clinit>`)永不挖空——stub 构造器是纯 return-void,classloader 置换未覆盖的加载路径(base.apk 副本)验证必 VerifyError 崩溃(`Constructor returning without calling superclass constructor`)。防护口径如实收窄:挖空只覆盖普通方法。
 
+## 实测记录(2026-10-05,API 24 + API 34 x86_64 模拟器,矩阵补格轮)
+
+补此前受阻的 API 24 与 API 30+ 格(DS_Test24 + DS_Test37,同一 `out/vmtest/hardened/ds-hello.hardened.apk` 产物):
+
+| 格 | 判据 | 结果 |
+|---|---|---|
+| API 24 standard | D1/D2/D3/D6 | PASS 5/5(落盘降级路径) |
+| API 24 `--vm-mode` | D1–D6+V1 | PASS 6/6——V1 注册在 API 24 旧 ART 路径同样生效 |
+| API 34 standard | D1/D2/D3/D6 | PASS 5/5 |
+| API 34 `--vm-mode` | D1–D6+V1 | FAIL:V1 注册未生效(下述根因) |
+
+API 34 V1 失败根因取证:壳 SO(`libnhekq.so`)已随包安装并解压到 app lib 目录,`vmLeaf` 报 `UnsatisfiedLinkError: No implementation found`;logcat 全程无任何 `DroidSealVMP` tag 日志(同 APK 在 API 24/26 均有 `vm bridge: 1 methods registered total`)——指向 `dsvmRegisterAll` 调用链未执行或其 JNI 定位在 API 34 语义下失联,而非 SO 未加载(D2/D3 靠 part2 静态字段回退仍绿,故闭环不受影响)。**待归因**:需在 API 34 上对注册调用点(Loader `init` 内 `dsvmRegisterAll(loadedLoader)`)与 JNI_OnLoad 时序打点复验。此格修复前,VM 注册链的 API 级覆盖如实声明为 API 24/26(注册+执行均过),API 34(注册未生效,根因待查)。
+
+环境注:本地 android-37.1 镜像为残缺安装(仅 `.installer` 占位),API 30+ 格经 sdkmanager 补装 `system-images;android-34;google_apis;x86_64`(1.5GB 下载+4.2GB 解压)后达成;首次解压曾因运行中模拟器锁 `crashpad_handler.exe` 失败,关闭模拟器后重跑成功——sdkmanager 安装期间须先关闭全部模拟器实例。
+
 ## 手动用例(脚本不覆盖)
 
 ### 重签必败(P0-A 锚点)
