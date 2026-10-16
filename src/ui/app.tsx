@@ -652,7 +652,7 @@ export function App() {
       isProject
         ? "流程: 环境诊断 → 源码审计 → Gradle 构建 → APK 审计 → 生成报告"
         : oneClickDraft.enableHarden
-          ? "流程: 环境诊断 → 准备 → 源码审计 → APK 审计 → DEX/SO/资源/字符串加密 → 运行时保护 → 签名 → 生成报告"
+          ? "流程: 环境诊断 → 准备 → 源码审计 → APK 审计 → DEX/SO/资源加密 → 运行时保护 → 签名 → 生成报告"
           : "流程: 环境诊断 → 准备 → 源码审计 → APK 审计 → 签名 → 生成报告",
       "即将开始执行…",
     ])
@@ -689,13 +689,9 @@ export function App() {
     enableMethodHollow: currentDraft.enableDexEncryption !== false,
     enableSoEncryption: currentDraft.enableSoEncryption !== false,
     enableResourceEncryption: currentDraft.enableResourceEncryption !== false,
-    enableStringEncryption: currentDraft.enableStringEncryption !== false,
     enableRuntimeProtection: currentDraft.enableRuntimeProtection !== false,
-    enableVmProtection: currentDraft.enableVmProtection ?? false,
-    enableSplitKey: currentDraft.enableSplitKey !== false,
     enableTripleEntry: currentDraft.enableTripleEntry !== false,
     enableRandomNames: currentDraft.enableRandomNames !== false,
-    enableKeystoreBinding: currentDraft.enableKeystoreBinding === true,
     keepIntermediates: currentDraft.keepIntermediates === true,
     classExclusionPatterns: [] as string[],
     certSha256: currentDraft.certSha256,
@@ -714,7 +710,7 @@ export function App() {
   const executeHardenPipeline = async (currentDraft: import("./wizard.ts").WizardDraft) => {
     addMessage("assistant", "审计完成,开始加固…", [
       `算法: ${currentDraft.hardenAlgorithm ?? "aes-256-gcm"}`,
-      `保护层: DEX${currentDraft.enableDexEncryption !== false ? "✓" : "✗"} SO${currentDraft.enableSoEncryption !== false ? "✓" : "✗"} 资源${currentDraft.enableResourceEncryption !== false ? "✓" : "✗"} 字符串${currentDraft.enableStringEncryption !== false ? "✓" : "✗"} 运行时${currentDraft.enableRuntimeProtection !== false ? "✓" : "✗"}`,
+      `保护层: DEX${currentDraft.enableDexEncryption !== false ? "✓" : "✗"} SO${currentDraft.enableSoEncryption !== false ? "✓" : "✗"} 资源${currentDraft.enableResourceEncryption !== false ? "✓" : "✗"} 运行时${currentDraft.enableRuntimeProtection !== false ? "✓" : "✗"}`,
     ])
     try {
       const { runHardenPipeline } = await import("../core/harden-pipeline.ts")
@@ -724,7 +720,6 @@ export function App() {
         addMessage("success", "加固完成", [
           `输出: ${hardenResult.outputApk ?? hardenConfig.outputDir}`,
           `保护层: ${hardenResult.summary.dexProtected ? "DEX✓" : "DEX✗"} ${hardenResult.summary.soProtected ? "SO✓" : "SO✗"} ${hardenResult.summary.resourceProtected ? "资源✓" : "资源✗"}`,
-          `Keystore 绑定: ${hardenConfig.enableKeystoreBinding ? "✓ 一机一份(重装/换机即失效)" : "✗ 未启用(密钥随 APK 分发)"}`,
           `生成文件: ${hardenResult.generatedFiles.length} 个`,
         ])
         if (hardenResult.outputApk) setArtifactPath(hardenResult.outputApk)

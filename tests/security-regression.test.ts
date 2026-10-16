@@ -37,20 +37,6 @@ test("SEC-002 C2 相邻不变量: loader DEX 补丁后仍无 master 明文(hex)�
   expect(hexRuns.length).toBeLessThanOrEqual(2)
 })
 
-// ── C3(KS+挑战组合二次启动砖)────────────────────────────────────────
-// 触发条件:--challenge-url + --keystore-bind 组合,旧实现封存的是 XOR part3 之后的
-// 真实 part1,二次启动 unseal 取回后又 XOR 一次 part3 → 密钥永久错误 → 必砖。
-// 修复语义:封存 pre-XOR part1′;unseal → XOR part3 → 还原真实 part1,路径与首启一致。
-// 可测面在 loader Java 源:封存点必须位于 XOR part3 之前(源序断言)。
-test("SEC-003 C3: 封存(pre-XOR part1′)必须先于 XOR part3 的代码顺序", () => {
-  const src = readFileSync("runtime/java/droidseal/runtime/DroidSealLoader.java", "utf8")
-  const sealIdx = src.indexOf("sealPart1(toSeal)")
-  expect(sealIdx).toBeGreaterThan(0)
-  // 注释锚点:封存值语义(pre-XOR)必须与实现相邻,防实现回退而注释漂移
-  const seg = src.slice(Math.max(0, sealIdx - 2000), sealIdx)
-  expect(seg.includes("pre-XOR")).toBe(true)
-})
-
 // ── C4(debuggable 输入永久解密失败)──────────────────────────────────
 // 触发条件:输入 debuggable=true 的 APK——环境投票把 debuggable 视为污染 → 派生错钥
 // → 产物在所有设备上解密失败,无任何提示。
@@ -72,8 +58,7 @@ test("SEC-004 C4: flipDebuggableInAxml 等长翻转(true→false),无属性时�
 })
 
 // ── R3(CLI flag 吞噬)───────────────────────────────────────────────
-// 触发条件:`--challenge-url --keystore-bind`(flag 相邻)——旧 getArg 把下一个 flag
-// 当值吞掉,开关名被当作 URL。
+// 触发条件:相邻 flag(`--no-dex --no-so`)——旧 getArg 把下一个 flag 当值吞掉。
 // 修复语义:getArg/collectMulti 判下一参数 `--` 开头则不当作值。
 // index.tsx 未导出 getArg(单文件 CLI),按修复语义做纯函数对照测试,锁定约定:
 test("SEC-005 R3: getArg 语义——下一参数为 flag 时不吞作值", () => {
@@ -82,48 +67,22 @@ test("SEC-005 R3: getArg 语义——下一参数为 flag 时不吞作值", () =
     if (idx < 0 || idx + 1 >= args.length || args[idx + 1]!.startsWith("--")) return undefined
     return args[idx + 1]
   }
-  // 触发条件复现:flag 相邻 → undefined(触发警告而非把开关当 URL)
-  expect(getArg(["harden", "x.apk", "--challenge-url", "--keystore-bind"], "--challenge-url")).toBeUndefined()
+  // 触发条件复现:flag 相邻 → undefined
+  expect(getArg(["harden", "x.apk", "--profile", "--no-dex"], "--profile")).toBeUndefined()
   // 正常取值不受影响
-  expect(getArg(["harden", "x.apk", "--challenge-url", "https://a.com"], "--challenge-url")).toBe("https://a.com")
+  expect(getArg(["harden", "x.apk", "--package", "com.example"], "--package")).toBe("com.example")
   // flag 在末尾无值 → undefined
-  expect(getArg(["harden", "--challenge-url"], "--challenge-url")).toBeUndefined()
-})
-
-// ── R2(参考服务器全网卡裸奔)────────────────────────────────────────
-// 触发条件:旧 challenge-server.ts 用 .listen(port) 不绑地址 → 监听全网卡,part3(密钥
-// 材料)对局域网裸奔,而日志声称 127.0.0.1。
-// 修复语义:显式 .listen(port, "127.0.0.1")。
-// 服务器进程不适合在单测里起——对源码做结构断言(修复语义 = 显式回环绑定):
-test("SEC-006 R2: challenge-server 显式绑定 127.0.0.1(结构断言)", () => {
-  const src = readFileSync("scripts/challenge-server.ts", "utf8")
-  expect(src.includes('.listen(port, "127.0.0.1"')).toBe(true)
-  // 不得存在裸 .listen(port 调用(绑地址缺失 = 全网卡)——HTTP/HTTPS 两个分支都须绑定,全局替换
-  expect(/\.listen\(\s*port\s*[,)]/.test(src.replace(/\.listen\(port, "127\.0\.0\.1"/g, ""))).toBe(false)
-})
-
-// ── R1(非 ASCII URL 写坏 DEX,已有 IDN 用例在 harden-chain.test.ts)──
-// 此处补字节级填充断言:合法 URL 补丁后,标记区必须是「URL + '#' 填充」精确 128B。
-test("SEC-007 R1: URL 补丁后标记区按字节等长填充(ASCII 路径字节级断言)", () => {
-  // 见 harden-chain.test.ts 的全长度匹配用例;此处锁填充字节语义:
-  // 填充字符必须是 0x23('#'),且总长恰为标记等长——短一字节=未填满(误判未补丁),
-  // 长一字节=越界(DEX 损坏)。
-  const MARK = "DS_SRV_URL" + "#".repeat(118) // 128B 标记
-  expect(MARK.length).toBe(128)
-  expect(Buffer.byteLength(MARK, "utf8")).toBe(128) // 字节长 = 字符长(纯 ASCII)
+  expect(getArg(["harden", "--package"], "--package")).toBeUndefined()
 })
 
 // ── C5(白名单遗漏)──────────────────────────────────────────────────
-// 触发条件:scripts/challenge-server.ts 未进 npm files 白名单 → 发布包缺参考服务器,
-// 用户无从部署挑战端点。修复语义:白名单补齐 + CI/发布冒烟校验。
-// 冒烟逻辑已制度化于 .github/workflows/ci.yml 与 scripts/release.ts——此处断言两处
+// 冒烟逻辑制度化于 .github/workflows/ci.yml 与 scripts/release.ts——此处断言两处
 // 都在(防止有人"清理"掉冒烟步骤)。
 test("SEC-008 C5: 白名单冒烟制度化(CI 与 release 双处常驻)", () => {
   const ci = readFileSync(".github/workflows/ci.yml", "utf8")
   expect(ci.includes("runtime/droidseal-loader.dex")).toBe(true)
-  expect(ci.includes("scripts/challenge-server.ts")).toBe(true)
   const rel = readFileSync("scripts/release.ts", "utf8")
-  expect(rel.includes("scripts/challenge-server.ts")).toBe(true)
+  expect(rel.includes("runtime/droidseal-loader.dex")).toBe(true)
 })
 
 // ── 工具:构造含 debuggable 的最小 AXML(与 flipDebuggableInAxml 解析布局逐字段对齐)──

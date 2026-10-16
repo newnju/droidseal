@@ -64,14 +64,9 @@ export interface WizardDraft {
   enableDexEncryption?: boolean
   enableSoEncryption?: boolean
   enableResourceEncryption?: boolean
-  enableStringEncryption?: boolean
   enableRuntimeProtection?: boolean
-  enableVmProtection?: boolean
-  enableSplitKey?: boolean
   enableTripleEntry?: boolean
   enableRandomNames?: boolean
-  // Android Keystore 设备绑定:首次运行后密钥片段封存进硬件 Keystore,卸载/重装/换机即失效(可选)
-  enableKeystoreBinding?: boolean
   hardenAlgorithm?: "aes-256-gcm" | "chacha20-poly1305"
   // 加固额外配置
   packageName?: string | undefined
@@ -104,13 +99,9 @@ export function createDraft(runMode: RunMode): WizardDraft {
     enableDexEncryption: true,
     enableSoEncryption: true,
     enableResourceEncryption: true,
-    enableStringEncryption: true,
     enableRuntimeProtection: true,
-    enableVmProtection: false,
-    enableSplitKey: true,
     enableTripleEntry: true,
     enableRandomNames: true,
-    enableKeystoreBinding: false,
     hardenAlgorithm: "aes-256-gcm",
   }
 }
@@ -151,13 +142,9 @@ export function createOneClickDraft(inputPath: string): WizardDraft {
     enableDexEncryption: true,
     enableSoEncryption: true,
     enableResourceEncryption: true,
-    enableStringEncryption: true,
     enableRuntimeProtection: true,
-    enableVmProtection: false,
-    enableSplitKey: true,
     enableTripleEntry: true,
     enableRandomNames: true,
-    enableKeystoreBinding: false,
     hardenAlgorithm: "aes-256-gcm",
   }
 }
@@ -743,23 +730,11 @@ export function applyAnswer(
     case "enableResourceEncryption":
       next.enableResourceEncryption = value === "yes"
       break
-    case "enableStringEncryption":
-      next.enableStringEncryption = value === "yes"
-      break
     case "enableRuntimeProtection":
       next.enableRuntimeProtection = value === "yes"
       break
-    case "enableVmProtection":
-      next.enableVmProtection = value === "yes"
-      break
-    case "enableSplitKey":
-      next.enableSplitKey = value === "yes"
-      break
     case "enableTripleEntry":
       next.enableTripleEntry = value === "yes"
-      break
-    case "enableKeystoreBinding":
-      next.enableKeystoreBinding = value === "yes"
       break
     case "enableRandomNames":
       next.enableRandomNames = value === "yes"
@@ -840,13 +815,9 @@ export function buildPipelineConfig(draft: WizardDraft): PipelineConfig {
       enableDexEncryption: draft.enableDexEncryption ?? true,
       enableSoEncryption: draft.enableSoEncryption ?? true,
       enableResourceEncryption: draft.enableResourceEncryption ?? true,
-      enableStringEncryption: draft.enableStringEncryption ?? true,
       enableRuntimeProtection: draft.enableRuntimeProtection ?? true,
-      enableVmProtection: draft.enableVmProtection ?? false,
-      enableSplitKey: draft.enableSplitKey ?? true,
       enableTripleEntry: draft.enableTripleEntry ?? true,
       enableRandomNames: draft.enableRandomNames ?? true,
-      enableKeystoreBinding: draft.enableKeystoreBinding ?? false,
       hardenAlgorithm: draft.hardenAlgorithm ?? "aes-256-gcm",
     } : {}),
   }
@@ -893,8 +864,8 @@ export function summaryLines(draft: WizardDraft): string[] {
     // 加固摘要
     ...(draft.enableHarden ? [
       `加固: 启用 (${draft.hardenAlgorithm ?? "aes-256-gcm"})`,
-      `  DEX: ${draft.enableDexEncryption !== false ? "✓" : "✗"}  SO: ${draft.enableSoEncryption !== false ? "✓" : "✗"}  资源: ${draft.enableResourceEncryption !== false ? "✓" : "✗"}  字符串: ${draft.enableStringEncryption !== false ? "✓" : "✗"}`,
-      `  运行时: ${draft.enableRuntimeProtection !== false ? "✓" : "✗"}  VMP: ${draft.enableVmProtection ? "✓" : "✗"}  Split-Key: ${draft.enableSplitKey !== false ? "✓" : "✗"}  三重入口: ${draft.enableTripleEntry !== false ? "✓" : "✗"}`,
+      `  DEX: ${draft.enableDexEncryption !== false ? "✓" : "✗"}  SO: ${draft.enableSoEncryption !== false ? "✓" : "✗"}  资源: ${draft.enableResourceEncryption !== false ? "✓" : "✗"}`,
+      `  运行时: ${draft.enableRuntimeProtection !== false ? "✓" : "✗"}  三重入口: ${draft.enableTripleEntry !== false ? "✓" : "✗"}`,
     ] : ["加固: 未启用(仅审计)"]),
   ]
 }
