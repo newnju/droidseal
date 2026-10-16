@@ -170,61 +170,20 @@ describe("stub 标识符随机化", () => {
 })
 
 describe("loader DEX 密钥补丁", () => {
-  test("三标记 + KS 开关全命中,指纹真实嵌入", () => {
-    const r = patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), CERT, true)
+  test("三标记全命中,指纹真实嵌入", () => {
+    const r = patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), CERT)
     expect(r.patchedPart1).toBe(true)
     expect(r.patchedPart2).toBe(true)
     expect(r.patchedCert).toBe(true)
-    expect(r.patchedKsFlag).toBe(true)
-    const text = Buffer.from(r.dex).toString("latin1")
-    expect(text.includes("KS_BIND_FLAG_1")).toBe(true)
-    expect(text.includes("KS_BIND_FLAG_0")).toBe(false)
-  })
-
-  test("KS 开关关闭时 flag 保持 0", () => {
-    const r = patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), CERT, false)
-    expect(r.patchedKsFlag).toBe(false)
-    expect(Buffer.from(r.dex).toString("latin1").includes("KS_BIND_FLAG_0")).toBe(true)
   })
 
   test("证书 hex 非法时跳过指纹补丁(不写垃圾)", () => {
-    const r = patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), "zzzz", true)
+    const r = patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), "zzzz")
     expect(r.patchedCert).toBe(false)
   })
 
   test("密钥长度不符直接抛错", () => {
     expect(() => patchLoaderDexKeys(loaderDex(), randomBytes(16), randomBytes(32))).toThrow(/32/)
-  })
-
-  test("挑战 URL 全长度补丁:标记完全替换,尾部 # 填充等长", () => {
-    const url = "https://challenge.example.com/ds/part3"
-    const r = patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), undefined, false, url)
-    expect(r.patchedUrl).toBe(true)
-    const text = Buffer.from(r.dex).toString("latin1")
-    expect(text.includes(url)).toBe(true)
-    // 128B 标记(DS_SRV_URL + 118 个 #)必须整体消失——部分命中不算补丁成功
-    expect(text.includes("DS_SRV_URL")).toBe(false)
-    // 尾部以 # 补齐到 128 字符(URL 42 + 填充 86)
-    const i = text.indexOf(url)
-    expect(text.slice(i + url.length, i + url.length + 4)).toBe("####")
-  })
-
-  test("挑战 URL 非法:含 # / 非 https / 超长直接抛错(不写坏 DEX)", () => {
-    expect(() => patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), undefined, false, "http://a.example.com")).toThrow(/https/)
-    expect(() => patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), undefined, false, "https://a#b.com")).toThrow(/#/)
-    expect(() => patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), undefined, false, `https://${"a".repeat(200)}.com`)).toThrow(/128/)
-  })
-
-  test("挑战 URL 非法:非 ASCII(IDN 域名)直接抛错——字节长 ≠ 字符长,padEnd 会写坏 DEX", () => {
-    expect(() => patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), undefined, false, "https://例え.jp/part3")).toThrow(/ASCII/)
-  })
-
-  test("假阳性防护:仅含标记前 32B 子串的 DEX 不得报 patchedUrl", () => {
-    // 构造只有 32B 部分标记的合成 DEX——旧 findMarker(硬编码 32B 比对)会误报 true
-    const partial = new Uint8Array(64)
-    partial.set(Buffer.from("DS_SRV_URL" + "#".repeat(22)), 0) // 恰为 128B 标记的前 32B
-    const r = patchLoaderDexKeys(partial, randomBytes(32), randomBytes(32), undefined, false, "https://x.example.com")
-    expect(r.patchedUrl).toBe(false)
   })
 })
 

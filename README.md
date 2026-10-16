@@ -40,7 +40,7 @@ droidseal --version
 
 `droidseal <input.apk> --output <dir> --cert-sha256 <sha256> --keystore <jks> --ks-alias <alias> --ks-pass <pass> --key-pass <pass>`
 
-Runtime-hardens a release APK: DEX payload encryption (AES-256-GCM, per-entry HKDF-derived keys), a randomized bootstrap shell (dual-DEX: a plaintext stub loads an encrypted loader from assets), shell entry-class / container-magic / meta-key randomization per build, method code-item extraction, and optional NDK split-key part2 relocation into a native library. Every build emits an honest findings report — anything not implemented is reported as a finding, never claimed as protection.
+Runtime-hardens a release APK: DEX payload encryption (AES-256-GCM, per-entry HKDF-derived keys), a randomized bootstrap shell (dual-DEX: a plaintext stub loads an encrypted loader from assets), shell entry-class / container-magic / meta-key randomization per build, and method code-item extraction. Every build emits an honest findings report — anything not implemented is reported as a finding, never claimed as protection.
 
 **AI-era hardening layers** (designed so tampering produces wrong keys, not warnings — nothing for a tool to "read and bypass"):
 
@@ -54,10 +54,8 @@ Runtime-hardens a release APK: DEX payload encryption (AES-256-GCM, per-entry HK
 | `--cert-sha256 <hex>` | signing-cert fingerprint; keys derive from it — **re-signing with a different key breaks decryption by design** |
 | `--no-random-names` | keep fixed shell identifiers (debugging only) |
 | `--no-triple-entry` | skip extra shell entry hooks |
-| `--keystore-bind` | seal key part1 with Android Keystore after first run — reinstall/device change invalidates it |
-| `--challenge-url <url>` | server-side challenge (opt-in): key part3 is stripped from the APK and served from your HTTPS endpoint after verifying the caller's manifest hash; builds emit `server-challenge.json` for deployment — **losing that file makes the build permanently undecryptable**. Reference server: `scripts/challenge-server.ts`. **Honest caveat**: the manifest hash is publicly computable from the APK, so this check is *not* authentication — it only stops a *different* APK from grabbing this build's part3. Anyone holding both the APK and `server-challenge.json` can reconstruct the key offline; treat that file as key material (store offline, never commit it). |
 
-**Expectation management**: hardening raises reverse-engineering cost; it does not make reversing impossible. On rooted devices with Frida, in-memory DEX dumps cannot be fully prevented by any offline packer — the layers above shrink the window and poison tampered environments, but a sufficiently skilled attacker with sustained physical access still wins eventually. `minSdk < 26` falls back to a file-backed `DexClassLoader` (still works, slightly weaker isolation). The server challenge is rate-limitable but its endpoint availability becomes a runtime dependency (offline devices cannot decrypt). Real-device install is the only authoritative acceptance test.
+**Expectation management**: hardening raises reverse-engineering cost; it does not make reversing impossible. On rooted devices with Frida, in-memory DEX dumps cannot be fully prevented by any offline packer — the layers above shrink the window and poison tampered environments, but a sufficiently skilled attacker with sustained physical access still wins eventually. `minSdk < 26` falls back to a file-backed `DexClassLoader` (still works, slightly weaker isolation). Real-device install is the only authoritative acceptance test.
 
 ## Platform & status
 
@@ -73,12 +71,12 @@ Android security tooling splits into two tracks: **audit** (MobSF, AndroBugs, AP
 | Track | Closest peers | What DroidSeal adds |
 |---|---|---|
 | Audit | MobSF (deepest analysis, ~19k★), AndroBugs, APKiD | Audit findings drive **fixes in the same toolchain**: audit → remediation report → R8 → hardening → re-sign → re-verify, with a CycloneDX SBOM and release-evidence chain (releaseDecision / remediation). MobSF stops at the report. No dynamic analysis / taint analysis / iOS — use MobSF for those. |
-| Hardening (open source) | dpt-shell (method-level), nmmp (VMP), XopProtector | **Keyed defenses**: integrity anchors and anti-analysis votes fold into per-entry key derivation (P0-A/B/C, P1) — patching detection code restores the *correct* key, but attaching Frida without patching derives *wrong* keys. Mainstream shells detect-and-warn; bypassing the check costs nothing. Also: key sharding (part2 → SO, optional part3 → server), Keystore device binding, honest findings. |
+| Hardening (open source) | dpt-shell (method-level), nmmp (VMP), XopProtector | **Keyed defenses**: integrity anchors and anti-analysis votes fold into per-entry key derivation (P0-A/B/C, P1) — patching detection code restores the *correct* key, but attaching Frida without patching derives *wrong* keys. Mainstream shells detect-and-warn; bypassing the check costs nothing. Also: key sharding, honest findings. |
 | Hardening (commercial) | DexGuard, DexProtector, 360 加固保 | Fully **offline** (code never leaves your machine — the main reason teams pick open-source hardening over cloud services), auditable behavior, no per-app pricing. Trade-off: no VMP/white-box crypto, less battle-tested, no SLA. |
 
 **Where DroidSeal does NOT compete (honest boundaries)**:
 
-- Need VMP-grade protection that survives a memory dump of the master key? Use nmmp or DexGuard — DroidSeal ships a VMP-lite layer for (I)I leaf methods (device-verified execution semantics), but explicitly does not invest in white-box AES or full-instruction-set VM protection; on rooted devices with sustained physical access, a sufficiently skilled attacker eventually wins.
+- Need VMP-grade protection that survives a memory dump of the master key? Use nmmp or DexGuard — DroidSeal does not ship a VMP layer in this release and explicitly does not invest in white-box AES or full-instruction-set VM protection; on rooted devices with sustained physical access, a sufficiently skilled attacker eventually wins.
 - Doing malware triage or dynamic behavior analysis? Use MobSF + APKiD — DroidSeal only audits and hardens, it never sandboxes.
 - Need contractual support/SLA for a high-stakes product? The project is early (real-device acceptance, independent security review, and community size are all still ahead of it) — commercial vendors are the safer bet there.
 
@@ -105,8 +103,7 @@ Numbers below come from reproducible harnesses in [`benchmark/`](benchmark/READM
 | DEX payload encryption (AES-256-GCM, HKDF, keyed anchors P0-A/B/C) | shipped; emulator-accepted (SEC-010/011/012 fixed via real-device loop) |
 | Method extraction (code-item hollowing) + lazy restoration | shipped; fail-open fallback to full restore |
 | String encryption with call-site rewrite (MUTF-8 safe ciphertext + checksum recompute) | shipped; apktool fail-closed on write-back |
-| VMP-lite | shipped for the wired subset: (I)I leaf methods compile to VM bytecode embedded in the shell SO, registered via `RegisterNatives` at runtime; device-verified on API 26 x86_64 (V1 registration 5/5 + V2 execution semantics: `vmLeaf(21)=120` matches ground truth) — `vmProtected` reports `true` only when the bridge+payload SO is actually compiled and injected into the APK (honest evidence gate); non-(I)I methods keep stub+lazy-restore; wider API matrix (API 24–35) not yet run |
-| Keyed defenses (integrity anchor / environment gate / key sharding / server challenge) | shipped, with honest caveats in the hardening section below |
+| Keyed defenses (integrity anchor / environment gate / key sharding) | shipped, with honest caveats in the hardening section below |
 
 **Honest boundaries of the numbers**: TaintBench line numbers and jadx line numbers are different sources (230 endpoints, only 6 exact) — connected-level matching therefore offers a strict tier (line ±2, historically 0) and a lenient tier (class-stem alignment, 66/249); the lenient tier must never be quoted alone. Obfuscated GT method names (`i`, 31 occurrences) are recovered only when the wrapping method body contains exactly one known source/sink API; ambiguous cases are dropped, not guessed.
 
@@ -148,7 +145,7 @@ A defensive tool: by default it does not unpack, pack, or inject hooks / anti-de
 
 ### Self-developed vs third-party calls
 
-- **Self-developed** (business core): `src/core` (139 modules — ZIP/DEX/ELF/ARSC/AXML parsing and audit, pipeline orchestration, signing strategy, release gate, taint dataflow, VMP-lite compiler, JNI dynamic-register recovery), `src/ui` (TUI + i18n), the anti-debug stub, `scripts` (build/release/gate/bench scripts), and the dual launchers;
+- **Self-developed** (business core): `src/core` (ZIP/DEX/ELF/ARSC/AXML parsing and audit, pipeline orchestration, signing strategy, release gate, taint dataflow, JNI dynamic-register recovery), `src/ui` (TUI + i18n), the anti-debug stub, `scripts` (build/release/gate/bench scripts), and the dual launchers;
 - **Third-party** (rendering/build layer): OpenTUI (terminal rendering), Solid.js (reactive UI), Terser (build minification, optional web JS only), TypeScript/Bun (toolchain), and external Android tools (keytool/Gradle/zipalign/apksigner/aapt — orchestrated through self-developed discovery and verification).
 
 ### Pipeline visualization (self/third-party per step)

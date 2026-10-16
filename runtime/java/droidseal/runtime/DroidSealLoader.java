@@ -204,98 +204,6 @@ public final class DroidSealLoader {
     /** 壳入口调用:执行完整还原链,成功后 getClassLoader() 返回原始 DEX 的类加载器。
      *  soName 非 null 时优先经 JNI 从壳 SO 获取 part2(Split-Key 异位存放,纯 Java 层脚本失效);
      *  SO 不可用(NDK 缺失降级)时回退 KEY_PART2 静态字段。 */
-    // ── Android Keystore 设备绑定(可选,--keystore-bind)──────────────────
-    // 首次成功解密后:part1 用 Keystore 硬件密钥(AES-GCM,不可导出)加密封存到
-    // 私有目录,并抹掉内存/字段中的明文;后续启动优先从 Keystore 解包。
-    // 卸载重装/换机 → 封存数据随私有目录消失或解包失败 → init 失败 fail-closed。
-    // 如实边界:首次启动前密钥仍在 loader DEX 内(离线单机无法避免),
-    // 收益是"二次启动后 loader DEX 内不再持有有效密钥"——拷贝 loader DEX 到
-    // 其他设备/重打包后无法解密容器(Keystore 密钥不可迁移)。
-    private static final String KS_ALIAS = "ds_bind_key";
-    private static final String KS_SEAL_FILE = "ds_seal.bin";
-    private static boolean keystoreBindingEnabled = false;
-
-    // 构建期开关标记:末字符 '0'=关闭,'1'=启用(--keystore-bind 时由流水线等长替换)
-    public static final String KS_BIND_FLAG = "KS_BIND_FLAG_0";
-    // P2 服务端挑战 URL 占位符(128 字符 = TS MARK_URL 严格一致:DS_SRV_URL + 118 个 '#'):
-    // 构建期 patchLoaderDexKeys 等长替换为真实 https:// URL(右补 '#')。
-    // 未打补丁 = 纯本地模式,fetchPart3 直接跳过。
-    public static final String SERVER_URL = "DS_SRV_URL######################################################################################################################";
-
-    /** ShellApplication 启动时读取构建期开关标记。 */
-    public static void applyKeystoreBindingFlag() {
-        keystoreBindingEnabled = KS_BIND_FLAG.endsWith("1");
-    }
-
-    private static javax.crypto.SecretKey keystoreKey() throws Exception {
-        android.security.keystore.KeyGenParameterSpec spec = new android.security.keystore.KeyGenParameterSpec.Builder(
-                KS_ALIAS, android.security.keystore.KeyProperties.PURPOSE_ENCRYPT
-                | android.security.keystore.KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256)
-                .build();
-        javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance(
-                android.security.keystore.KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-        kg.init(spec);
-        return kg.generateKey();
-    }
-
-    private static javax.crypto.SecretKey keystoreGet() throws Exception {
-        // android.security.KeyStore 是 @hide API,公开 SDK 编译不可见;用 java.security 门面
-        java.security.KeyStore ks = java.security.KeyStore.getInstance("AndroidKeyStore");
-        ks.load(null);
-        if (!ks.containsAlias(KS_ALIAS)) return null;
-        return (javax.crypto.SecretKey) ks.getKey(KS_ALIAS, null);
-    }
-
-    /** 首次成功解密后调用:part1 用 Keystore 密钥封装写入私有目录,返回是否成功。 */
-    private static boolean sealPart1(byte[] part1) {
-        try {
-            // appContext 未注入(极端时序:setAppContext 未被调用)时不落盘、直接失败——
-            // 封存失败只是回退到嵌入值路径,不能因 NPE 崩溃暴露壳的存在
-            if (appContext == null) return false;
-            javax.crypto.SecretKey key = keystoreGet();
-            if (key == null) key = keystoreKey();
-            javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
-            c.init(javax.crypto.Cipher.ENCRYPT_MODE, key);
-            byte[] sealed = c.doFinal(part1); // Java GCM: ct||tag
-            byte[] iv = c.getIV();
-            java.io.File f = new java.io.File(appContext.getFilesDir(), KS_SEAL_FILE);
-            java.io.FileOutputStream fo = new java.io.FileOutputStream(f);
-            fo.write(iv.length); // 1B IV 长度(恒 12)
-            fo.write(iv);
-            fo.write(sealed);
-            fo.close();
-            return true;
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
-    /** 从私有目录 + Keystore 解包 part1;失败(换机/篡改/未封存)返回 null。 */
-    private static byte[] unsealPart1() {
-        try {
-            javax.crypto.SecretKey key = keystoreGet();
-            if (key == null || appContext == null) return null;
-            java.io.File f = new java.io.File(appContext.getFilesDir(), KS_SEAL_FILE);
-            if (!f.exists()) return null;
-            byte[] data = new byte[(int) f.length()];
-            java.io.FileInputStream fi = new java.io.FileInputStream(f);
-            int total = fi.read(data);
-            fi.close();
-            if (total < 14) return null;
-            int ivLen = data[0] & 0xff;
-            byte[] iv = java.util.Arrays.copyOfRange(data, 1, 1 + ivLen);
-            javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
-            c.init(javax.crypto.Cipher.DECRYPT_MODE, key, new javax.crypto.spec.GCMParameterSpec(128, iv));
-            return c.doFinal(data, 1 + ivLen, total - 1 - ivLen);
-        } catch (Throwable t) {
-            // 换机后封存数据存在但 Keystore 密钥不存在 → 解包失败(设备绑定生效)
-            return null;
-        }
-    }
-
     public static synchronized void init(byte[] keyPart1, byte[] keyPart2, String soName) {
         if (loadedLoader != null) return;
         // 签名自校验已失配:中止初始化,密钥与明文 DEX 永不进入内存。
@@ -305,17 +213,7 @@ public final class DroidSealLoader {
             byte[] container = readContainerAsset();
             if (container == null) return;
             byte[] part2 = fetchPart2(soName, keyPart2);
-            // Keystore 绑定开启时:优先从封存解包 part1(二次启动明文不再来自 DEX);
-            // 解包失败回退嵌入值(首次启动/未封存),成功解密后立即封存并抹掉嵌入值。
             byte[] effPart1 = keyPart1;
-            boolean fromSeal = false;
-            if (keystoreBindingEnabled && appContext != null) {
-                byte[] unsealed = unsealPart1();
-                if (unsealed != null && unsealed.length == 32) {
-                    effPart1 = unsealed;
-                    fromSeal = true;
-                }
-            }
             int envVote = voteEnvironment() ? 1 : 0;
             // 容器格式(小端):magic12(构建期随机化,与 asset meta 同步写入) + version4 + count4,
             // 条目 = kind4(1=dex, 2=citable) + targetIndex4 + length4 + bytes
@@ -335,23 +233,6 @@ public final class DroidSealLoader {
             // P0-A:重算完整性锚点(自身 APK 的 manifest SHA-256),参与逐条目密钥派生。
             // 构建期有锚而运行时重算失败 → 锚不匹配 → 密钥错 → GCM 静默失败(fail-closed)。
             byte[] anchor = computeIntegrityAnchor();
-            // P2 服务端挑战:URL 已嵌入(仍以 DS_SRV_URL 开头 = 未补丁,跳过)时向服务器取
-            // part3 合入 part1。part3 不在 APK 内——拿到完整 APK 也缺一段密钥;
-            // 离线/被拒 → 解密静默失败。纯本地构建时 fetchPart3 返回 null,零影响。
-            // KS+挑战组合:封存的必须是 pre-XOR 值(part1′)——否则二次启动 unseal 出
-            // 真实 part1 再 XOR 一次 part3 → 密钥错,永久解密失败。
-            byte[] sealValue = null;
-            if (keystoreBindingEnabled && appContext != null && !fromSeal && anchor != null) {
-                // 嵌入值即将被 XOR 原地修改,先拷贝 part1′ 供解密成功后封存
-                sealValue = java.util.Arrays.copyOf(keyPart1, 32);
-            }
-            if (anchor != null) {
-                byte[] p3 = fetchPart3(anchor);
-                if (p3 != null) {
-                    for (int i = 0; i < 32; i++) effPart1[i] ^= p3[i];
-                    java.util.Arrays.fill(p3, (byte) 0);
-                }
-            }
             // P0-C 密钥分片化:master = part1 ^ part2 不再常驻内存——每条目解密时
             // 临时合成、派生完立即清零。任意时刻内存无完整 master,hook/dump 单点
             // 快照拿不到可复用的密钥材料(effPart1/part2 各自只有一半,单独无意义)。
@@ -392,17 +273,6 @@ public final class DroidSealLoader {
             }
             // splitKey part2 用后清零(master 已在循环内逐条目合成后即清,无需在此处理)
             java.util.Arrays.fill(part2, (byte) 0);
-            // Keystore 绑定:首次解密成功 → 封存 pre-XOR part1′(挑战模式取片成功时嵌入值
-            // 已被原地 XOR 成真实 part1,必须封存拷贝出来的 part1′)并抹掉嵌入值(嵌入字段
-            // 填 0 后 xorKey(全零, part2) 必然失败,后续启动只能走 unsealPart1——设备绑定生效)。
-            // 二次启动:unseal → part1′ → XOR part3 → 真实 part1,与首次启动路径一致。
-            if (keystoreBindingEnabled && appContext != null && !fromSeal) {
-                byte[] toSeal = sealValue != null ? sealValue : effPart1;
-                if (sealPart1(toSeal)) {
-                    java.util.Arrays.fill(keyPart1, (byte) 0);
-                }
-                if (sealValue != null) java.util.Arrays.fill(sealValue, (byte) 0);
-            }
             if (effPart1 != keyPart1) java.util.Arrays.fill(effPart1, (byte) 0);
 
             if (dexList.isEmpty()) return;
@@ -570,62 +440,6 @@ public final class DroidSealLoader {
      *  找不到 InMemoryDexClassLoader 里的 app 类,必须经 loadClass 定位。返回成功注册数;
      *  SO 未加载/无 VM 方法时调用方 fail-open(异常吞掉,不阻断启动)。 */
     static native int dsvmRegisterAll(ClassLoader appLoader);
-
-    /** P2 服务端挑战:向 SERVER_URL(构建期嵌入)POST manifestSha256,取回 part3(hex 64 字符 → 32B)。
-     *  服务器按 manifest 摘要校验后发放——其他 APK / 被篡改的包拿不到本构建的 part3。
-     *  子线程执行(init 在 attachBaseContext 主线程,直接联网抛 NetworkOnMainThread);
-     *  超时/失败返回 null → master 还原失败 → 解密静默失败(fail-closed,不崩溃不降级)。
-     *  响应只解析 "part3":"<64 hex>" 字段,不引入 JSON 依赖。 */
-    private static byte[] fetchPart3(final byte[] manifestSha256) {
-        final String url = SERVER_URL;
-        // 占位符未替换(仍以 DS_SRV_URL 开头)= 纯本地模式。
-        // 不能用 indexOf('#') 判定:合法补丁后的 URL 右侧以 '#' 补齐到 128 字符,必含 '#'。
-        if (url.startsWith("DS_SRV_URL") || !url.startsWith("https://")) return null;
-        final java.util.concurrent.atomic.AtomicReference<byte[]> out = new java.util.concurrent.atomic.AtomicReference<byte[]>(null);
-        Thread t = new Thread(new Runnable() {
-            @Override public void run() {
-                try {
-                    final char[] HEX = "0123456789abcdef".toCharArray();
-                    StringBuilder mh = new StringBuilder();
-                    for (byte b : manifestSha256) { mh.append(HEX[(b >> 4) & 0xf]).append(HEX[b & 0xf]); }
-                    String body = "manifestSha256=" + mh;
-                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-                    conn.setRequestMethod("POST");
-                    conn.setDoOutput(true);
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
-                    conn.setFixedLengthStreamingMode(body.getBytes("UTF-8").length);
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                    java.io.OutputStream os = conn.getOutputStream();
-                    os.write(body.getBytes("UTF-8"));
-                    os.close();
-                    if (conn.getResponseCode() != 200) return;
-                    java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
-                    StringBuilder sb = new StringBuilder();
-                    char[] buf = new char[2048];
-                    int n;
-                    while ((n = br.read(buf)) > 0) sb.append(buf, 0, n);
-                    br.close();
-                    // 提取 "part3":"<hex>"
-                    String resp = sb.toString();
-                    int k = resp.indexOf("\"part3\"");
-                    if (k < 0) return;
-                    int q1 = resp.indexOf('"', resp.indexOf(':', k) + 1);
-                    int q2 = resp.indexOf('"', q1 + 1);
-                    if (q1 < 0 || q2 < 0 || q2 - q1 - 1 != 64) return;
-                    String hex = resp.substring(q1 + 1, q2);
-                    byte[] p3 = new byte[32];
-                    for (int i = 0; i < 32; i++) {
-                        p3[i] = (byte) ((Character.digit(hex.charAt(i * 2), 16) << 4) | Character.digit(hex.charAt(i * 2 + 1), 16));
-                    }
-                    out.set(p3);
-                } catch (Throwable ignored) {}
-            }
-        });
-        t.start();
-        try { t.join(3500); } catch (InterruptedException ignored) {}
-        return out.get();
-    }
 
     // ── per-entry 密钥派生(HKDF-SHA256,与 TS 侧 deriveEntryKey 严格一致)──
 

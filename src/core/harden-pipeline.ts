@@ -21,20 +21,14 @@ import { randomizeStubIdentifiers, encryptLoaderDex } from "./stub-encapsulate.t
 import { generateShellLoaderFiles, type ShellLoaderConfig, buildShellLoaderFindings } from "./dex-shell-loader.ts"
 import { processAllSoFiles, type SoProcessConfig } from "./so-process.ts"
 import { processAllAssets, DEFAULT_RESOURCE_CONFIG, type ResourceProcessConfig } from "./resource-process.ts"
-import { processStrings, DEFAULT_STRING_PROCESS_CONFIG, type StringProcessConfig } from "./string-process.ts"
 import { generateRuntimeProtectionFiles, DEFAULT_RUNTIME_CONFIG, buildRuntimeProtectionFindings, type RuntimeProtectionConfig } from "./runtime-protection.ts"
-import { generateVmInterpreterSmali, DEFAULT_VM_CONFIG, buildVmpFindings } from "./vmp-protection.ts"
 import { repackApk, type SigningConfig, type RepackConfig } from "./apk-repack.ts"
 import { generateResourceDecryptorSmali } from "./resource-string-protection.ts"
 import { generateNativeShellFiles, buildNativeShellFindings, patchSoTextCrc, type NativeShellConfig } from "./native-shell.ts"
 import { compileAndMergeSmali } from "./smali-merge.ts"
 import { buildPayloadContainer, decryptContainerEntry, encryptContainerEntryDerived, decryptContainerEntryDerived, chainSeed, CONTAINER_ASSET_NAME, type ContainerEntry } from "./payload-container.ts"
-import { generateSplitKeyInjectionData } from "./split-key-inject.ts"
 import { recompileAndInjectManifest } from "./axml-recompile.ts"
 import { injectRuntimeProtection, generateRuntimeInitCall } from "./runtime-inject.ts"
-import { runStringWritebackCycle } from "./string-callsite-rewrite.ts"
-import { compileMethodToVm, serializeVmPayload, buildVmpCompilerFindings, compileVmSubset, generateVmInterpreterC, generateVmRegisterBridgeC } from "./vmp-compiler.ts"
-import { markVmMethodsNative, resolveVmBridgeEntries } from "./vmp-native-mark.ts"
 import { compileNativeSo, generateCmakeListsForShell } from "./native-so-compile.ts"
 import { generateEnhancedRuntimeSmali, generateEnhancedNativeC, buildEnhancedGuardFindings } from "./enhanced-guard.ts"
 import { buildCodeItemTable, encryptCodeItemTable, generateCodeItemRestoreHeader } from "./codeitem-table.ts"
@@ -56,22 +50,14 @@ export interface HardenConfig {
   enableMethodHollow: boolean
   enableSoEncryption: boolean
   enableResourceEncryption: boolean
-  enableStringEncryption: boolean
   enableRuntimeProtection: boolean
-  enableVmProtection: boolean
-  enableSplitKey: boolean
   enableTripleEntry: boolean
   enableRandomNames: boolean
-  /** Android Keystore 设备绑定:part1 首次运行后用 Keystore 硬件密钥封装,卸载/换机即失效(可选) */
-  enableKeystoreBinding: boolean
   classExclusionPatterns: string[]
   runtimeConfig?: RuntimeProtectionConfig | undefined
   signingConfig?: import("./apk-repack.ts").SigningConfig | undefined
   /** 默认 false(经典模式):结束清理 native/smali 等过程目录,只留最终 APK;true(测试学习模式)保留 */
   keepIntermediates?: boolean
-  /** P2 服务端挑战(可选):启用后密钥第三段 part3 不进 APK,运行时向该 URL 取片;
-   *  构建产物旁生成 server-challenge.json(含 part3 与校验规则),运营者部署到该 URL。 */
-  challengeUrl?: string
 }
 
 export const DEFAULT_HARDEN_CONFIG: Partial<HardenConfig> = {
@@ -80,13 +66,9 @@ export const DEFAULT_HARDEN_CONFIG: Partial<HardenConfig> = {
   enableMethodHollow: true,
   enableSoEncryption: true,
   enableResourceEncryption: true,
-  enableStringEncryption: true,
   enableRuntimeProtection: true,
-  enableVmProtection: false, // VMP 默认关闭(性能影响大)
-  enableSplitKey: true,
   enableTripleEntry: true,
   enableRandomNames: true,
-  enableKeystoreBinding: false, // 换机/重装密钥轮换语义,默认关闭由用户显式开启
   runtimeConfig: DEFAULT_RUNTIME_CONFIG,
 }
 
@@ -106,9 +88,7 @@ export interface HardenResult {
     dexProtected: boolean
     soProtected: boolean
     resourceProtected: boolean
-    stringProtected: boolean
     runtimeProtected: boolean
-    vmProtected: boolean
     totalFindings: number
     /** 加固覆盖率指标(P2,报告一等指标):方法抽取覆盖(有代码路径背书,真实百分比);
      *  dex2cWired 如实报桥接是否实际接线(当前 generateDex2cBridge 无调用点 → false,
@@ -128,7 +108,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   const mappingRecords: MappingRecord[] = [] // P3 mapping.txt 数据源(壳名/标识符随机化映射)
   let keyMaterial: KeyMaterial | undefined
   const containerEntries: ContainerEntry[] = []
-  let stringWritebackApplied = false // encryptAndReplaceStrings 接线后置 true
+  let soInjected = false // 壳 SO 编译并注入 APK 后置 true(native 壳链路证据)
   let dexResult: import("./dex-process.ts").DexProcessResult | undefined
   let outputApk: string | undefined
 
@@ -199,29 +179,6 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   }
 
   // ──────────────────────────────────────────────────────────────────────
-  // Step 1.7: 字符串加密写回(StringFog 式调用点改写,唯一可靠路径)
-  // 原位字节写回已被证伪:const-string 仍引用原 string_ids,写回密文=运行时拿到乱码。
-  // 此处走 apktool 解码→smali 改写→重编译;工具链缺失/任一步失败 → applied=false,
-  // 完全不写回(fail-closed),stringWritebackApplied 保持 false,门禁如实报 not-wired。
-  // ──────────────────────────────────────────────────────────────────────
-  try {
-    const cycle = await runStringWritebackCycle(config.inputApk, packageName, "", config.outputDir)
-    findings.push(...cycle.findings)
-    if (cycle.applied && cycle.dexFiles && cycle.dexFiles.length > 0) {
-      apkContents.dexFiles = cycle.dexFiles.map((d) => ({ name: d.name, bytes: d.bytes, compressed: false, compressionMethod: 0, crc32: 0 }))
-      stringWritebackApplied = true
-    }
-  } catch (swErr) {
-    findings.push({
-      severity: "medium", confidence: "high", code: "STRING_WRITEBACK_ERROR",
-      title: "字符串加密写回异常,未生效(如实降级)",
-      detail: `闭环执行异常: ${swErr instanceof Error ? swErr.message : String(swErr)}。原 DEX 未改动。`,
-      recommendation: "检查工具链环境;失败时产物走原路径(无字符串加密)。",
-      evidence: String(swErr).slice(0, 120),
-    })
-  }
-
-  // ──────────────────────────────────────────────────────────────────────
   // Step 2: 密钥生成
   // ──────────────────────────────────────────────────────────────────────
   let apkBytes: Uint8Array
@@ -230,15 +187,15 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   } catch (readErr) {
     findings.push({ severity: "high", confidence: "high", code: "APK_READ_FAILED", title: "APK 文件读取失败", detail: String(readErr), recommendation: "确认 APK 路径正确且文件可读。", evidence: String(readErr).slice(0, 200) })
     await cleanupIntermediates()
-    return { success: false, findings, soResults: [], resourceResults: [], generatedFiles: [], summary: { dexProtected: false, soProtected: false, resourceProtected: false, stringProtected: false, runtimeProtected: false, vmProtected: false, totalFindings: findings.length, methodHollow: { hollowed: 0, total: 0, pct: 0, skipped: 0 }, dex2cWired: false } }
+    return { success: false, findings, soResults: [], resourceResults: [], generatedFiles: [], summary: { dexProtected: false, soProtected: false, resourceProtected: false, runtimeProtected: false, totalFindings: findings.length, methodHollow: { hollowed: 0, total: 0, pct: 0, skipped: 0 }, dex2cWired: false } }
   }
   const apkSha256 = createHash("sha256").update(apkBytes).digest("hex")
   // configHash:将密钥派生与本次加固配置绑定(恒空串的降级已移除;
   // 运行时密钥经 splitKey parts 嵌入,不依赖 configHash,故仅构建期生效)
   const configHash = createHash("sha256").update(JSON.stringify(config)).digest("hex")
-  keyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "dex", config.enableSplitKey, configHash)
-  const soKeyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "so", config.enableSplitKey, configHash)
-  const resKeyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "resource", config.enableSplitKey, configHash)
+  keyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "dex", true, configHash)
+  const soKeyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "so", true, configHash)
+  const resKeyMaterial = generateKeyMaterial(config.certSha256, apkSha256, "resource", true, configHash)
 
   // ──────────────────────────────────────────────────────────────────────
   // Step 2.5: Loader DEX 预处理(类名随机化)——Step 3 manifest 与 Step 13 注入共用
@@ -444,7 +401,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   if (config.enableDexEncryption || config.enableMethodHollow) {
     const dexConfig: DexProcessConfig = {
       algorithm: config.algorithm, enableMethodHollow: config.enableMethodHollow,
-      enableDexEncryption: config.enableDexEncryption, enableSplitKey: config.enableSplitKey,
+      enableDexEncryption: config.enableDexEncryption,
       classExclusionPatterns: config.classExclusionPatterns, certSha256: config.certSha256, apkSha256,
     }
     try {
@@ -490,7 +447,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
         severity: "info", confidence: "high", code: "MAPPING_TXT_EXPORTED",
         title: `映射产物 mapping.txt 已生成(${mappingRecords.length} 条)`,
         detail: "壳类名/固定标识符随机化的 原值→新值 映射(ProGuard mapping 同型)——崩溃栈与日志还原用。明文对应混淆前名,随该构建归档;提交公开仓库会废掉随机化的静态定位效果。",
-        recommendation: "与 server-challenge.json 同级对待:离线归档、严禁公开。",
+        recommendation: "与密钥材料同级对待:离线归档、严禁公开。",
         evidence: `records=${mappingRecords.length}`,
       })
     }
@@ -565,7 +522,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     packageName, originalApplication, randomPackageName: randomPkg, randomSoName: randomSo,
     tripleEntry: { packageName, originalApplication, useAppComponentFactory: config.enableTripleEntry,
       useContentProvider: config.enableTripleEntry, useApplication: true },
-    algorithm: config.algorithm, useSplitKey: config.enableSplitKey,
+    algorithm: config.algorithm, useSplitKey: true,
     classExclusionPatterns: config.classExclusionPatterns,
   }
   const shellFiles = generateShellLoaderFiles(shellConfig)
@@ -602,87 +559,12 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   }
 
   // ──────────────────────────────────────────────────────────────────────
-  // Step 8: 字符串加密(DEX string_data 分析 + 解密器生成)
-  // ──────────────────────────────────────────────────────────────────────
-  if (config.enableStringEncryption && dexResult) {
-    // 从处理后的 DEX 中提取字符串池(复用 dex-scan 的 extractDexStrings)
-    const { extractDexStrings } = await import("./dex-scan.ts")
-    const allStrings: string[] = []
-    for (const dex of dexResult.processedDex) {
-      try { allStrings.push(...extractDexStrings(dex).strings) } catch { /* skip */ }
-    }
-    const strConfig: StringProcessConfig = { ...DEFAULT_STRING_PROCESS_CONFIG, enableStringEncryption: true }
-    const strResult = processStrings(allStrings, packageName, strConfig, keyMaterial)
-    if (strResult.encryptedCount > 0) {
-      generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealStringDecryptor.smali`, content: strResult.decryptorSmali })
-    }
-    findings.push(...strResult.findings)
-    // 如实标注:字符串加密仅生成解密器参考产物,string_ids 未实际加密写回
-    findings.push({
-      severity: "medium", confidence: "high", code: "STRING_ENCRYPTION_NOT_IMPLEMENTED",
-      title: "字符串加密未实际写回 DEX(not-implemented)",
-      detail: `encryptAndReplaceStrings 尚无调用点:string_ids 未加密替换,仅生成了 DroidSealStringDecryptor 参考产物(${strResult.encryptedCount} 个字符串处于分析状态)。summary.stringProtected 如实报 false。`,
-      recommendation: "不要基于本项做发布安全决策;等待 string writeback 接线后重新加固。",
-      evidence: `analyzed=${strResult.encryptedCount} applied=0`,
-    })
-  }
-
-  // ──────────────────────────────────────────────────────────────────────
   // Step 9: 运行时保护 Smali 生成
   // ──────────────────────────────────────────────────────────────────────
   if (config.enableRuntimeProtection && config.runtimeConfig) {
     const rtFiles = generateRuntimeProtectionFiles(packageName, config.runtimeConfig)
     generatedFiles.push(...rtFiles)
     findings.push(...buildRuntimeProtectionFindings(rtFiles, config.runtimeConfig))
-  }
-
-  // ──────────────────────────────────────────────────────────────────────
-  // Step 10: VMP 保护(可选)
-  // ──────────────────────────────────────────────────────────────────────
-  // soInjected/vmEvidence 在 Step 12.1 赋值,此处声明供 VMP finding 引用
-  let soInjected = false
-  let vmEvidence = 0
-  if (config.enableVmProtection) {
-    const vmSmali = generateVmInterpreterSmali(packageName, DEFAULT_VM_CONFIG)
-    generatedFiles.push({ name: `smali/${packageName.replace(/\./g, "/")}/DroidSealVmInterpreter.smali`, content: vmSmali })
-    // 方法级 VM 子集:编译+ACC_NATIVE 标记已在 processDexFile 内完成(挖空后、加密前,
-    // payload 与壳 DEX 一致)——此处消费接线产物:payload 落盘 + 桥 C/解释器 C 随 SO 编译链落盘。
-    // 诚实边界:标记成功 ≠ 运行时生效——RegisterNatives 需真机验收(链路 3),
-    // vmProtected 证据(真机已验证的链路):payload 以 C 数组嵌入 vm_bridge.c、
-    // 桥 C/解释器 C 随壳 SO 编译且 SO 注入 APK(soInjected)、≥1 个 (I)I 方法置
-    // ACC_NATIVE——四者齐备即有产物背书;注册与执行语义已过 device-test.sh
-    // --vm-mode 真机断言(API 26,V1 注册 5/5 + V2 执行结果 vmLeaf(21)=120)。
-    // 证据缺失(如 NDK 缺失 SO 未注入)仍如实降级报 false。
-    // 注意:vmProtected 表示"VM 执行链路已接线且有产物背书",不等于全方法 VM 化——
-    // 仅签名恰为 (I)I 的叶子方法走 VM 路径,其余保持 stub+惰性还原(如实口径)。
-    // 证据计数在 Step 12.1(soInjected 已知)处写入 vmEvidence。
-    const vmInfo = dexResult?.vmSubset
-    const hollow = dexResult?.hollowResult
-    if (hollow && vmInfo && vmInfo.entries.length > 0) {
-      const subset = vmInfo.subset
-      const vmPayload = serializeVmPayload(subset.compiled)
-      generatedFiles.push({ name: "native/vm-payload.bin.b64", content: Buffer.from(vmPayload).toString("base64") })
-      // 里程碑 B 执行端+桥:随 native 壳编译链落盘(链路 2 接线)
-      generatedFiles.push({ name: "native/vm_interpreter.c", content: generateVmInterpreterC() })
-      generatedFiles.push({ name: "native/vm_bridge.c", content: generateVmRegisterBridgeC(vmInfo.entries.map((e) => ({ stubName: e.methodName, signature: e.signature, methodIdx: e.methodIdx, className: e.className })), jniClassPath.replace(/\//g, "."), vmPayload) })
-      findings.push(...buildVmpCompilerFindings(subset.compiled.length, vmPayload.length))
-      findings.push({
-        severity: "info", confidence: "high", code: "VMP_NATIVE_MARKED_NOT_VERIFIED",
-        title: `VMP 接线完成:${vmInfo.entries.length} 个 (I)I 叶子方法已 native 化(SO 注入${soInjected ? "成功" : "失败,如实降级"})`,
-        detail: `VM 子集编译 ${subset.compiled.length} 个方法(payload ${vmPayload.length}B,initial_reg 按 code_item 头解析),其中 ${vmInfo.entries.length} 个签名恰为 (I)I 已置 ACC_NATIVE+code_off=0(等长补丁,${vmInfo.marked.length} 成功/${vmInfo.skippedMark.length} 跳过),桥 C+解释器 C+嵌入 payload 随壳 SO 编译${soInjected ? "并注入 APK" : "(SO 未注入,vmProtected 如实降级)"}。排除 ${vmInfo.excluded.length} 个非 (I)I 方法(保持 stub+惰性还原)。注册链路与执行语义已过 device-test.sh --vm-mode 真机断言(API 26:V1 注册 5/5,V2 执行结果 vmLeaf(21)=120 与原版一致)。`,
-        recommendation: soInjected ? "无需处理;新 ABI/新 API 矩阵可用 device-test.sh --vm-mode 复验。" : "检查壳 SO 编译日志(NDK 缺失或 CMake 失败),SO 注入成功前 vmProtected 不计入防护。",
-        evidence: `compiled=${subset.compiled.length} marked=${vmInfo.marked.length} excluded=${vmInfo.excluded.length} soInjected=${soInjected}`,
-      })
-    } else if (hollow && hollow.stubMethods.length > 0 && (!vmInfo || vmInfo.subset.compiled.length === 0)) {
-      findings.push({
-        severity: "medium", confidence: "high", code: "VMP_SUBSET_EMPTY",
-        title: "方法级 VM 子集编译零产出(如实降级)",
-        detail: `抽取的 ${hollow.stubMethods.length} 个方法全部翻译失败(操作码覆盖不足)或无 (I)I 可注册方法——不产出半成品 payload,不置 ACC_NATIVE。`,
-        recommendation: "扩展 translateDalvikInstruction 的操作码覆盖后重试;fixture 需补 (I)I 叶子方法。",
-        evidence: `stubs=${hollow.stubMethods.length}`,
-      })
-    }
-    findings.push(...buildVmpFindings(true, false, false))
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -712,11 +594,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     enableAntiDump: true,
     enableAntiDebug: true,
     enableArtHook: config.enableMethodHollow,
-    // Split-Key part2 异位注入 SO:密钥从"一个 DEX 字段"变为"SO 内嵌数组"
-    keyPart2Hex: keyMaterial.splitKey ? Buffer.from(keyMaterial.splitKey.part2).toString("hex") : undefined,
     jniClassPath,
-    // VMP 里程碑 B:VM 解释器+桥随壳 SO 编译(有已注册桥表条目才开)
-    includeVm: Boolean(dexResult?.vmSubset && dexResult.vmSubset.entries.length > 0),
   }
   const nativeFiles = generateNativeShellFiles(nativeConfig)
   generatedFiles.push(...nativeFiles)
@@ -753,11 +631,6 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
         apkContents.soFiles.push({ name: `lib/${so.abi}/${randomSo}`, bytes: tic.bytes, compressed: true, compressionMethod: 8, crc32: 0 })
       }
       soInjected = true
-      // vmProtected 证据:VM 化方法数(桥+嵌入 payload 已随壳 SO 编译并注入 APK;
-      // 注册/执行语义已过 device-test.sh --vm-mode 真机断言)
-      if (dexResult?.vmSubset && dexResult.vmSubset.entries.length > 0 && config.enableVmProtection) {
-        vmEvidence = dexResult.vmSubset.entries.length
-      }
       if (textCrcPatched > 0) {
         findings.push({
           severity: "info", confidence: "high", code: "NATIVE_TEXT_CRC_EMBEDDED",
@@ -817,40 +690,10 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   }
 
   // Step 13 前置 1: 注入 loader DEX 为 classesN.dex(壳入口已在 Step 2.5 确定最终类名)
-  // P2:挑战模式下 part3 分裂在此发生,供 repack 成功后写 server-challenge.json
-  let challengePart3: Uint8Array | undefined
   if (loaderDexRaw) {
     // 密钥两段:XOR 后 = AES-256 密钥(与 ShellApplication.KEY_PART1/KEY_PART2 严格一致)
     const keyParts = keyMaterial?.splitKey ?? splitKey(keyMaterial?.encryptionKey ?? createHash("sha256").update(apkSha256).digest())
-    // P2 服务端挑战:part1' = part1 ^ part3(part3 不进 APK,由服务器按挑战发放,
-    // 运行时 part1' ^ part2 ^ part3 还原同一 master)。未启用时 part3 = 0,part1' = part1。
-    let part1Final: Uint8Array = keyParts.part1
-    let part3: Uint8Array | undefined
-    if (config.challengeUrl) {
-      part3 = new Uint8Array(randomBytes(32))
-      part1Final = new Uint8Array(32)
-      for (let i = 0; i < 32; i += 1) part1Final[i] = keyParts.part1[i]! ^ part3[i]!
-      challengePart3 = part3
-    }
-    const patchResult = patchLoaderDexKeys(loaderDexRaw, part1Final, keyParts.part2, config.certSha256, config.enableKeystoreBinding, config.challengeUrl)
-    if (config.challengeUrl && !patchResult.patchedUrl) {
-      findings.push({
-        severity: "high", confidence: "high", code: "CHALLENGE_URL_MISSING",
-        title: "服务端挑战 URL 标记未命中(运行时无法取 part3,解密必然失败)",
-        detail: "DS_SRV_URL 占位符未在 loader DEX 中定位到——挑战模式产物将无法解密启动。",
-        recommendation: "重新编译 runtime/java 生成一致的 loader DEX,或去掉 --challenge-url 回退纯本地模式。",
-        evidence: "DS_SRV_URL",
-      })
-    }
-    if (config.enableKeystoreBinding && !patchResult.patchedKsFlag) {
-      findings.push({
-        severity: "medium", confidence: "high", code: "LOADER_KS_FLAG_MISSING",
-        title: "Keystore 绑定开关标记未命中(运行时绑定不生效)",
-        detail: "KS_BIND_FLAG_0 未在 loader DEX 中定位到——设备绑定将不启用,密钥仍常驻 loader DEX。",
-        recommendation: "重新编译 runtime/java 生成一致的 loader DEX。",
-        evidence: "KS_BIND_FLAG_0",
-      })
-    }
+    const patchResult = patchLoaderDexKeys(loaderDexRaw, keyParts.part1, keyParts.part2, config.certSha256)
     if (!patchResult.patchedCert && config.certSha256) {
       findings.push({
         severity: "medium", confidence: "high", code: "LOADER_CERT_PATCH_MISSING",
@@ -1073,29 +916,6 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     await writeFile(filePath, file.content, "utf8")
   }
 
-  // P2 服务端挑战:part3 + 校验锚落盘(不进 APK)。运营者把此文件部署到
-  // --challenge-url 指定的服务端(参考实现 scripts/challenge-server.ts)。
-  if (challengePart3 && config.challengeUrl && integrityAnchor) {
-    const challengeDoc = {
-      version: 1,
-      // 服务器校验规则:请求携带的 manifestSha256 必须与此一致才发放 part3
-      manifestSha256: Buffer.from(integrityAnchor).toString("hex"),
-      certSha256: config.certSha256 ?? null,
-      // part3(hex):客户端 part1' ^ part2 ^ part3 还原 master
-      part3: Buffer.from(challengePart3).toString("hex"),
-      url: config.challengeUrl,
-      note: "此文件必须部署到 url 字段指定的 HTTPS 端点;服务器按 manifestSha256 校验请求后返回 part3 字段原值。丢失此文件 = 该构建永久无法解密,请离线备份。",
-    }
-    await writeFile(path.join(config.outputDir, "server-challenge.json"), JSON.stringify(challengeDoc, null, 2), "utf8")
-    findings.push({
-      severity: "info", confidence: "high", code: "CHALLENGE_ARTIFACT",
-      title: "服务端挑战产物已生成(server-challenge.json)",
-      detail: `part3 已从 APK 中剥离,仅存于 ${path.join(config.outputDir, "server-challenge.json")};APK 内只有 part1' ^ part2,缺少服务器发放的 part3 无法还原密钥。`,
-      recommendation: "将该文件部署到 HTTPS 端点(参考 scripts/challenge-server.ts),并离线备份——丢失即永久不可解密。",
-      evidence: "server-challenge.json",
-    })
-  }
-
   // 覆盖率指标(P2,报告一等指标):方法抽取有代码路径背书(hollowResult 真实统计)→
   // 报真实百分比;Dex2C 桥(generateDex2cBridge)仅有定义无调用点 → 如实报 not-wired,
   // 与 stringProtected 同口径:summary 不虚报未接线的配置开关。
@@ -1108,11 +928,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     { key: "dexProtected", configEnabled: config.enableDexEncryption || config.enableMethodHollow, evidenceCount: (dexResult?.encryptedDex ? 1 : 0) + mhHollowed },
     { key: "soProtected", configEnabled: config.enableSoEncryption, evidenceCount: soResults?.length ?? 0 },
     { key: "resourceProtected", configEnabled: config.enableResourceEncryption, evidenceCount: resourceResults?.length ?? 0 },
-    { key: "stringProtected", configEnabled: true, evidenceCount: stringWritebackApplied ? 1 : 0 },
     { key: "runtimeProtected", configEnabled: config.enableRuntimeProtection, evidenceCount: stubDexRaw && loaderDexRaw ? 1 : 0 },
-    // VMP 证据门:vmEvidence = VM 化方法数(要求桥+payload 嵌入 SO 且 SO 注入 APK;
-    // 注册与执行语义已过 device-test.sh --vm-mode 真机断言)——无产物背书时如实 0
-    { key: "vmProtected", configEnabled: config.enableVmProtection, evidenceCount: vmEvidence },
     // dex2c 如实 not-wired(2026-09 评估结论):generateDex2cBridge 是 C 模板桩——
     // 方法体为 TODO 占位(return NULL)、JNI 签名写死,无 Java→C 方法体转换能力。
     // 接线将产出运行时必崩的空壳桥,却宣称防护已生效——违背如实降级,故不接线。
@@ -1132,11 +948,7 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     dexProtected: gate.effective.dexProtected ?? false,
     soProtected: gate.effective.soProtected ?? false,
     resourceProtected: gate.effective.resourceProtected ?? false,
-    // 如实降级:encryptAndReplaceStrings 写回尚无调用点,字符串仅生成了解密器参考产物,
-    // 未实际加密——summary 必须有代码路径背书,报 false 而非配置开关值
-    stringProtected: gate.effective.stringProtected ?? false,
     runtimeProtected: gate.effective.runtimeProtected ?? false,
-    vmProtected: gate.effective.vmProtected ?? false,
     totalFindings: findings.length,
     methodHollow: {
       hollowed: mhHollowed,
@@ -1185,9 +997,7 @@ export function generateHardenReport(result: HardenResult): string {
     `  DEX 保护: ${result.summary.dexProtected ? "✓ 已启用" : "✗ 未启用"}`,
     `  SO 保护: ${result.summary.soProtected ? "✓ 已启用" : "✗ 未启用"}`,
     `  资源保护: ${result.summary.resourceProtected ? "✓ 已启用" : "✗ 未启用"}`,
-    `  字符串保护: ${result.summary.stringProtected ? "✓ 已启用" : "✗ 未启用"}`,
     `  运行时保护: ${result.summary.runtimeProtected ? "✓ 已启用" : "✗ 未启用"}`,
-    `  VMP 保护: ${result.summary.vmProtected ? "✓ 已启用" : "✗ 未启用"}`,
     "",
     "加固覆盖率:",
     `  方法抽取: ${result.summary.methodHollow.hollowed}/${result.summary.methodHollow.total} (${result.summary.methodHollow.pct}%, 跳过 ${result.summary.methodHollow.skipped})`,

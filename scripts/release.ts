@@ -53,7 +53,7 @@ ok = step("V2 bun test", () => execSync("bun test", { stdio: "pipe" })) && ok
 // V3 npm pack 冒烟(不写入文件)
 ok = step("V3 npm pack --dry-run 白名单", () => {
   const out = execSync("npm pack --dry-run 2>&1", { stdio: "pipe", shell: "bash" }).toString()
-  for (const f of ["runtime/droidseal-loader.dex", "runtime/droidseal-stub.dex", "scripts/challenge-server.ts", "README.md"]) {
+  for (const f of ["runtime/droidseal-loader.dex", "runtime/droidseal-stub.dex", "README.md"]) {
     if (!out.includes(f)) throw new Error(`npm 包白名单缺 ${f}`)
   }
 }) && ok

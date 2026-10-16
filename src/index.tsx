@@ -70,9 +70,6 @@ function usage(): string {
   --no-resource            禁用资源加密
   --no-string              禁用字符串加密
   --no-runtime             禁用运行时保护
-  --enable-vmp             生成 VM 解释器参考产物(写入输出目录,不注入 APK——
-                           不构成生效防护,报告如实标 vmProtected=false)
-  --no-split-key           禁用 Split-Key 混淆
   --no-triple-entry        禁用三重入口
   --no-random-names        禁用随机包名/SO 名
   --exclude <pattern>      类排除规则(可多次指定)
@@ -80,13 +77,8 @@ function usage(): string {
   --ks-alias <alias>       密钥别名
   --ks-pass <password>     密钥库密码
   --key-pass <password>    密钥密码
-  --keystore-bind          Android Keystore 设备绑定(首次运行后密钥封存进硬件;
-                           卸载重装/清除数据/换机即失效且无法恢复——一机一份分发用)
   --keep-intermediates     保留 native/smali 等中间产物(测试学习模式;默认经典模式
                            流水线结束即清理,只留最终 APK)
-  --challenge-url <url>    服务端挑战(可选):密钥第三段 part3 不进 APK,构建产物旁生成
-                           server-challenge.json 部署到该 HTTPS URL;运行时联网取片,
-                           离线/被拒则解密失败。丢失 server-challenge.json 该构建永久无法解密
 
 通用选项:
   --use-cn-mirror          官方源下载受阻时直接切换国内镜像重试(预应答,免交互;
@@ -310,21 +302,16 @@ if (resolved && resolved.inputPath) {
 
     const { runHardenPipeline, generateHardenReport, DEFAULT_HARDEN_CONFIG } = await import("./core/harden-pipeline.ts")
     const excludePatterns = collectMulti("--exclude")
-    // P2 服务端挑战 URL(可选,--challenge-url)
-    const challengeUrl = getArg("--challenge-url")
-    if (hasFlag("--challenge-url") && !challengeUrl) {
-      console.warn("警告: --challenge-url 后未提供 URL——本次构建按纯本地模式执行(密钥完整进 APK)。")
-    }
     // profile 预设(参数组合糖,不新增流水线能力):
-    //   quick    — 最快出包:关抽取/字符串加密/三重入口/随机名,保留 DEX 加密
+    //   quick    — 最快出包:关抽取/三重入口/随机名,保留 DEX 加密
     //   balanced — 默认档(与省略 --profile 完全一致)
-    //   maximum  — 全开(含 --enable-vmp 传参;VMP 仅产出参考 smali,报告如实 not-wired)
+    //   maximum  — 全开
     // 显式 flag 永远优先于预设(先算预设布尔,再被单 flag 覆盖)。
     const profileArg = (getArg("--profile") ?? "balanced").toLowerCase()
-    const profiles: Record<string, { hollow: boolean; stringEnc: boolean; triple: boolean; randomNames: boolean; vmp: boolean }> = {
-      quick: { hollow: false, stringEnc: false, triple: false, randomNames: false, vmp: false },
-      balanced: { hollow: true, stringEnc: true, triple: true, randomNames: true, vmp: false },
-      maximum: { hollow: true, stringEnc: true, triple: true, randomNames: true, vmp: true },
+    const profiles: Record<string, { hollow: boolean; triple: boolean; randomNames: boolean }> = {
+      quick: { hollow: false, triple: false, randomNames: false },
+      balanced: { hollow: true, triple: true, randomNames: true },
+      maximum: { hollow: true, triple: true, randomNames: true },
     }
     const profile = profiles[profileArg]
     if (!profile) {
@@ -344,13 +331,9 @@ if (resolved && resolved.inputPath) {
       enableMethodHollow: hasFlag("--no-dex") ? false : (profileArg === "balanced" ? !hasFlag("--no-dex") : profile.hollow),
       enableSoEncryption: !hasFlag("--no-so"),
       enableResourceEncryption: !hasFlag("--no-resource"),
-      enableStringEncryption: profileArg === "balanced" ? !hasFlag("--no-string") : profile.stringEnc,
       enableRuntimeProtection: !hasFlag("--no-runtime"),
-      enableVmProtection: hasFlag("--enable-vmp") || profile.vmp,
-      enableSplitKey: !hasFlag("--no-split-key"),
       enableTripleEntry: profileArg === "balanced" ? !hasFlag("--no-triple-entry") : profile.triple,
       enableRandomNames: profileArg === "balanced" ? !hasFlag("--no-random-names") : profile.randomNames,
-      enableKeystoreBinding: hasFlag("--keystore-bind"),
       classExclusionPatterns: excludePatterns,
       signingConfig: getArg("--keystore") ? {
         mode: "keystore" as const,
@@ -361,7 +344,6 @@ if (resolved && resolved.inputPath) {
       } : undefined,
       // 测试学习模式:保留 native/smali 等中间产物;经典模式(默认)流水线收尾会清理
       keepIntermediates: hasFlag("--keep-intermediates"),
-      ...(challengeUrl ? { challengeUrl } : {}),
     }
 
     try {

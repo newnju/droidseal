@@ -11,7 +11,6 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **native 线性数据流**(NATIVE_DATAFLOW_SUSPECT):JNI 导出函数体 source→sink 共现检测,线性启发式(confidence: low)如实标注;
 - **混淆名归一**(对判层):GT 混淆方法名经方法体唯一 API 锚定恢复,歧义如实放弃——TaintBench 249 流口径 TP 130 → 136、宽松档 61 → 66;
 - **allowBackup 可执行修复**:审计 finding → AXML 原位翻转补丁(lipAllowBackupFalse,resId 0x01010280,长度保持);
-- **VMP 里程碑 B(构建期代码路径)**:RegisterNatives 桥生成器 + stub ACC_NATIVE 标记;真机矩阵验收前 mProtected 恒 false(如实降级);
 - **文档**:双语 README 新增「实测能力(基准数字)」节(全部随口径),模块数 30 → 139 修正;benchmark 报告与威胁模型补能力提升轮记录。
 
 ### Added
@@ -21,9 +20,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
   - P0-B 环境门控参与密钥派生——运行时反分析投票折入 HKDF info `-e<vote>` 后缀；挂 Frida / 被调试 → 派生错钥，无信号可定位。
   - P0-C 密钥分片化——master 密钥逐条目临时合成、用后即清，任意时刻内存无完整密钥；解密后 DEX 缓冲在类加载完成后即刻清零；minSdk<26 落盘降级保留不砍能力。
   - P1 冗余异构检测——Java 检测 + native（fork 跨进程读父进程 TracerPid / Frida 端口 27042·27043 探测 / maps 扫描）+ debuggable 标志三源判定，读取路径异构。
-- **P2 服务端挑战（opt-in `--challenge-url`）**：密钥第三段 part3 从 APK 剥离，由 HTTPS 端点按调用方 manifest 哈希校验后发放；构建产物含 `server-challenge.json`（当密钥材料对待——丢失即永久无法解密）；参考服务器 `scripts/challenge-server.ts`（仅绑 127.0.0.1，进 npm 发布白名单）。
-- **Keystore 绑定（opt-in `--keystore-bind`）**：首次解密成功后用 Android Keystore 封存 pre-XOR part1′ 并抹掉嵌入值——卸载重装 / 清数据 / 换机即失效；与挑战模式组合兼容（封存值与 XOR 顺序严格一致）。
-- **TUI 加固向导补齐**：`--keystore-bind`（含「一机一份失效」警示）、标识符随机化开关、测试学习/经典模式（keepIntermediates）全部接入向导问答与配置流转，i18n 中英文案。
+- **TUI 加固向导补齐**：标识符随机化开关、测试学习/经典模式（keepIntermediates）全部接入向导问答与配置流转，i18n 中英文案。
 - **签名失配中止初始化**：运行时证书指纹校验失配先置 `integrityFailed` 再延迟销毁，`init` 入口直接 return——失配 APK 密钥/明文 DEX 零暴露。
 - **输入 debug 包自动矫正**：加固流水线等长翻转 `debuggable=true → false`（置于锚点计算之前），发 `HARDEN_DEBUGGABLE_FORCED` finding——否则环境投票将 debuggable 视为污染，产物在所有设备解密失败。
 
@@ -33,15 +30,11 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **方法抽取 stub 留下非零节区填充（critical，SEC-011）**：stub 把 `insns_size` 从 N 缩到 1，原指令区残留字节违反 ART「节区起点前必须为零」校验（`Non-zero padding … before section start` → 拒载）；`tries_size > 0` 方法恢复后还会丢异常表。修复为足迹不变 stub：保留 `insns_size`、写 `return-void` + `nop` 填充（item 字节足迹与原始一致）；带异常表方法跳过抽取，跳过数经 finding 如实报告（如实边界：抽取覆盖不含此类方法）。
 - **标识符随机化破坏 DEX string_ids 字典序（critical，SEC-012）**：等长随机改名未保持 `string_ids` 的 UTF-16 码点字典序（ART 严格校验 `Out-of-order string_ids` → 拒载），含三个子缺陷：槽邻居用裸类路径查询而表存 `L...;` 形式（二分永不命中）、多项槽区间重叠时各自合法但互相交错、可打印 ASCII 候选含类名非法字符。修复为保序槽内构造（合法字符集 = JLS 集 ∪ 原名字符）+ 多项按表序级联批量生成（批内相对序校验 + 整批重试）；槽无解保留原名并经 `missed` 如实报告（功能无损，静态签名仍在——已明示）。
 - **上述三缺陷的来源与验收闭环**：全部由模拟器真机验收挖出（构建期 264 测试 / H1–H6 基线全绿但首启即崩——「构建期全绿 ≠ 运行时正确」的实证）；三修齐备后复测：安装/首启/二次启动全 PASS、logcat 失败标记 0、卸载干净。回归断言锚定在产物基线字节级校验（SEC-010/011）与 `tests/harden-chain.test.ts` 全表有序断言（SEC-012），详见 [Security Ledger](docs/security-ledger.md)。
-- **URL 补丁三重缺陷（critical）**：Java `SERVER_URL` 常量 126B 与 TS 标记 128B 不一致 + `findMarker` 硬编码 32B 比对导致假阳性并越界覆盖 DEX 数据 + 运行时 `indexOf('#')` 判定被合法尾部填充误杀——挑战模式产物曾 100% 解密失败。现在两侧严格 128B、全长度匹配、按字节填充、非 ASCII（IDN）URL 构建期直接拒绝。
 - **native 检测源 PTRACE_TRACEME 自残（critical）**：TRACEME 成功后自身被 zygote trace → Java 侧 TracerPid 检测必命中 → 干净设备上每次启动被误杀。改为 fork 子进程跨进程读父进程 `/proc/<ppid>/status` 的 TracerPid（零副作用，检测力等强）。
-- **KS+挑战组合二次启动砖（high）**：封存值从「XOR 后真实 part1」改为 pre-XOR part1′，unseal → XOR part3 → 还原路径与首次启动一致。
-- **CLI 参数吞噬（high）**：`--challenge-url --keystore-bind` 等相邻 flag 不再被当作值解析；`--challenge-url` 缺值时明确警告回退纯本地模式。
-- **参考服务器网络暴露（high）**：`.listen(port)` 全网卡 → 显式绑定 `127.0.0.1`。
 - 多 DEX 共用 GCM nonce 的重用隐患——改为每文件独立随机 nonce（nonce 内嵌 payload blob 头）。
 - 容器 stored 判断跟随随机化 asset 名（固定名会导致容器被 deflate、虚报 stored）；`readContainerAsset` 优先用壳注入 appContext（attachBaseContext 阶段 ActivityThread 为 null）。
-- stub DEX SourceFile 调试属性泄露明文类名——纳入等长随机化；`sealPart1/unsealPart1` appContext 判空 fail-closed。
-- npm 发布白名单补 `runtime/droidseal-stub.dex`（缺失则 npm 包无法构建壳）与 `scripts/challenge-server.ts`。
+- stub DEX SourceFile 调试属性泄露明文类名——纳入等长随机化。
+- npm 发布白名单补 `runtime/droidseal-stub.dex`（缺失则 npm 包无法构建壳）。
 
 ### Changed
 

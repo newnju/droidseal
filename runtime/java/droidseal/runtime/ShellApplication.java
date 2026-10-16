@@ -61,7 +61,6 @@ public final class ShellApplication extends Application {
         try {
             String soName = metaString(base, META_SHELL_SO);
             DroidSealLoader.setAppContext(base); // 供 API<26 DexClassLoader 落盘降级
-            DroidSealLoader.applyKeystoreBindingFlag(); // --keystore-bind 构建期标记
             // 签名自校验:重签名/重打包 → 延迟销毁(构建期嵌入期望指纹;未补丁则跳过)
             DroidSealLoader.verifyIntegrity(base);
             DroidSealLoader.init(KEY_PART1, KEY_PART2, soName);
