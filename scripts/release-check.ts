@@ -40,6 +40,8 @@ const expectedPackageFiles = [
   "dist/parser.worker-*.js",
   "dist/@opentui/**",
   "dist/third-party/**",
+  "dist/droidseal",
+  "dist/droidseal-build.linux.json",
   "dist/droidseal.exe",
   "dist/droidseal-build.json",
   "runtime/droidseal-loader.dex",
