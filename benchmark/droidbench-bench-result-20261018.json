@@ -1,0 +1,2460 @@
+{
+  "suite": "DroidBench",
+  "cases": 177,
+  "tp": 171,
+  "fp": 5,
+  "fn": 1,
+  "tn": 0,
+  "precision": 97.2,
+  "recall": 99.4,
+  "categories": [
+    {
+      "name": "Aliasing",
+      "tp": 3,
+      "fp": 1,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "AndroidSpecific",
+      "tp": 13,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "ArraysAndLists",
+      "tp": 11,
+      "fp": 1,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "Callbacks",
+      "tp": 12,
+      "fp": 2,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "DynamicLoading",
+      "tp": 4,
+      "fp": 0,
+      "fn": 1,
+      "tn": 0
+    },
+    {
+      "name": "EmulatorDetection",
+      "tp": 15,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "FieldAndObjectSensitivity",
+      "tp": 7,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "GeneralJava",
+      "tp": 26,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "ImplicitFlows",
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "InterAppCommunication",
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "InterComponentCommunication",
+      "tp": 17,
+      "fp": 1,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "Lifecycle",
+      "tp": 19,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "Native",
+      "tp": 5,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "Reflection",
+      "tp": 10,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "Reflection_ICC",
+      "tp": 10,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "Threading",
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    },
+    {
+      "name": "UnreachableCode",
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0
+    }
+  ],
+  "details": [
+    {
+      "category": "Aliasing",
+      "name": "FlowSensitivity1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Aliasing",
+      "name": "Merge1",
+      "expected": false,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Aliasing",
+      "name": "SimpleAliasing1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Aliasing",
+      "name": "StrongUpdate1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "ApplicationModeling1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "DirectLeak1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "InactiveActivity",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "Library1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "Library2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "LogNoLeak",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "Obfuscation1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PrivateDataLeak1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_LOG_SENSITIVE",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DB_COLUMN_SENSITIVE"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PrivateDataLeak2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_LOGCAT_VERBOSE_SENSITIVE"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PrivateDataLeak3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEFAULT_ENCODING"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PublicAPIField1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "PublicAPIField2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "AndroidSpecific",
+      "name": "View1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess4",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayAccess5",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayCopy1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ArrayToString1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "HashMapAccess1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "HashMapAccess2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ListAccess1",
+      "expected": false,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "ListAccess2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ArraysAndLists",
+      "name": "MultidimensionalArray1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "AnonymousClass1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_WIDGET_SENSITIVE",
+        "SOURCE_GPS_ONLY_LOCATION"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button4",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "Button5",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "LocationLeak1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_WIDGET_SENSITIVE",
+        "SOURCE_GPS_ONLY_LOCATION"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "LocationLeak2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_WIDGET_SENSITIVE",
+        "SOURCE_GPS_ONLY_LOCATION"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "LocationLeak3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_WIDGET_SENSITIVE",
+        "SOURCE_GPS_ONLY_LOCATION"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "MethodOverride1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "MultiHandlers1",
+      "expected": false,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_WIDGET_SENSITIVE",
+        "SOURCE_GPS_ONLY_LOCATION",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_WIDGET_SENSITIVE",
+        "SOURCE_GPS_ONLY_LOCATION"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "Ordering1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_WIDGET_SENSITIVE",
+        "SOURCE_GPS_ONLY_LOCATION"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "RegisterGlobal1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Callbacks",
+      "name": "Unregister1",
+      "expected": false,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "CommonLibrary1",
+      "expected": true,
+      "hit": false,
+      "codes": []
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "DynamicBoth1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_FILE_PATH_FROM_USER",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "DynamicLoadingTarget1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "DynamicSink1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_FILE_PATH_FROM_USER",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "DynamicLoading",
+      "name": "DynamicSource1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_FILE_PATH_FROM_USER",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Battery1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DYNAMIC_RECEIVER",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_BATTERY_INFO_READ"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Bluetooth1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Build1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_EMULATOR_CHECK_SRC"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Contacts1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "ContentProvider1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "DeviceId1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "File1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "IMEI1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "IP1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DNS_HARDCODED"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "PI1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "PlayStore1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "PlayStore2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "Sensors1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_AMBIENT_SENSOR"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "SubscriberId1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "EmulatorDetection",
+      "name": "VoiceMail1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "FieldSensitivity1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "FieldSensitivity2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "FieldSensitivity3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "FieldSensitivity4",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "InheritedObjects1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING"
+      ]
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "ObjectSensitivity1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "FieldAndObjectSensitivity",
+      "name": "ObjectSensitivity2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Clone1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions4",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions5",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions6",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Exceptions7",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "FactoryMethods1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_LOCATION_ONE_SHOT"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Loop1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Loop2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "Serialization1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_DESERIALIZATION_UNSAFE",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SERIALIZATION_JAVA",
+        "SOURCE_DESERIALIZATION_UNTRUSTED"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "SourceCodeSpecific1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StartProcessWithSecret1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StaticInitialization1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StaticInitialization2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StaticInitialization3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StringFormatter1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StringPatternMatching1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StringToCharArray1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "StringToOutputStream1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_DEFAULT_ENCODING"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "UnreachableCode",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "VirtualDispatch1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "VirtualDispatch2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "VirtualDispatch3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "GeneralJava",
+      "name": "VirtualDispatch4",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_LOG_SENSITIVE",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_LOG_SENSITIVE",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow4",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_LOG_SENSITIVE",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow5",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "ImplicitFlows",
+      "name": "ImplicitFlow6",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "InterAppCommunication",
+      "name": "Collector",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_FILE_PATH_FROM_USER"
+      ]
+    },
+    {
+      "category": "InterAppCommunication",
+      "name": "Echoer",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_LOG_SENSITIVE",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_URI_LOGGED"
+      ]
+    },
+    {
+      "category": "InterAppCommunication",
+      "name": "SendSMS",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_INTENT_PARCEL_SENSITIVE",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "InterAppCommunication",
+      "name": "StartActivityForResult1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_INTENT_PARCEL_SENSITIVE",
+        "SOURCE_LOCATION_ONE_SHOT",
+        "SOURCE_GPS_ONLY_LOCATION",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_LOCATION_ONE_SHOT",
+        "SOURCE_DEFAULT_ENCODING",
+        "SOURCE_FILE_PATH_FROM_USER"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication4",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication5",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication6",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication7",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ActivityCommunication8",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "BroadcastTaintAndLeak1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DYNAMIC_RECEIVER",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ComponentNotInManifest1",
+      "expected": false,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "EventOrdering1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ENCRYPTED_FILE_SUFFIX_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_ENCRYPTED_SHARED_PREFS_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "IntentSink1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_INTENT_PARCEL_SENSITIVE"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "IntentSink2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "IntentSource1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_LOG_SENSITIVE",
+        "SOURCE_ACTIVITY_RESULT_UNSAFE",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "ServiceCommunication1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_INTEGRITY_API_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "SharedPreferences1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ENCRYPTED_FILE_SUFFIX_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_ENCRYPTED_SHARED_PREFS_ABSENT"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "Singletons1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "InterComponentCommunication",
+      "name": "UnresolvableIntent1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_INSECURE_RANDOM",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityEventSequence1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityEventSequence2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityEventSequence3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityLifecycle1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_CERTIFICATE_PINNING_ABSENT",
+        "SOURCE_CERTIFICATE_TRANSPARENCY_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SOCKET_SSRF",
+        "SOURCE_URL_OPEN_CONNECTION"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityLifecycle2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityLifecycle3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivityLifecycle4",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ActivitySavedState1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ApplicationLifecycle1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ApplicationLifecycle2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ApplicationLifecycle3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "AsynchronousEventOrdering1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "BroadcastReceiverLifecycle1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "BroadcastReceiverLifecycle2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DYNAMIC_RECEIVER",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "BroadcastReceiverLifecycle3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DYNAMIC_RECEIVER",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "EventOrdering1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "FragmentLifecycle1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ENCRYPTED_FILE_SUFFIX_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "ServiceLifecycle2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Lifecycle",
+      "name": "SharedPreferenceChanged1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ENCRYPTED_FILE_SUFFIX_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Native",
+      "name": "JavaIDFunction",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "Native",
+      "name": "NativeIDFunction",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Native",
+      "name": "SinkInNativeCode",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Native",
+      "name": "SinkInNativeLibCode",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Native",
+      "name": "SourceInNativeCode",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection10",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection3",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_REFLECTION_UNRESTRICTED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection4",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection5",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection6",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection7",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_REFLECTION_UNRESTRICTED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection8",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection",
+      "name": "Reflection9",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "ActivityCommunication2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "AllReflection",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyIntent",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyIntentReceive",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlySMS",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyTelephony",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyTelephony_Dynamic",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyTelephony_Reverse",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "OnlyTelephony_Substring",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_SMS_SEND_AUTO",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Reflection_ICC",
+      "name": "SharedPreferences1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_ENCRYPTED_FILE_SUFFIX_ABSENT"
+      ]
+    },
+    {
+      "category": "Threading",
+      "name": "AsyncTask1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Threading",
+      "name": "Executor1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_THREAD_POOL_UNBOUNDED"
+      ]
+    },
+    {
+      "category": "Threading",
+      "name": "JavaThread1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Threading",
+      "name": "JavaThread2",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Threading",
+      "name": "Looper1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "Threading",
+      "name": "TimerTask1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT",
+        "SOURCE_SMS_SEND_AUTO"
+      ]
+    },
+    {
+      "category": "UnreachableCode",
+      "name": "SimpleUnreachable1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "UnreachableCode",
+      "name": "UnreachableSink1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_INSECURE_RANDOM",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    },
+    {
+      "category": "UnreachableCode",
+      "name": "UnreachableSource1",
+      "expected": true,
+      "hit": true,
+      "codes": [
+        "SOURCE_INSECURE_RANDOM",
+        "SOURCE_DEVICE_ID_TRACKING",
+        "SOURCE_TAPJACKING_UNPROTECTED",
+        "SOURCE_SCREENSHOT_NOT_BLOCKED",
+        "SOURCE_ROOT_DETECTION_ABSENT"
+      ]
+    }
+  ]
+}

@@ -41,6 +41,12 @@ cargo run --release -- bench <suite.json> [--mutate]
 
 TS/Rust 流级差 2 条:端点判定的实现细节差异(行内多 API 匹配顺序),如实记录不做粉饰。
 
+> **2026-10-18 复跑(DroidBench 数据集迁至 E:/env/datasets 后,同引擎 bun 1.4.2)**:
+> - GT map 由 `scripts/generate-droidbench-map.ts` 从上游官方 README 重生成——179 正例 / 6 负例、共 185 个用例名(此前过滤名单误杀过 File1/IP1 等用例,已修正);
+> - 评测复现 TP=171 FP=5 FN=1 · 97.2%/99.4%,与 09-16 基线一致;
+> - 分层 FP:data-flow 0 / 辅助 5——旧 `droidbench-bench-report.md` 里的"4/1"归因是旧层白名单的陈旧产物,已废止,权威证据见 `droidbench-bench-report.md`(带溯源头)与 `droidbench-bench-report-20261018.md`;
+> - 计时证据(全量 177 计分用例):连跑 wall **982 ms**、进程内峰值 RSS **96.5 MB**、CPU(user+system)**984 ms**;隔离单用例端到端 mean **1.3 ms** / p50 1.1 / p90 0.9 / max 10.2,详见 `timing-droidbench-20261018.md`,由 `bun scripts/timing-bench.ts benchmark/droidbench-suite.json` 一命令复现。
+
 ## 四、套件配置(GT 双格式)
 
 - **README 语义 map**(`positive/negative` 数组):DroidBench 用,由官方 README 逐用例描述生成;

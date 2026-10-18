@@ -1,0 +1,750 @@
+{
+  "generatedFrom": "E:/env/datasets/DroidBench/README.md",
+  "generatedAt": "2026-10-18T13:59:22.895Z",
+  "algorithm": "README case descriptions; negative iff description contains documented negation phrases",
+  "positive": [
+    {
+      "name": "FlowSensitivity1",
+      "desc": "Sensitive data is assigned to a heap object. Only after calling the sink, an alias between the leaked object and the tainted one is created.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "SimpleAliasing1",
+      "desc": "Sensitive data is assigned to a heap object and leaked through an alias.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "StrongUpdate1",
+      "desc": "Sensitive data is assigned to a heap object, but then overwritten before it is leaked.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ArrayAccess1",
+      "desc": "Stores both a tainted and an untainted value in an array and then leaks the untainted one. Array indices are constants."
+    },
+    {
+      "name": "ArrayAccess2",
+      "desc": "Stores both a tainted and an untainted value in an array and then leaks the untainted one. Array indices are calculated."
+    },
+    {
+      "name": "ArrayAccess3",
+      "desc": "Sensitive data is written into an array, read back again, and leaked.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ArrayAccess4",
+      "desc": "Sensitive data is written into a field of an object, this object is then stored in an array and read back again. The field that gets passed to the sink, is however, a different one \tthan the one that was tainted.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ArrayAccess5",
+      "desc": "Sensitive data is written into an array, but only the constant size of the array is leaked, not the data itself.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ArrayCopy1",
+      "desc": "Stores a tainted value in an array and then uses System.arraycopy to copy the data to a new array which is then leaked to log."
+    },
+    {
+      "name": "ArrayToString1",
+      "desc": "IMEI is stored in an array of String which is then converted back to String using Arrays.toString()."
+    },
+    {
+      "name": "HashMapAccess1",
+      "desc": "Stores both a tainted and an untainted value in a hash map and then leaks the untainted one. Map keys are constants."
+    },
+    {
+      "name": "HashMapAccess2",
+      "desc": "Stores both a tainted and an untainted value in a hash map and then leaks the tainted one. Map keys are constants.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ListAccess2",
+      "desc": "Both a tainted and an untainted value are stored in a list. The tainted value is leaked."
+    },
+    {
+      "name": "MultidimensionalArray1",
+      "desc": "Stores a tainted value in a 2-dimensional array and accesses it through a reference pointing to a slice containing the tainted value."
+    },
+    {
+      "name": "AnonymousClass1",
+      "desc": "Registers a callback handler for location updates in an anonymous inner class and leaks the incoming location data inside the callback."
+    },
+    {
+      "name": "Button1",
+      "desc": "The sink is called after the user clicks a button. The button handler is defined via XML."
+    },
+    {
+      "name": "Button2",
+      "desc": "Only clicking buttons in a specific order leads to a data leak."
+    },
+    {
+      "name": "Button3",
+      "desc": "A new callback is registered in another callback's handler. The second handler leaks the data obtained by the first handler."
+    },
+    {
+      "name": "Button4",
+      "desc": "The sink is called after the user clicks a button. The button handler is defined via XML using an include directive."
+    },
+    {
+      "name": "Button5",
+      "desc": "IMEI is obtained during Activity's onCreate() and is later leaked through onClick's callback defined in layout's xml. Note that the first click only stores the IMEI into the button's hint. Only the second click actually leaks it."
+    },
+    {
+      "name": "LocationLeak1",
+      "desc": "Registers a listener for location updates, stores the value and leaks it later in the lifecycle."
+    },
+    {
+      "name": "LocationLeak2",
+      "desc": "Similar to LocationLeak1, but the activity class directly implements the callback interface."
+    },
+    {
+      "name": "LocationLeak3",
+      "desc": "Similar to LocationLeak1, but the callback handler is in a dedicated class decoupled from the activity using an interface."
+    },
+    {
+      "name": "MethodOverride1",
+      "desc": "Overwrites an internal Android method to hide a leak."
+    },
+    {
+      "name": "Ordering1",
+      "desc": "Leaks variable contents before the handler initializing them is even registered."
+    },
+    {
+      "name": "RegisterGlobal1",
+      "desc": "Both source and sink are part of a global (application-level) lifecycle handler."
+    },
+    {
+      "name": "CommonLibrary1",
+      "desc": "Not a test case on its own, part of the other dynamic code loading test cases. It contains the base class for the actual class that implements source and sink."
+    },
+    {
+      "name": "DynamicBoth1",
+      "desc": "Use dynamically loaded code to create both source and sink."
+    },
+    {
+      "name": "DynamicSink1",
+      "desc": "Use dynamically loaded code to create a sink."
+    },
+    {
+      "name": "DynamicSource1",
+      "desc": "Use dynamically loaded code to create a source."
+    },
+    {
+      "name": "DynamicLoadingTarget1",
+      "desc": "The actual implementation of the source and sink class defined in CommonLibrary1."
+    },
+    {
+      "name": "FieldSensitivity1",
+      "desc": "Both tainted and untainted data is stored in a data object; the untainted value is leaked."
+    },
+    {
+      "name": "FieldSensitivity2",
+      "desc": "Similar to FieldSensitivity1, but source and sink calls are distributed across the lifecycle."
+    },
+    {
+      "name": "FieldSensitivity3",
+      "desc": "Both tainted and untainted data is stored in a data object; the tainted value is leaked. Source and sink calls are distributed across the lifecycle."
+    },
+    {
+      "name": "FieldSensitivity4",
+      "desc": "Field contents are sent before tainting the field."
+    },
+    {
+      "name": "InheritedObjects1",
+      "desc": "Chooses an object's actual type based on a conditional. Only one possible type leads to a leak."
+    },
+    {
+      "name": "ObjectSensitivity1",
+      "desc": "Writes a tainted value into an object and an untainted one into another object of the same type. Leaks the untainted value."
+    },
+    {
+      "name": "ObjectSensitivity2",
+      "desc": "Writes a tainted value into a field and then overwrites it with untainted data."
+    },
+    {
+      "name": "Echoer",
+      "desc": "Receives data and echoes it back to the sender."
+    },
+    {
+      "name": "SendSMS",
+      "desc": "Reads the Device ID, passes it through Echoer, and then sends it in a text message."
+    },
+    {
+      "name": "StartActivityForResult1",
+      "desc": "Reads the user's geographical location (via GPS), passes it through Echoer, and then writes it to a file."
+    },
+    {
+      "name": "Collector",
+      "desc": "The data received through an intent is written into a file on the SD card.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "DeviceId_Broadcast1",
+      "desc": "The device id is sent to a broadcast receiver and from there on to the collector app.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "DeviceId_ContentProvider1",
+      "desc": "The device id is stored in a content provider and, independent from"
+    },
+    {
+      "name": "DeviceId_Service1",
+      "desc": "This app starts a service which sends the device id to the Collector app where it is leaked.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Location1",
+      "desc": "This app obtains the location data and sends it to the Collector app.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Location_Broadcast1",
+      "desc": "This app obtains the location data, and sends it to a broadcast"
+    },
+    {
+      "name": "ActivityCommunication1",
+      "desc": "Contains two activities that communicate using static fields."
+    },
+    {
+      "name": "ActivityCommunication2",
+      "desc": "IMEI is obtained in one Activity and stored in an Intent's extra for starting the next Activity which will then leak IMEI to log."
+    },
+    {
+      "name": "ActivityCommunication3",
+      "desc": "Another Activity is started using class name.  IEMI is leaked in the Activity to be started."
+    },
+    {
+      "name": "ActivityCommunication4",
+      "desc": "An Intent for starting another Activity is created by concatenating two constant strings.  The Activity to be started leaks the IMEI which was passed in as the Intent's extra."
+    },
+    {
+      "name": "ActivityCommunication5",
+      "desc": "A Activity is started using constant component's Name and Intent.setComponent. The started Activity leaks the IMEI to log."
+    },
+    {
+      "name": "ActivityCommunication6",
+      "desc": "An Intent to start another Activity is passed through LinkedList's add() and retrieved with LinkedList.get().  The retrieved Intent is used to start a leaking Activity."
+    },
+    {
+      "name": "ActivityCommunication7",
+      "desc": "An Activity class is created and its classname is retrieved using getClass() on the instance object.  The classname is then used to start the second Activity which then leaks IMEI information form Intent's extra."
+    },
+    {
+      "name": "ActivityCommunication8",
+      "desc": "An action for the Intent to start another Activity is passed through and retrieved with LinkedList.get().  The retrieved String is used to start the leaking Activity."
+    },
+    {
+      "name": "BroadcastTaintAndLeak1",
+      "desc": "IMEI is obtained in an Activity and stored in the Intent's extra of the Intent to the BroadcastReceiver which was registered programmatically.  The Receiver leaks the IMEI info."
+    },
+    {
+      "name": "EventOrdering1",
+      "desc": "IMEI is obtained and stored in the SharedPreferences of the secondary Activity (InFlowActivity).  The first Activity (OutFlowActivity) starts the second Activity.  The second-time the 2nd Activity is started, IMEI is leaked to log."
+    },
+    {
+      "name": "IntentSink1",
+      "desc": "A tainted value is leaked as the result of an activity."
+    },
+    {
+      "name": "IntentSink2",
+      "desc": "Similar to IntentSink, but the value is sent out in a callback method defined in XML."
+    },
+    {
+      "name": "IntentSource1",
+      "desc": "Two tainted leaks: the first one is that a tainted value is leaked to another app using an intent by startActivityForResult. The other one is that onActivityResult method gets intent as tainted data and then logs it."
+    },
+    {
+      "name": "ServiceCommunication1",
+      "desc": "IMEI is obtained and sent to a Service which then leaks the info in the Messenger's Handler."
+    },
+    {
+      "name": "SharedPreferences1",
+      "desc": "IMEI is obtained in the one Activity and stored in the SharedPreferences which is leaked by another Activity."
+    },
+    {
+      "name": "Singletons1",
+      "desc": "IMEI is stored in a singleton object in one Activity and leaked in a different Activity."
+    },
+    {
+      "name": "UnresolvableIntent1",
+      "desc": "The app tries to start an Activity int an Intent that cannot be resolved statically.  One of the two Activities may be started based on a random boolean, and both of them leak IMEI from the starting Activity to log."
+    },
+    {
+      "name": "ActivityEventSequence1",
+      "desc": "Source in Activity.onCreate(), sink in Activity.onResume().<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ActivityEventSequence2",
+      "desc": "Checks whether the analysis tool correctly handles events.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ActivityEventSequence3",
+      "desc": "Saves and restores state using the Activity's state callbacks.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ActivityLifecycle1",
+      "desc": "Calls to sources and sinks distributed across an activity lifecycle."
+    },
+    {
+      "name": "ActivityLifecycle2",
+      "desc": "Activity class inherited from a superclass containing the lifecycle method which leaks the tainted value."
+    },
+    {
+      "name": "ActivityLifecycle3",
+      "desc": "Calls to sources and sinks distributed across instance state handling methods."
+    },
+    {
+      "name": "ActivityLifecycle4",
+      "desc": "A tainted value is obtained on `onPause()` and leaked when the activity is restarted later."
+    },
+    {
+      "name": "ActivitySavedState1",
+      "desc": "IMEI is saved during onSaveInstanceState() via bundle's persistence and leaked during the next onCreate()"
+    },
+    {
+      "name": "ApplicationLifecycle1",
+      "desc": "Obtains a secret value when the application is launched and sends it out in the onResume() method of the main activity."
+    },
+    {
+      "name": "ApplicationLifecycle2",
+      "desc": "Obtains a secret value when the application is launched and sends it out in the low memory callback of the application."
+    },
+    {
+      "name": "ApplicationLifecycle3",
+      "desc": "Obtains a secret value when a content provider is initialized and leaks it in the onCreate() method of the application."
+    },
+    {
+      "name": "AsynchronousEventOrdering1",
+      "desc": "Obtains IMEI during onResume() and leaks it during onStop() with an overwrite in onLowMemory()."
+    },
+    {
+      "name": "BroadcastReceiverLifecycle1",
+      "desc": "Calls to sources and sinks distributed across a broadcast receiver lifecycle."
+    },
+    {
+      "name": "BroadcastReceiverLifecycle2",
+      "desc": "The sensitive data is read in onCreate() and sent out in a dynamically registered broadcast receiver."
+    },
+    {
+      "name": "BroadcastReceiverLifecycle3",
+      "desc": "The sensitive data is read and leaked in a dynamically registered broadcast receiver."
+    },
+    {
+      "name": "FragmentLifecycle1",
+      "desc": "Calls to sources and sinks distributed across a fragment lifecycle."
+    },
+    {
+      "name": "ServiceEventLifecycle1",
+      "desc": "Obtains the IMEI in onStartCommand(), copies it in onBind(), and leaks it in onStartCommand().<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ServiceEventLifecycle2",
+      "desc": "Like ServiceEventLifecycle1, but performs a second copy stop in OnUnbind().<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ServiceEventLifecycle3",
+      "desc": "Obtains the IMEI in onStartCommand(), copies it in onBind(), and leaks it in onUnbind().<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ServiceLifecycle2",
+      "desc": "IMEI is obtained at the end of onStartCommand and is stored to a service's field.  It is leaked the second time the service command starts."
+    },
+    {
+      "name": "SharedPreferenceChanged1",
+      "desc": "onCreate(), IMEI is put into the SharedPreferences and it triggers onSharedPreferenceChanged() which then leaks the IMEI to Android Log."
+    },
+    {
+      "name": "Clone1",
+      "desc": "IMEI is added to a linkedlist, and the list is cloned to a new list, then the tainted member of the newlist is leaked."
+    },
+    {
+      "name": "DirectBuffer",
+      "desc": "Test case for under/over tainted ByteBuffers."
+    },
+    {
+      "name": "Exceptions1",
+      "desc": "Saves a tainted value into a local variable, raises an exception and sends the value out in the exception handler."
+    },
+    {
+      "name": "Exceptions2",
+      "desc": "Saves a tainted value into a local variable, implicitly raises an exception (ArrayIndexOutOfBounds) and sends the data out in the exception handler."
+    },
+    {
+      "name": "Exceptions3",
+      "desc": "Saves a tainted value into a local variable, but the exception handler which would send it out is never invoked."
+    },
+    {
+      "name": "Exceptions4",
+      "desc": "Throws an exception containing a tainted value and sends it out in the exception handler."
+    },
+    {
+      "name": "Exceptions5",
+      "desc": "Throws an exception containing tainted data inside a called method and catches it in the caller."
+    },
+    {
+      "name": "Exceptions6",
+      "desc": "Throws an implicit exception inside a called method and catches and leaks data in the catch block inside the caller."
+    },
+    {
+      "name": "Exceptions7",
+      "desc": "A leak happens inside an exception handler that can never be reached, because it"
+    },
+    {
+      "name": "FactoryMethods1",
+      "desc": "Obtains a LocationManager from a factory method contained in the Android operating system, reads out the location, and leaks it."
+    },
+    {
+      "name": "Loop1",
+      "desc": "Contains a simple loop and a data leak."
+    },
+    {
+      "name": "Loop2",
+      "desc": "Retrieves location information through a callback and leaks it via nested loops."
+    },
+    {
+      "name": "Serialization1",
+      "desc": "IMEI is obtained and serialized/deserialzed throught ObjectOutputStream and ObjectInputStream."
+    },
+    {
+      "name": "SourceCodeSpecific1",
+      "desc": "Uses unusual code construct `a = p ? b : c.`"
+    },
+    {
+      "name": "StartProcessWithSecret1",
+      "desc": "IMEI is obtained and leaked through ProcessBuilder's start()."
+    },
+    {
+      "name": "StaticInitialization1",
+      "desc": "Passes a tainted value into a static initialization method."
+    },
+    {
+      "name": "StaticInitialization2",
+      "desc": "Sensitive data is obtained during static initialization of a class and leaked in non-static code"
+    },
+    {
+      "name": "StaticInitialization3",
+      "desc": "IMEI is obtained during static initializer and is stored and overriding in the Activity's field which was not tainted at the beginning."
+    },
+    {
+      "name": "StringFormatter1",
+      "desc": "IMEI is passed to a formatter and then the formatted buffer is converted back to String before leaked to log."
+    },
+    {
+      "name": "StringPatternMatching1",
+      "desc": "IMEI is matched against .* regular expression, and the matched group is leaked."
+    },
+    {
+      "name": "StringToCharArray1",
+      "desc": "IMEI is obtained and stored in the char[]  which is then later converted to String before leaked to log."
+    },
+    {
+      "name": "StringToOutputStream1",
+      "desc": "IMEI is obtained and passed through ByteArrayOutputStream as String bytes back to String."
+    },
+    {
+      "name": "UnreachableCode",
+      "desc": "Passes tainted data into a method that is never called."
+    },
+    {
+      "name": "VirtualDispatch1",
+      "desc": "Depending on a click counter, one class or another is instantiated. However, only one of the classes actually leaks data, the only ever leaks a constant string."
+    },
+    {
+      "name": "VirtualDispatch2",
+      "desc": "A method in the base class returns untainted information, the same method in one of the derived classes returns sensitive (IMEI) information. That information is later leaked through SMS."
+    },
+    {
+      "name": "VirtualDispatch3",
+      "desc": "Two classes implement an interface, but only one of them returns sensitive data. The leak however happens on the other implementation that only returns constant data."
+    },
+    {
+      "name": "VirtualDispatch4",
+      "desc": "Similar to VirtualDispatch3, but with slightly more type information."
+    },
+    {
+      "name": "ApplicationModeling1",
+      "desc": "Stores IMEI in Application's object and later leaks it in a different Activity."
+    },
+    {
+      "name": "DirectLeak1",
+      "desc": "The device id is read out and sent via SMS on the activity's `onCreate()` event."
+    },
+    {
+      "name": "InactiveActivity",
+      "desc": "Data leak in a disabled activity."
+    },
+    {
+      "name": "LogNoLeak",
+      "desc": "Writes untainted data into a log file."
+    },
+    {
+      "name": "Obfuscation1",
+      "desc": "This APK contains an own implementation of android.telephony.TelephonyManager. However, on a real device the preloaded OS implementation will always hide the custom one and you will always get a real IMEI. Testes on Galaxy Nexus 4, no guarantees for the emulator, though."
+    },
+    {
+      "name": "Library1",
+      "desc": "not a test case on its own, part of Library2."
+    },
+    {
+      "name": "Library2",
+      "desc": "The IMEI is read out inside a custom library and then leaked in the app."
+    },
+    {
+      "name": "PrivateDataLeak1",
+      "desc": "Summary test case containing various challenges."
+    },
+    {
+      "name": "PrivateDataLeak2",
+      "desc": "Leaks a value from a password field."
+    },
+    {
+      "name": "PrivateDataLeak3",
+      "desc": "The IMEI is written into a file, read out again and then leaked."
+    },
+    {
+      "name": "PublicAPIField1",
+      "desc": "IMEI is obtained and converted to 2 floating point numbers as x and y of PointF.  Value of PointF is leaked."
+    },
+    {
+      "name": "PublicAPIField2",
+      "desc": "IMEI is retrieved and stored to Intent.action as a data holder."
+    },
+    {
+      "name": "View1",
+      "desc": "The IMEI is leaked inside the draw event of a custom view. <img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ImplicitFlow1",
+      "desc": "A value from a source gets obfuscated by two different ways and is then written to the log."
+    },
+    {
+      "name": "ImplicitFlow2",
+      "desc": "Based on an input of a password field a log message is written."
+    },
+    {
+      "name": "ImplicitFlow3",
+      "desc": "This test cases checks the type of the object to determine which information to write to the log."
+    },
+    {
+      "name": "ImplicitFlow4",
+      "desc": "Several implicit flows exist in this test case."
+    },
+    {
+      "name": "ImplicitFlow5",
+      "desc": "Implicit control flow through exceptions. Only if the value is smaller than 43, an exception is thrown and then a leak happens.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ImplicitFlow6",
+      "desc": "Implicit control flow, but leaked value is the same regardless of the sensitive value.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Reflection1",
+      "desc": "Sensitive data is stored in a field of a reflective class and directly read out again and leaked."
+    },
+    {
+      "name": "Reflection2",
+      "desc": "Sensitive data is stored in a field of a reflective class, read out again using a method implemented in the \"unknown\" class and leaked."
+    },
+    {
+      "name": "Reflection3",
+      "desc": "Sensitive data is stored using a setter in a reflective class, read back using a getter and then leaked. No type information on the target class is used."
+    },
+    {
+      "name": "Reflection4",
+      "desc": "Sensitive data is read using a function in a reflective class and leaked using another function in the same reflective class."
+    },
+    {
+      "name": "Reflection5",
+      "desc": "Sensitive data is leaked using reflective invocation without using \"newInstance()\" to create a class instance. <img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Reflection6",
+      "desc": "Sensitive data is read using reflective invocation without using \"newInstance()\" to create a class instance. <img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Reflection7",
+      "desc": "Use a unusual way to get the class name for reflection calls. <img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Reflection8",
+      "desc": "The reflective class has two methods with the same name. <img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Reflection9",
+      "desc": "Names of reflective methods and parameters are not constant strings. <img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Reflection10",
+      "desc": "Reads the telephone number, passes it to an AsyncTask, which uses reflection to store it in an object. Then uses reflection to read the telephone number from the object and sends it to the internet. <img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "AllReflection",
+      "desc": "Source, Sink, Intent(Explicit) all are reflected. Sink is SMS."
+    },
+    {
+      "name": "OnlyIntent",
+      "desc": "Intent itself is reflected during send. Intent is Explicit. Sink is SMS."
+    },
+    {
+      "name": "OnlyIntentReceive",
+      "desc": "Intent Send is not reflected only its receive is reflected by passing intent as object. Intent is Explicit Intent."
+    },
+    {
+      "name": "OnlySMS",
+      "desc": "Data is obtained and sent to Activity2 where it is leaked. Sink is reflected. Sink is SMS."
+    },
+    {
+      "name": "OnlyTelephony",
+      "desc": "Source is getDeviceid and Reflection is used to call this Source API. The data is then transmitted to a second activity. Sink is in the second activity and is SMS. Sink and Intent are not Reflected."
+    },
+    {
+      "name": "OnlyTelephony_Dynamic",
+      "desc": "Source API is getDeviceId. The API is called using reflection along with concatenation to generate the string at run time. The data is then transmitted to Activity2 where it is leaked."
+    },
+    {
+      "name": "OnlyTelephony_Reverse",
+      "desc": "Source API is getDeviceId which is obtained using reverse() function. The API is called using reflection. The data is then passed on to a second activity where it is leaked."
+    },
+    {
+      "name": "OnlyTelephony_Substring",
+      "desc": "Source API is getDeviceId which is obtained using substring() function. The API is called using reflection. The data is then passed on to a second activity where it is leaked."
+    },
+    {
+      "name": "AsyncTask1",
+      "desc": "Sensitive data is read in onCreate() and send out in a dedicated thread started using Android's AsyncTask mechanism."
+    },
+    {
+      "name": "JavaThread1",
+      "desc": "Sensitive data is read in onCreate() and send out in a dedicated thread started using Java's normal threading mechanism."
+    },
+    {
+      "name": "JavaThread2",
+      "desc": "Sensitive data is read in onCreate() and send out in a dedicated thread started using Java's Runnable mechanism."
+    },
+    {
+      "name": "Executor1",
+      "desc": "Sensitive data is read in onCreate() and send out in a dedicated thread started using Java's Executor mechanism."
+    },
+    {
+      "name": "Looper1",
+      "desc": "Sensitive data is read in onCreate() and enqueued for a custom thread hosting an Android Looper whose handler sends out the data."
+    },
+    {
+      "name": "TimerTask1",
+      "desc": "Sensitive data is read in onCreate() and enqeued to be sent out 2 seconds later using Java's TimerTask architecture."
+    },
+    {
+      "name": "Battery1",
+      "desc": "This test detects the Android emulator by checking the battery status. For emulator the battery status is always 50% or 0. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Bluetooth1",
+      "desc": "This test detects the Android emulator by checking the bluetooth. The non-presence of Bluetooth sensor identify the environment as Emulator. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Build1",
+      "desc": "This test detects the Android emulator by checking the various Build properties like SDK, Board, Brand etc. This app send IMEI number via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Contacts1",
+      "desc": "This test detects the Android emulator by checking the number of contacts and calllogs both. Below value of 5 for both identify the environment as Emulator. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ContentProvider1",
+      "desc": "This test case detects the Android emulator by checking the IMEI in a content provider. The IMEI is only sent via SMS in the activity if the app runs on a real phone."
+    },
+    {
+      "name": "DeviceId1",
+      "desc": "This test detects the Android emulator by checking the IMEI number using getDeviceId API. IMEI value of 16 0's identify environment as Emulator. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "File1",
+      "desc": "This test detects the Android emulator by checking the system files. Some files are specific to emulator while others are to device. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "IMEI1",
+      "desc": "This test case detects the Android emulator by truncating the secret data which is leaked at a position computed from the IMEI. On an emulator, the IMEI is expected to be 00..0."
+    },
+    {
+      "name": "IP1",
+      "desc": "This test detects the Android emulator by checking the IP Address of environment. A value of 10.0.2.15 is the identification of Emulator. This app send IMEI number via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "PI1",
+      "desc": "This test detects the Android emulator by doing a large computation i.e calculating value of pi till n decimal places. A threshhold value is obtained by doing experiments on 100 devices and emulators. Based on this threshhold value, a decision is taken. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "PlayStore1",
+      "desc": "This test case detects the Android emulator by whether the Play Store app is installed on the phone. The IMEI is only sent via SMS if the app runs on a real phone."
+    },
+    {
+      "name": "PlayStore2",
+      "desc": "This test detects the Android emulator by checking absense of Google Play Services. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "Sensors1",
+      "desc": "This test detects the Android emulator by counting the distinct sensors. A total of 13 different type of sensors is checked. A emulator will always have 7 or less sensors. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "SubscriberId1",
+      "desc": "This test detects the Android emulator by checking Subscriber Id which always start with 310260000000000 for emulators. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "VoiceMail1",
+      "desc": "This test detects the Android emulator by checking VoiceMail number. A VoiceMail number with value +15552175049, identify environment as emulator. This app send IMEI number  via SMS if the app runs on a real phone.<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "JavaIDFunction",
+      "desc": "This test case sends tainted data from Java to Native to Java and back to native where it is leaked."
+    },
+    {
+      "name": "NativeIDFunction",
+      "desc": "This test case sends tainted data from Java to Native and back to Java where it is leaked."
+    },
+    {
+      "name": "SinkInNativeCode",
+      "desc": "This test case obtains the IMEI in Java code and leaks it in native code by calling back to the Java-based Android API."
+    },
+    {
+      "name": "SinkInNativeLibCode",
+      "desc": "This test case obtains the IMEI in Java code and leaks it in native code using Linux sockets."
+    },
+    {
+      "name": "SourceInNativeCode",
+      "desc": "This test case obtains the IMEI in native code and leaks it in Java code."
+    },
+    {
+      "name": "SimpleUnreachable1",
+      "desc": "Both source and sink are in an unreachable branch guarded by a simple numeric comparison."
+    },
+    {
+      "name": "UnreachableBoth1",
+      "desc": "Both source and sink are in unreachable branches."
+    },
+    {
+      "name": "UnreachableSink1",
+      "desc": "Sensitive data is leaked in a branch of \"switch\" instruction, which will never be executed."
+    },
+    {
+      "name": "UnreachableSource1",
+      "desc": "Sensitive data is read in a branch of \"if\" instruction, which will never be executed."
+    }
+  ],
+  "negative": [
+    {
+      "name": "Merge1",
+      "desc": "Sensitive data is assigned to a heap object which is then shuffled around. Only constant data is leaked."
+    },
+    {
+      "name": "ListAccess1",
+      "desc": "Both a tainted and an untainted value are stored in a list. Only the untainted value is leaked."
+    },
+    {
+      "name": "MultiHandlers1",
+      "desc": "Contains two activities and two handlers that do not leak any data if the correct activity is used with the correct handler."
+    },
+    {
+      "name": "Unregister1",
+      "desc": "Registers and directly unregisters a callback before it can be invoked. The code in the callback can thus never leak any data."
+    },
+    {
+      "name": "DeviceId_OrderedIntent1",
+      "desc": "The device id is obtained and sent to a broadcast receiver in the current app. There are multiple broadcast receivers with different priorities. Only the higher-priority receiver relays the data to the Collector app, the lower-priority receiver only shows the data to the user (no leak).<img src=\"https://raw.github.com/secure-software-engineering/DroidBench/master/new.gif\"/>"
+    },
+    {
+      "name": "ComponentNotInManifest1",
+      "desc": "IMEI is obtained in one Activity and is stored in the Intent's to start a leaking Activity which is not in the AndroidManifest.xml.  No leak happens as it is not valid."
+    }
+  ],
+  "unsupported": []
+}

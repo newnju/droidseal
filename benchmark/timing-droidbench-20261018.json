@@ -1,0 +1,44 @@
+{
+  "label": "DroidBench-full-177",
+  "suite": "benchmark/droidbench-suite.json",
+  "wallMs": 982,
+  "peakRssMB": 96.5,
+  "cpuTotalMs": 984,
+  "perCase": {
+    "count": 206,
+    "meanMs": 1.3,
+    "p50Ms": 1.1,
+    "p90Ms": 0.9,
+    "maxMs": 10.2,
+    "minMs": 0.8
+  },
+  "perCaseNamed": [
+    {
+      "name": "Merge1",
+      "ms": 1.6
+    },
+    {
+      "name": "ApplicationModeling1",
+      "ms": 1.4
+    },
+    {
+      "name": "Obfuscation1",
+      "ms": 1.2
+    },
+    {
+      "name": "PrivateDataLeak1",
+      "ms": 1.2
+    },
+    {
+      "name": "ArrayAccess4",
+      "ms": 1.2
+    },
+    {
+      "name": "FlowSensitivity1",
+      "ms": 1.1
+    }
+  ],
+  "verdict": "suite=DroidBench cases=177 tp=171 fp=5 fn=1 tn=0;",
+  "timestamp": "2026-10-18T14:16:36.257Z",
+  "engine": "bun 1.4.2 · TS core (same engine as audit, scanSourceDetectors)"
+}
