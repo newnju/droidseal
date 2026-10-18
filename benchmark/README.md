@@ -52,11 +52,13 @@ TS/Rust 流级差 2 条:端点判定的实现细节差异(行内多 API 匹配�
 - **README 语义 map**(`positive/negative` 数组):DroidBench 用,由官方 README 逐用例描述生成;
 - **per-case expected**(`cases[].expected`):TaintBench 用,由官方 `*_findings.json` 转换(app 级 expected=true);
 - 配置文件:`droidbench-suite.json`、`taintbench-suite-ts.json`(TS 侧)、`taintbench-suite.json`(Rust 侧),字段 `{name, projects_dir, gt_file, kind}`,`kind=droidbench`(两级目录)/`generic`(扁平)。
+- **taintbench-suite-ts.json 的 projects_dir 现指向已不存在的旧 C: 路径**(2026-10-18 如实记录):上游 TaintBench 仓库仅含 configs(AD_/DB_/FD_ SourcesAndSinks),应用源码仍待定位(`benchmark/taintbench-map.json` GT 齐备);应用恢复到 `E:/env/datasets/TaintBench/apps` 后更新该路径并重跑流级对判。
 
 ## 五、诚实边界
 - DroidBench 5 条 FP 全部来自辅助 UI/隐私检测器,data-flow 层 FP=0(分层计分,见 comparison.md);
 - TaintBench 行号与 GitHub 源码不同源(230 端点仅 6 精确),流级对判以"同文件 + target API 语义等价"为主判定层;
 - 流级剩余 FN 主因是跨方法/跨类流(过程间分析未实现,后续工作);
-- vibleaker/xbot 两个纯 APK 仓库未纳入(需反编译)。
+- vibleaker/xbot 两个纯 APK 仓库未纳入(需反编译);
+- **AndroZoo 434-benign 数据流层 FP=0 的对照组不可本地复现**(需要 AndroZoo API key,密钥不入仓库;对照组口径与声明见论文,本地以 DroidBench 负例层承担 FP 归因)。
 
 > **2026-09-26 更新**:对判层新增混淆名归一(方法体唯一 API 锚定,歧义如实放弃)后,249 条 GT 流口径的流级 TP 130 → 136、连通级宽松档 61 → 66(实测与口径详见 taintbench-flow-report.md「混淆名归一轮实测」)。上表 115 条官方流为独立套件口径,数字不变。
