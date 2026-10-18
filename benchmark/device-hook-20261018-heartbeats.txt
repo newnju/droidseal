@@ -1,0 +1,14 @@
+﻿{"type":"send","payload":{"type":"meta","attached":["libc.so/openat","libc.so/read"],"errors":["libart.so/_ZN3art7JNIEnv16GetStringUTFCharsEP8_jstringPh: Error: export not found: _ZN3art7JNIEnv16GetStringUTFCharsEP8_jstringPh"]}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":0,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":0,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":0,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}
+{"type":"send","payload":{"type":"heartbeat","calls":{"openat":0,"read":18,"jstrings":0}}}

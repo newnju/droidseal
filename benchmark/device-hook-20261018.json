@@ -1,0 +1,34 @@
+{
+  "run": "device-active-hook",
+  "date": "2026-10-18T14:59:51.114Z",
+  "serial": "emulator-5554",
+  "api": "26 (x86_64)",
+  "target": "out/a6/pass1/hardened/ds-hello.signed.hardened.apk",
+  "packageName": "com.droidseal.fixtures.hello",
+  "launcherPid": 3676,
+  "protocol": {
+    "windowSeconds": 28,
+    "deviceSidedTimeout": true,
+    "uiInteraction": "6 adb input strokes (tap/swipe) during window",
+    "hookScript": "scripts/frida-active-hook.js (Frida 17 module-instance API)",
+    "counting": "in-process Interceptor.attach counters, 2s heartbeats"
+  },
+  "hooksAttached": [
+    "libc.so/openat",
+    "libc.so/read"
+  ],
+  "hookErrors": [
+    "libart.so/_ZN3art7JNIEnv16GetStringUTFCharsEP8_jstringPh: Error: export not found: _ZN3art7JNIEnv16GetStringUTFCharsEP8_jstringPh"
+  ],
+  "finalCalls": {
+    "openat": 0,
+    "read": 18,
+    "jstrings": 0
+  },
+  "heartbeatsReceived": 13,
+  "aliveDuringWindow": true,
+  "relaunchedPid": 3843,
+  "logcatFailureMarkers": "none (integral scan empty)",
+  "fridaRuntime": "frida-inject 17.24.2 (android x86_64)",
+  "notes": "2026-10-18 committed run; a preceding run using the legacy static Module.getExportByName API had silent attachment failure (counts stayed zero) and is discarded after fixing the hook script."
+}

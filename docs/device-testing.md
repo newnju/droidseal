@@ -197,6 +197,20 @@ API 34 V1 失败根因取证:壳 SO(`libnhekq.so`)已随包安装并解压到 ap
 
 环境注:本地 android-37.1 镜像为残缺安装(仅 `.installer` 占位),API 30+ 格经 sdkmanager 补装 `system-images;android-34;google_apis;x86_64`(1.5GB 下载+4.2GB 解压)后达成;首次解压曾因运行中模拟器锁 `crashpad_handler.exe` 失败,关闭模拟器后重跑成功——sdkmanager 安装期间须先关闭全部模拟器实例。
 
+## 实测记录(2026-10-18,API 26 x86_64 模拟器,Frida 17.24.2 活跃 hook 复测轮)
+
+frida-inject 驻留主进程(无 frida-server,不暴露 27042 端口,不触发端口探测投票),对 `out/a6/pass1/hardened/ds-hello.signed.hardened.apk`(包 com.droidseal.fixtures.hello)做函数级 hook 计数重跑:
+
+| 判据 | 结果 |
+|---|---|
+| 挂载 | libc.so/openat + libc.so/read 挂载成功(libart GetStringUTFChars 导出未解析到,如实记录于证据 JSON) |
+| 进程内计数 | 28 秒窗口(device 侧 timeout 收束,UI 交互 6 次 tap/swipe 驱动 I/O):`read`=**18**,`openat`=0,`jstrings`=0,心跳 13 条 |
+| 全程存活 | 进程 pid 不变(3676),投票对函数级 hooking 按设计保持沉默 |
+| 注入后重启 | 成功(新 pid 3843),未现持久损伤 |
+| logcat | integrityFailed/BadTag/FATAL 全零 |
+
+历史口径"61 read calls"与本轮 18 的差异属 I/O 量差异(窗口与交互路径不同),以本轮提交证据为准;证据与机械转写:`benchmark/device-hook-20261018.{md,json}`(由 `E:/env/frida/hook-window.log` 心跳原文转写)。复现:`bun scripts/run-hook-experiment.ts <frida-inject>`(hook 脚本 `scripts/frida-active-hook.js` 已升级 Frida 17 模块实例 API——旧静态 `Module.getExportByName` 在 Frida 17 已移除,曾致一次静默挂载失败,如实记录)。
+
 ## 对抗审计(自动化闭环)
 
 真机在手后的对抗性验收:一条命令跑完"部署 → 对抗验证 → verdict 回写"环,

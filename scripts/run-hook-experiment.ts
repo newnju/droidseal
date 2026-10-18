@@ -14,8 +14,14 @@ const serialIdx = process.argv.indexOf("--serial")
 const serial = serialIdx >= 0 ? process.argv[serialIdx + 1]! : "emulator-5554"
 const bin = process.argv[2]
 if (!bin) { console.error("usage: bun scripts/run-hook-experiment.ts <frida-inject> [--serial s]"); process.exit(2) }
-const sh = (cmd: string, timeout = 60_000) =>
-  execFileSync(adb, ["-s", serial, "shell", cmd], { encoding: "utf8", timeout }).trim()
+const sh = (cmd: string, timeout = 60_000) => {
+  try {
+    return execFileSync(adb, ["-s", serial, "shell", cmd], { encoding: "utf8", timeout }).trim()
+  } catch (e: any) {
+    // adb shell 的非零退出码(如 pidof 无进程)在此提取 stdout 继续,不中断实验
+    return String(e?.stdout ?? "").trim()
+  }
+}
 const log: string[] = []
 const emit = (x: string) => { log.push(x); console.log(x) }
 
