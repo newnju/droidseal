@@ -6,9 +6,18 @@
 // 4) 判定:最后心跳计数 / 应用存活(同 PID) / 重启成功 / logcat 零失败标记
 // 用法: bun scripts/run-hook-experiment.ts <frida-inject-binary> [--serial emulator-5554]
 import { readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { execFileSync } from "node:child_process"
 
-const adb = "C:/Users/diamond/AppData/Local/Android/Sdk/platform-tools/adb.exe"
+const here = import.meta.dir
+// adb 解析:DROIDSEAL_ADB → ANDROID_HOME(或 ANDROID_SDK_ROOT) 的 platform-tools → PATH 上的 adb。
+// 不硬编码任何本机绝对路径——开源发布卫生扫描(release-check)会拦本机用户路径。
+const adb = process.env.DROIDSEAL_ADB
+  ?? (process.env.ANDROID_HOME
+    ? join(process.env.ANDROID_HOME, "platform-tools", "adb.exe")
+    : process.env.ANDROID_SDK_ROOT
+      ? join(process.env.ANDROID_SDK_ROOT, "platform-tools", "adb.exe")
+      : "adb")
 const pkg = "com.droidseal.fixtures.hello"
 const serialIdx = process.argv.indexOf("--serial")
 const serial = serialIdx >= 0 ? process.argv[serialIdx + 1]! : "emulator-5554"
@@ -41,12 +50,13 @@ if (!pid || !/^\d+$/.test(pid)) { emit("FAIL: no pid after launch"); process.exi
 // 2) 推送二进制(若参数为本地文件则 push)
 execFileSync(adb, ["-s", serial, "push", bin, "/data/local/tmp/frida-inject.probe"], { encoding: "utf8", timeout: 120_000 })
 sh("chmod 755 /data/local/tmp/frida-inject.probe")
-execFileSync(adb, ["-s", serial, "push", "E:/DroidSeal-GitHub/scripts/frida-active-hook.js", "/data/local/tmp/hook.js"], { encoding: "utf8", timeout: 60_000 })
+execFileSync(adb, ["-s", serial, "push", join(here, "frida-active-hook.js"), "/data/local/tmp/hook.js"], { encoding: "utf8", timeout: 60_000 })
 emit("pushed frida-inject + hook.js")
 
 // 3) 开 28s 窗口(设备侧 timeout 保证收束),同进程 UI 交互驱动 I/O
+const hookLog = process.env.DROIDSEAL_HOOK_LOG ?? join(here, "hook-window.log")
 const capture = Bun.spawn(["powershell", "-NoProfile", "-Command",
-  `& '${adb}' -s ${serial} shell 'timeout 28 /data/local/tmp/frida-inject.probe -p ${pid} -s /data/local/tmp/hook.js' 2>&1 | Out-File -Encoding utf8 E:/env/frida/hook-window.log`],
+  `& '${adb}' -s ${serial} shell 'timeout 28 /data/local/tmp/frida-inject.probe -p ${pid} -s /data/local/tmp/hook.js' 2>&1 | Out-File -Encoding utf8 '${hookLog}'`],
   { stdout: "pipe" })
 const strokes = [
   ["tap", "540", "900"], ["swipe", "300", "1200", "300", "400"], ["swipe", "300", "400", "300", "1200"],
