@@ -32,8 +32,9 @@ bash scripts/device-matrix.sh app-release.apk --api 26,24 [--cert-sha256 <hex>] 
 ## 标准流程
 
 ```bash
-# 1. 构建(纯本地模式)
-bun run src/index.tsx harden app-release.apk --output out --cert-sha256 <release-cert-sha256> --keystore release-key.jks --ks-pass <pass>
+# 1. 构建(纯本地模式;不传 --keystore 时用输出目录自签名 keystore)
+# 产物路径:<out>/hardened/app-release.hardened.apk
+bun run src/index.tsx app-release.apk --output out --cert-sha256 <release-cert-sha256> --keystore release-key.jks --ks-pass <pass>
 
 # 2. 构建期基线(不需设备,应先过)
 bun scripts/verify-harden-artifact.ts out/hardened/app-release.hardened.apk
