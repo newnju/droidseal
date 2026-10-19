@@ -380,10 +380,10 @@ export interface NativeShellConfig {
   includeVm?: boolean
   /** C 项逐构建结构随机化:内部 C 标识符前缀(valid C ident;默认 "ds" = 确定性回退)。
    *  JNI 导出名不入前缀(Java 契约固定)。 */
-  identPrefix?: string
+  identPrefix?: string | undefined
   /** C 项逐构建结构随机化:filler 函数 + 检测循环置换 + guard XOR key 的种子;
    *  构建期随机生成。缺省 = crypto 随机(即每次调用都不同)。 */
-  noiseSeed16?: Uint8Array
+  noiseSeed16?: Uint8Array | undefined
 }
 
 /**

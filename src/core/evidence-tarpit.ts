@@ -48,7 +48,7 @@ export function buildEvidenceTarpits(opts: {
   /** master 密钥(真容器同源;decoy 条目派生同族) */
   masterKey: Uint8Array
   /** 骨架 dex 副本载荷(可缺省);提供时诱饵条目=截断副本 */
-  payloadDex?: Uint8Array
+  payloadDex?: Uint8Array | undefined
   /** 真 asset 名干支,如 "droidseal.brG" —— 诱饵名共享干支、随机后缀 */
   assetStem: string
   /** 扰动种子(逐构建) */
