@@ -36,10 +36,12 @@ cargo run --release -- bench <suite.json> [--mutate]
 | 套件 | 粒度 | DroidSeal(TS) | DroidSeal(Rust) |
 |---|---|---|---|
 | DroidBench(177 用例,合成) | app 级 | TP=171 FP=5 FN=1 · 97.2%/99.4% | 同左(完全一致) |
-| TaintBench(11 app,真实恶意) | app 级 | TP=11 FP=0 FN=0 | 同左 |
-| TaintBench(115 条官方流) | 流级(端点对判) | 召回 57.4%(TP=66/FN=49) | 召回 59.1%(TP=68/FN=47) |
+| TaintBench(39 app,真实恶意) | app 级 | TP=39 FP=0 FN=0 · 100%/100%(E: 数据集恢复后 2026-10-19 复跑) | Rust 侧待在 E: 数据上重跑 |
+| TaintBench(249 条官方流,三档口径) | 流级(端点对判) | 端点级 TP=136/FN=67(召回 67%)· 连通宽松 101(74.3%)/连通锚定 56(41.2%)· 负例 FP=41 | Rust 侧待在 E: 数据上重跑 |
 
-TS/Rust 流级差 2 条:端点判定的实现细节差异(行内多 API 匹配顺序),如实记录不做粉饰。
+TS/Rust 流级差 2 条:端点判定的实现细节差异(行内多 API 匹配顺序),如实记录不做粉饰(该对账基于旧 C: 数据时代;E: 迁移后 Rust 侧重跑前不再声称一致)。
+
+> **2026-10-19 TaintBench 复跑说明**:上游主仓只有 configs,应用以"一仓一 app"形式在 taintbench org 分发;39 个 app 源码仓库已逐个浅克隆恢复至 `E:/env/datasets/TaintBench/apps`,套件 projects_dir 已从旧 C: 死路径迁移。app 级与流级判定由当前提交的 CLI 机械产出(证据:`taintbench-bench-report.md` 溯源头 + 2026-10-19 原文,`taintbench-bench-result-20261019.json`)。旧的 115 条对齐粒度账目(2026-09-26 注)保留在 `taintbench-flow-report-ts.md` 历史里,与三档口径不可混引。
 
 > **2026-10-18 复跑(DroidBench 数据集迁至 E:/env/datasets 后,同引擎 bun 1.4.2)**:
 > - GT map 由 `scripts/generate-droidbench-map.ts` 从上游官方 README 重生成——179 正例 / 6 负例、共 185 个用例名(此前过滤名单误杀过 File1/IP1 等用例,已修正);
@@ -52,7 +54,8 @@ TS/Rust 流级差 2 条:端点判定的实现细节差异(行内多 API 匹配�
 - **README 语义 map**(`positive/negative` 数组):DroidBench 用,由官方 README 逐用例描述生成;
 - **per-case expected**(`cases[].expected`):TaintBench 用,由官方 `*_findings.json` 转换(app 级 expected=true);
 - 配置文件:`droidbench-suite.json`、`taintbench-suite-ts.json`(TS 侧)、`taintbench-suite.json`(Rust 侧),字段 `{name, projects_dir, gt_file, kind}`,`kind=droidbench`(两级目录)/`generic`(扁平)。
-- **taintbench-suite-ts.json 的 projects_dir 现指向已不存在的旧 C: 路径**(2026-10-18 如实记录):上游 TaintBench 仓库仅含 configs(AD_/DB_/FD_ SourcesAndSinks),应用源码仍待定位(`benchmark/taintbench-map.json` GT 齐备);应用恢复到 `E:/env/datasets/TaintBench/apps` 后更新该路径并重跑流级对判。
+- **taintbench-suite-ts.json 的 projects_dir 已迁移至 `E:/env/datasets/TaintBench/apps`**(2026-10-19):上游 TaintBench 主仓仅含 configs,39 个 app 以"一仓一 app"在 taintbench org 分发,已全部浅克隆恢复;流级对判的旧 115 条口径账目保留在 `taintbench-flow-report-ts.md`,三档口径(rimless/宽松/锚定)见 `taintbench-bench-report.md`。
+- androzoo-suite.json 的 projects_dir 同步迁移至 E: 对应路径 `E:/env/datasets/AndroZoo/java50`、gt_file 收进仓库(`benchmark/androzoo-map.json`);数据本身不可本地复现(诚实边界见下)。
 
 ## 五、诚实边界
 - DroidBench 5 条 FP 全部来自辅助 UI/隐私检测器,data-flow 层 FP=0(分层计分,见 comparison.md);

@@ -1,6 +1,6 @@
 {
  "name": "AndroZoo-modern-weakGT",
- "projects_dir": "C:/c/c/tmp/androzoo/java50",
- "gt_file": "C:/c/c/tmp/androzoo/androzoo-map.json",
+ "projects_dir": "E:/env/datasets/AndroZoo/java50",
+ "gt_file": "benchmark/androzoo-map.json",
  "kind": "generic"
 }

@@ -1,6 +1,6 @@
 {
  "name": "TaintBench-realworld",
- "projects_dir": "C:/c/c/tmp/taintbench",
+ "projects_dir": "E:/env/datasets/TaintBench/apps",
  "gt_file": "benchmark/taintbench-map.json",
  "kind": "generic"
 }
