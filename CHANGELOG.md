@@ -24,6 +24,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **签名失配中止初始化**：运行时证书指纹校验失配先置 `integrityFailed` 再延迟销毁，`init` 入口直接 return——失配 APK 密钥/明文 DEX 零暴露。
 - **输入 debug 包自动矫正**：加固流水线等长翻转 `debuggable=true → false`（置于锚点计算之前），发 `HARDEN_DEBUGGABLE_FORCED` finding——否则环境投票将 debuggable 视为污染，产物在所有设备解密失败。
 
+- **产物可读性评分判定(发布评审 advisory)**:新增 `scripts/artifact-metrics.ts`——机械化度量产物残余可读面(dex 明文窗口 / 类名可读性 / 字符串池人读密度 / arsc-assets 明文面 / .so 导出符号计数),加权三档判定 `artifact-readability: high|medium|low`;首批 7 产物证据入库(`benchmark/artifact-metrics-20261019`),fresh balanced 构建与 V1 keyed / V2 VM / sealed 形态同表对拍。
+
 ### Fixed
 
 - **补丁后 payload DEX 被ART 拒载——校验和/签名顺序颠倒（critical，SEC-010）**：`updateDexChecksum` 两份拷贝（`dex-protection.ts`、`dex-payload-inject.ts`）先算 Adler32 再写 SHA-1 签名——签名一落盘刚算好的校验和立即失效，真机/模拟器上 zygote 直接拒载（`Bad checksum` → `ClassNotFoundException` 静默崩溃）。构建期校验和测试全绿是因为测的是正确实现（`dex-model.recomputeDexChecksums`），不是实际使用的那份拷贝。修复为规范顺序：先签名、后校验和，两份拷贝统一并注释引用 SEC-010。
