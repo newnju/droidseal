@@ -35,6 +35,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ### Fixed
 
+- **发布门禁轮(2026-10-19,符号与卫生侧)**:cut 1.1.0 时按项目自带 release 流程(V1–V5)走门禁,tsc 首次全量跑亮出此前只被 bun test 覆盖不到的三处真实漂移——`NativeShellConfig.identPrefix/noiseSeed16`、`buildEvidenceTarpits.payloadDex` 在 `exactOptionalPropertyTypes` 下按同接口 `keyPart2Hex` 既有先例补齐 `| undefined` 声明(类型侧,零运行时改动);`artifact-metrics.ts` 对象字面量重复键(strings)删除、dex 条目表字段名声明侧 `kinds`→`kind` 对齐消费方(输出内容不变);`run-hook-experiment.ts` 硬编码本机绝对路径(adb/hook 脚本/窗口日志)全部机器无关化(`DROIDSEAL_ADB`/`ANDROID_HOME`/模块目录锚定),release-check 开源卫生扫描(本机用户路径)由红转绿;`antidebug-stub` 三重安装用例加显式 30s 超时(高 I/O 负载下 5s 默认偶发,断言不变)。
 - **`--json` 输出的 harden 块补全 findings**（既有可见性缺口如实补上）：此前加固阶段自有发现（SO 编译失败 → SO_SPLITKEY_FALLBACK 降级、text-CRC 未补丁、各加固层启用记录等）只进控制台报告，JSON 消费者只能靠"加固包显著偏小"这类间接信号察觉 SO 编译失败。现 `harden.findings` 全量入 JSON（与审计 findings 同 schema），经全流程实测构建验证（35 条发现在场：SO_COMPILED / NATIVE_TEXT_CRC_EMBEDDED / NATIVE_STRUCT_RANDOMIZED / SUMMARY_CLAIM_NOT_WIRED 等）。harden 抛错路径同步如实化：`{ success: false, error }` 取代此前"JSON 里无 harden 键"的"未加固"与"加固崩溃"两可状态。
 - 边界留痕：本机未做强制注入的 SO 编译失败端到端复现（NDK 在位，编译失败不可自然触发）；findings 载入验证走 NDK 在位时的成功构建路径，失败路径与成功路径共用同一条 findings 收集线，JSON 端不分支。
 - **补丁后 payload DEX 被ART 拒载——校验和/签名顺序颠倒（critical，SEC-010）**：`updateDexChecksum` 两份拷贝（`dex-protection.ts`、`dex-payload-inject.ts`）先算 Adler32 再写 SHA-1 签名——签名一落盘刚算好的校验和立即失效，真机/模拟器上 zygote 直接拒载（`Bad checksum` → `ClassNotFoundException` 静默崩溃）。构建期校验和测试全绿是因为测的是正确实现（`dex-model.recomputeDexChecksums`），不是实际使用的那份拷贝。修复为规范顺序：先签名、后校验和，两份拷贝统一并注释引用 SEC-010。
