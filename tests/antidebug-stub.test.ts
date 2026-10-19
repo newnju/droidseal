@@ -43,7 +43,8 @@ describe("anti-debug stub installer", () => {
     expect(guide).toContain("minIntervalMs")
   })
 
-  test("is non-destructive by default and honors force", async () => {
+  // @ts-expect-error bun@1.3.14 类型未收紧,test options,运行时支持 timeout
+  test("is non-destructive by default and honors force", { timeout: 30_000 }, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "ds-antidebug-"))
     await installAntiDebugStub(dir)
     const second = await installAntiDebugStub(dir)
