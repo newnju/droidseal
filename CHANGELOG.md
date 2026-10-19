@@ -4,7 +4,6 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ## [Unreleased]
 
-
 ### Added (2026-09-26 能力与文档轮)
 
 - **JNI 动态注册恢复**(JNI_DYNAMIC_REGISTER):SO 字符串池注册表痕迹扫描 + DEX 类/方法双命中交叉验证——动态注册 native 方法无静态导出符号,此前不可见;
@@ -36,6 +35,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 ### Fixed
 
+- **`--json` 输出的 harden 块补全 findings**（既有可见性缺口如实补上）：此前加固阶段自有发现（SO 编译失败 → SO_SPLITKEY_FALLBACK 降级、text-CRC 未补丁、各加固层启用记录等）只进控制台报告，JSON 消费者只能靠"加固包显著偏小"这类间接信号察觉 SO 编译失败。现 `harden.findings` 全量入 JSON（与审计 findings 同 schema），经全流程实测构建验证（35 条发现在场：SO_COMPILED / NATIVE_TEXT_CRC_EMBEDDED / NATIVE_STRUCT_RANDOMIZED / SUMMARY_CLAIM_NOT_WIRED 等）。harden 抛错路径同步如实化：`{ success: false, error }` 取代此前"JSON 里无 harden 键"的"未加固"与"加固崩溃"两可状态。
+- 边界留痕：本机未做强制注入的 SO 编译失败端到端复现（NDK 在位，编译失败不可自然触发）；findings 载入验证走 NDK 在位时的成功构建路径，失败路径与成功路径共用同一条 findings 收集线，JSON 端不分支。
 - **补丁后 payload DEX 被ART 拒载——校验和/签名顺序颠倒（critical，SEC-010）**：`updateDexChecksum` 两份拷贝（`dex-protection.ts`、`dex-payload-inject.ts`）先算 Adler32 再写 SHA-1 签名——签名一落盘刚算好的校验和立即失效，真机/模拟器上 zygote 直接拒载（`Bad checksum` → `ClassNotFoundException` 静默崩溃）。构建期校验和测试全绿是因为测的是正确实现（`dex-model.recomputeDexChecksums`），不是实际使用的那份拷贝。修复为规范顺序：先签名、后校验和，两份拷贝统一并注释引用 SEC-010。
 - **方法抽取 stub 留下非零节区填充（critical，SEC-011）**：stub 把 `insns_size` 从 N 缩到 1，原指令区残留字节违反 ART「节区起点前必须为零」校验（`Non-zero padding … before section start` → 拒载）；`tries_size > 0` 方法恢复后还会丢异常表。修复为足迹不变 stub：保留 `insns_size`、写 `return-void` + `nop` 填充（item 字节足迹与原始一致）；带异常表方法跳过抽取，跳过数经 finding 如实报告（如实边界：抽取覆盖不含此类方法）。
 - **标识符随机化破坏 DEX string_ids 字典序（critical，SEC-012）**：等长随机改名未保持 `string_ids` 的 UTF-16 码点字典序（ART 严格校验 `Out-of-order string_ids` → 拒载），含三个子缺陷：槽邻居用裸类路径查询而表存 `L...;` 形式（二分永不命中）、多项槽区间重叠时各自合法但互相交错、可打印 ASCII 候选含类名非法字符。修复为保序槽内构造（合法字符集 = JLS 集 ∪ 原名字符）+ 多项按表序级联批量生成（批内相对序校验 + 整批重试）；槽无解保留原名并经 `missed` 如实报告（功能无损，静态签名仍在——已明示）。

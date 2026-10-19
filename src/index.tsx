@@ -299,6 +299,7 @@ if (resolved && resolved.inputPath) {
   // ── 加固(仅 APK 且审计成功时) ─────────────────────────────
 
   let hardenResult: any = undefined
+  let hardenError: string | undefined = undefined
 
   if (isApk && auditSuccess) {
     console.log(`\n${"─".repeat(40)}`)
@@ -376,7 +377,8 @@ if (resolved && resolved.inputPath) {
         }
       }
     } catch (error) {
-      console.error(`加固失败: ${error instanceof Error ? error.message : String(error)}`)
+      hardenError = error instanceof Error ? error.message : String(error)
+      console.error(`加固失败: ${hardenError}`)
       if (error instanceof Error && error.stack) console.error(error.stack)
     }
   }
@@ -391,7 +393,13 @@ if (resolved && resolved.inputPath) {
         outputApk: hardenResult.outputApk,
         summary: hardenResult.summary,
         generatedFiles: hardenResult.generatedFiles.length,
+        // 加固阶段自有发现一并入 JSON(SO 编译失败/Split-Key 降级/text-CRC 未补丁等
+        // 不再只留在控制台报告;消费者可按 code 分诊,不依赖"APK 变小"这类间接信号)
+        findings: hardenResult.findings,
       }
+    } else if (hardenError) {
+      // 加固抛错比 disabled 更要如实可见:JSON 里区分"未加固"与"加固崩溃"
+      output.harden = { success: false, error: hardenError }
     }
     console.log(JSON.stringify(output, null, 2))
   }
