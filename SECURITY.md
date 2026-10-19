@@ -13,7 +13,7 @@ DroidSeal processes Android application artifacts, invokes external tools, and h
 | Older versions | Not supported |
 | Development snapshots | No compatibility commitment |
 
-The project is now at `1.0.1` stable — the CLI, output layout and report formats are stable. Security fixes are applied to the latest release first; the support scope will adjust as the project matures.
+The project is now at `1.1.0` stable — the CLI, output layout and report formats are stable. Security fixes are applied to the latest release first; the support scope will adjust as the project matures.
 
 ## Reporting vulnerabilities privately
 

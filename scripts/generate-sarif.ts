@@ -59,7 +59,7 @@ function render(report: ReportJson): string {
             driver: {
               name: report.product ?? "DroidSeal",
               informationUri: "https://github.com/your-org/droidseal",
-              version: "1.0.1",
+              version: "1.1.0",
               rules,
             },
           },

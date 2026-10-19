@@ -60,7 +60,7 @@ Runtime-hardens a release APK: DEX payload encryption (AES-256-GCM, per-entry HK
 ## Platform & status
 
 - **Platform**: Windows x64 / Linux x64;
-- **Status**: 1.0.1 stable — the CLI, output layout and report formats are now stable;
+- **Status**: 1.1.0 stable — the CLI, output layout and report formats are now stable;
 - **Software**: an ANSI/Unicode-capable monospace terminal is required for the TUI; Bun 1.3+ to run from source; JDK/Gradle/Android Build Tools are auto-discovered or downloaded per flow (Node only for Capacitor web builds);
 - **Hardware (practical advice, not a hard floor)**: ~500 MB disk (100 MB executable + toolchain + artifacts), ≥2 GB RAM (more for large APKs — parsing is memory-sensitive with a fail-safe cap), x64 dual-core CPU.
 
