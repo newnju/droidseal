@@ -227,9 +227,16 @@ public final class DroidSealLoader {
             int count = bb.getInt();
             if (count <= 0 || count > 4096) return;
 
-            java.util.List<byte[]> dexList = new java.util.ArrayList<byte[]>();
+            // P0-C 分块窗口化:明文 DEX 不再在 Java 堆聚合并以 list 常驻——
+            // 每条解密后立即转入 direct 原生缓冲并清零 Java 堆数组(Java 堆扫描型
+            // dump 无完整明文可取);dex#0 场景(citable 恒 targetIndex=0,见
+            // payload-container / harden-pipeline 写出口)保留 byte[] 至 citable
+            // 补丁完成后再转 direct。fail-closed:非 0 目标 citable(与构建侧
+            // 恒定写法不符)直接中止。
+            java.util.List<java.nio.ByteBuffer> dexBufs = new java.util.ArrayList<java.nio.ByteBuffer>();
             byte[] ciTable = null;
             int ciTarget = 0;
+            byte[] pendingPatch = null; // dex#0 明文(citable 可能后续补丁;用后即清)
             // P0-A:重算完整性锚点(自身 APK 的 manifest SHA-256),参与逐条目密钥派生。
             // 构建期有锚而运行时重算失败 → 锚不匹配 → 密钥错 → GCM 静默失败(fail-closed)。
             byte[] anchor = computeIntegrityAnchor();
@@ -268,31 +275,50 @@ public final class DroidSealLoader {
                     chainPrev = seed;
                 } catch (Throwable t) { return; }
                 markKeyUsed(); // 密钥已真实使用:此后反分析命中可执行处置
-                if (kind == 1) dexList.add(plain);
-                else if (kind == 2) { ciTable = plain; ciTarget = targetIndex; }
+                if (kind == 1) {
+                    if (!isDex(plain)) return;
+                    if (targetIndex == 0 && pendingPatch == null) {
+                        pendingPatch = plain; // 可能被 citable 补丁;补丁完成后转 direct 并清零
+                    } else {
+                        dexBufs.add(wrapDirectAndZero(plain));
+                    }
+                } else if (kind == 2) { ciTable = plain; ciTarget = targetIndex; }
             }
             // splitKey part2 用后清零(master 已在循环内逐条目合成后即清,无需在此处理)
             java.util.Arrays.fill(part2, (byte) 0);
             if (effPart1 != keyPart1) java.util.Arrays.fill(effPart1, (byte) 0);
 
-            if (dexList.isEmpty()) return;
-            byte[] primaryDex = dexList.get(0);
-            if (!isDex(primaryDex)) return;
+            if (dexBufs.isEmpty() && pendingPatch == null) return;
 
-            // Step 2: CodeItem 表还原(可选——无抽取时跳过)
-            if (ciTable != null && ciTarget >= 0 && ciTarget < dexList.size()) {
-                int restored = restoreCodeItems(dexList.get(ciTarget), ciTable);
-                if (restored > 0) recomputeDexChecksum(dexList.get(ciTarget));
+            // Step 2: CodeItem 表还原(citable 恒 target 0 = dex#0——与构建侧写法一致;
+            // 非 0 目标 fail-closed)。补丁在 byte[] 上进行,完成后转 direct 并即刻清零。
+            if (ciTable != null) {
+                if (ciTarget == 0 && pendingPatch != null) {
+                    int restored = restoreCodeItems(pendingPatch, ciTable);
+                    if (restored > 0) recomputeDexChecksum(pendingPatch);
+                    dexBufs.add(0, wrapDirectAndZero(pendingPatch)); // 保序:dex#0 处于加载序首位
+                    pendingPatch = null;
+                } else {
+                    return;
+                }
+                java.util.Arrays.fill(ciTable, (byte) 0);
+                ciTable = null;
             }
+            if (pendingPatch != null) {
+                dexBufs.add(0, wrapDirectAndZero(pendingPatch)); // 无 citable 时 dex#0 直接装载
+                pendingPatch = null;
+            }
+            if (dexBufs.isEmpty()) return;
 
-            // Step 3: 加载 + 置换 ClassLoader(多 DEX 走 ByteBuffer[] 构造)
-            loadedLoader = loadDex(dexList);
-            // P0-C 明文窗口最小化:类加载器已持有 DEX 的运行时映像,明文字节数组
-            // 尽快清零(InMemoryDexClassLoader 已拷贝/映射完毕;API<26 落盘路径由
-            // DexClassLoader 持有文件,此处数组同样不再需要)。
-            for (byte[] d : dexList) java.util.Arrays.fill(d, (byte) 0);
-            dexList.clear();
-            ciTable = null;
+            // Step 3: 加载 + 置换 ClassLoader(direct 原生缓冲数组构造)
+            loadedLoader = loadDex(dexBufs);
+            // P0-C 分块窗口化收束点:补丁/校验和/装载完成,Java 堆已无完整明文 DEX
+            // (direct 原生缓冲不受 Java 堆扫描影响)。如实边界:InMemoryDexClassLoader
+            // 在 zero-copy ART 版本上持有原生缓冲映射,清零即破坏 dex 映射——native
+            // 侧残留窗与 API<26 落盘文件均为已知边界,由 VMP/反调试层约束,不在本层
+            // 清零(清零会破坏 zero-copy 版本的运行)。旧实现(明文的 byte[] 在
+            // Java 堆常驻到装载完成)已废止。
+            dexBufs.clear();
             if (loadedLoader == null) return;
             replaceClassLoader(loadedLoader);
             // VMP 里程碑 B:app ClassLoader 就绪后注册 VM 桥(RegisterNatives 必须
@@ -622,18 +648,28 @@ public final class DroidSealLoader {
         }
     }
 
-    // ── Step 4: InMemoryDexClassLoader(支持多 DEX 条目) ─────────────────
+    // ── Step 4: InMemoryDexClassLoader(direct 原生缓冲,支持多 DEX 条目) ──
 
-    private static ClassLoader loadDex(java.util.List<byte[]> dexList) {
+    /** 直存原生缓冲并清零 Java 堆明文(明文即刻退出 Java 堆)。 */
+    private static java.nio.ByteBuffer wrapDirectAndZero(byte[] plain) {
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocateDirect(plain.length);
+        buf.put(plain);
+        buf.flip();
+        java.util.Arrays.fill(plain, (byte) 0);
+        return buf;
+    }
+
+    private static ClassLoader loadDex(java.util.List<java.nio.ByteBuffer> dexBufs) {
         // API26+ 内存加载(InMemoryHolder 隔离引用,API<26 不触发其验证)
         if (android.os.Build.VERSION.SDK_INT >= 26) {
             try {
-                return InMemoryHolder.load(dexList);
+                return InMemoryHolder.load(dexBufs);
             } catch (Throwable t) {
                 // 落盘降级
             }
         }
-        // API<26 降级:落盘 DexClassLoader(能力不缩水,低版本仍可运行)
+        // API<26 降级:落盘 DexClassLoader(能力不缩水,低版本仍可运行;FileChannel
+        // 直接从 direct 缓冲写盘,不再解回 Java 堆数组)
         try {
             android.content.Context ctx = appContext;
             if (ctx == null) return null;
@@ -641,10 +677,14 @@ public final class DroidSealLoader {
             java.io.File odex = new java.io.File(dir, "o");
             odex.mkdirs();
             StringBuilder paths = new StringBuilder();
-            for (int i = 0; i < dexList.size(); i++) {
+            for (int i = 0; i < dexBufs.size(); i++) {
                 java.io.File f = new java.io.File(dir, "p" + i + ".dex");
                 java.io.FileOutputStream fo = new java.io.FileOutputStream(f);
-                fo.write(dexList.get(i));
+                java.nio.channels.FileChannel ch = fo.getChannel();
+                java.nio.ByteBuffer src = dexBufs.get(i).duplicate();
+                src.position(0);
+                while (src.hasRemaining()) ch.write(src);
+                ch.close();
                 fo.close();
                 if (paths.length() > 0) paths.append(java.io.File.pathSeparator);
                 paths.append(f.getAbsolutePath());
@@ -658,17 +698,16 @@ public final class DroidSealLoader {
 
     // 独立类隔离 InMemoryDexClassLoader 引用:API<26 不加载本类即不触发其验证
     private static final class InMemoryHolder {
-        static ClassLoader load(java.util.List<byte[]> dexList) {
+        static ClassLoader load(java.util.List<java.nio.ByteBuffer> dexBufs) {
             try {
-                ByteBuffer[] buffers = new ByteBuffer[dexList.size()];
-                for (int i = 0; i < dexList.size(); i++) buffers[i] = ByteBuffer.wrap(dexList.get(i));
+                java.nio.ByteBuffer[] buffers = dexBufs.toArray(new java.nio.ByteBuffer[dexBufs.size()]);
                 return new InMemoryDexClassLoader(buffers, DroidSealLoader.class.getClassLoader());
             } catch (Throwable t) {
                 // 部分版本无 ByteBuffer[] 构造——回退单 DEX
                 try {
-                    if (dexList.size() == 1) {
+                    if (dexBufs.size() == 1) {
                         return new InMemoryDexClassLoader(
-                                ByteBuffer.wrap(dexList.get(0)), DroidSealLoader.class.getClassLoader());
+                                dexBufs.get(0), DroidSealLoader.class.getClassLoader());
                     }
                 } catch (Throwable ignore) { /* 失败关闭 */ }
                 return null;
