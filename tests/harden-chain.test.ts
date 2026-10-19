@@ -20,6 +20,8 @@ import {
 } from "../src/core/stub-encapsulate.ts"
 import { patchLoaderDexKeys } from "../src/core/loader-key-patch.ts"
 import { generateNativeShellFiles } from "../src/core/native-shell.ts"
+import { buildEvidenceTarpits } from "../src/core/evidence-tarpit.ts"
+import { decryptContainerEntry, type ContainerEntry } from "../src/core/payload-container.ts"
 
 const CERT = "51a3ebd686f801ce3fa77273a524745a1675084979f496a24b9e0f7c0af79736"
 const loaderDex = () => new Uint8Array(readFileSync(path.join(import.meta.dir, "..", "runtime", "droidseal-loader.dex")))
@@ -271,6 +273,54 @@ describe("C 项:逐构建 native 结构随机化", () => {
     // XOR key 来自 seed[0..7](种子确定性断言)
     const k = seed1.subarray(0, 8).join(", ")
     expect(gv.includes(`{ ${k} }`)).toBe(true)
+  })
+})
+
+describe("E 项:证据 tarpit(独立诱饵容器 asset)", () => {
+  const master = randomBytes(32)
+  const magic12 = "dsx0thermux"
+  const stub = stubDex()
+
+  test("诱饵与真容器同 magic/可解析/条目 GCM 有效;真容器往返不受影响", () => {
+    const realEntries: ContainerEntry[] = [
+      { kind: "dex", targetIndex: 0, bytes: new Uint8Array(96).fill(7) },
+    ]
+    const real = buildPayloadContainer(realEntries, { magic: magic12 })
+    const t = buildEvidenceTarpits({ magic: magic12, count: 3, masterKey: master, payloadDex: stub, assetStem: "droidseal.xx1", seed: randomBytes(16) })
+    expect(t.assets.length).toBe(3)
+    expect(t.entryCount).toBe(6)
+    for (const d of t.assets) {
+      // 命名:同干支不同随机后缀,且不等于真容器名
+      expect(d.name.startsWith("assets/droidseal.")).toBe(true)
+      expect(d.name).not.toBe("assets/droidseal.xx1")
+      // 形状:解析成功且至少一条条目
+      const parsed = parsePayloadContainer(d.bytes, { magic: magic12 })
+      expect(parsed).toBeDefined()
+      expect(parsed!.length).toBeGreaterThanOrEqual(2)
+      // GCM 有效:decoy 条目按同族派生解密成功;kind=dex 载荷为合法 dex 骨架副本
+      const dexEntry = parsed!.find((e) => e.kind === "dex")
+      expect(dexEntry).toBeDefined()
+      const plain = decryptContainerEntry(dexEntry!.bytes, deriveEntryKey(master, "dex", dexEntry!.targetIndex))
+      expect(plain).toBeDefined()
+      expect(Array.from(plain!.slice(0, 4))).toEqual([0x64, 0x65, 0x78, 0x0a]) // "dex\n"
+      // citable 条目同样可解
+      const cit = parsed!.find((e) => e.kind === "citable")
+      expect(decryptContainerEntry(cit!.bytes, deriveEntryKey(master, "citable", 0))).toBeDefined()
+    }
+    // 真容器往返不受诱饵存在影响(诱饵独立 asset,与容器字节无交集)
+    const realParsed = parsePayloadContainer(real, { magic: magic12 })
+    expect(realParsed!.length).toBe(1)
+  })
+
+  test("缺省 payloadDex → 定长噪声载荷;count 可调;诱饵大小与真容器接近", () => {
+    const t = buildEvidenceTarpits({ magic: magic12, count: 2, masterKey: master, assetStem: "droidseal.aa0", seed: randomBytes(16) })
+    expect(t.assets.length).toBe(2)
+    expect(t.entryCount).toBe(4)
+    const parsed = parsePayloadContainer(t.assets[0]!.bytes, { magic: magic12 })
+    const dexEntry = parsed!.find((e) => e.kind === "dex")!
+    const plain = decryptContainerEntry(dexEntry.bytes, deriveEntryKey(master, "dex", dexEntry.targetIndex))
+    expect(plain!.length).toBeLessThanOrEqual(256)
+    expect(plain!.length).toBeGreaterThanOrEqual(160)
   })
 })
 

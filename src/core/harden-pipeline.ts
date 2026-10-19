@@ -27,6 +27,7 @@ import { generateResourceDecryptorSmali } from "./resource-string-protection.ts"
 import { generateNativeShellFiles, buildNativeShellFindings, patchSoTextCrc, type NativeShellConfig } from "./native-shell.ts"
 import { compileAndMergeSmali } from "./smali-merge.ts"
 import { buildPayloadContainer, decryptContainerEntry, encryptContainerEntryDerived, decryptContainerEntryDerived, chainSeed, CONTAINER_ASSET_NAME, type ContainerEntry } from "./payload-container.ts"
+import { buildEvidenceTarpits } from "./evidence-tarpit.ts"
 import { recompileAndInjectManifest } from "./axml-recompile.ts"
 import { injectRuntimeProtection, generateRuntimeInitCall } from "./runtime-inject.ts"
 import { compileNativeSo, generateCmakeListsForShell } from "./native-so-compile.ts"
@@ -60,6 +61,10 @@ export interface HardenConfig {
    *  并同步启用巡逻复检的环境复投票(late-hook/中途换环境检测)。
    *  开发者显式开启即接受"root 设备上解密失败/销毁退出"的语义。 */
   enableRootVoteSignals?: boolean
+  /** E 项 opt-in(默认 false):证据 tarpit——在真容器之外放置 N 个形状合法的诱饵
+   *  容器 asset(同 magic 同版本、条目可解析、GCM 有效、独立 decoy 派生)。
+   *  诚实边界:meta 读名型强 REU 直达真容器不拦;loader 零改动零运行风险。 */
+  enableEvidenceTarpits?: boolean
   /** 默认 false(经典模式):结束清理 native/smali 等过程目录,只留最终 APK;true(测试学习模式)保留 */
   keepIntermediates?: boolean
 }
@@ -827,6 +832,8 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   }
 
   // Step 13 前置 2: 组装 payload 容器 → assets/<随机名>(stored,运行时 AssetManager 直读)
+  // E 项证据 tarpit(opt-in):真容器之外放置 N 个形状合法的诱饵容器 asset。
+  const tarpitNames = new Set<string>()
   if (containerEntries.length > 0) {
     const container = buildPayloadContainer(containerEntries, { magic: identMagic })
     apkContents.assetFiles.push({
@@ -839,6 +846,33 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
       recommendation: "确认加固 APK 安装后壳加载器能读取该条目并完成还原。",
       evidence: `entries=${containerEntries.length} bytes=${container.length}`,
     })
+    if (config.enableEvidenceTarpits) {
+      // 诱饵底料:优先标记为 stub 随机化副本(cert 构建路径的 stubDexRaw);
+      // 无证书构建兜底直接读仓库资产 runtime/droidseal-stub.dex(合法骨架,
+      // 与真容器同量级 7KB——比 160B 噪声块更贴近真容器的证据外观)。
+      let decoyDex = stubDexRaw
+      if (!decoyDex && existsSync(stubDexPath)) decoyDex = new Uint8Array(await readFile(stubDexPath))
+      const tarpit = buildEvidenceTarpits({
+        magic: identMagic,
+        count: 3,
+        masterKey: keyMaterial.encryptionKey,
+        payloadDex: decoyDex,
+        assetStem: identAssetName,
+        seed: randomBytes(16),
+        sizeTarget: container.length,
+      })
+      for (const d of tarpit.assets) {
+        tarpitNames.add(d.name)
+        apkContents.assetFiles.push({ name: d.name, bytes: d.bytes, compressed: false, compressionMethod: 0, crc32: 0 })
+      }
+      findings.push({
+        severity: "info", confidence: "high", code: "EVIDENCE_TARPIT_ASSETS",
+        title: `证据 tarpit 已放置 ${tarpit.assets.length} 个诱饵容器(${tarpit.entryCount} 条目,字节级同长)`,
+        detail: `magic 扫描型证据驱动脱壳的候选数 1 → ${1 + tarpit.assets.length}:诱饵与真容器同 magic/同版本/条目可解析/密文 GCM 有效(独立 decoy 派生)且**总长与真容器字节级一致**(抗大小排序),逐候选验证成本 ×${1 + tarpit.assets.length},解出证据为构建内合成骨架截断副本(残差如实:截断副本非合法可加载 dex)。诚实边界:1) 从 stub meta 读出真 asset 名的强 REU 直达真容器,本项不拦;2) 已知 master 的静态攻击者可同样派生解密诱饵;3) loader 按精确名读真容器,诱饵永不进入运行时链,零运行风险。`,
+        recommendation: "无需处理;诱饵与真容器同为 stored 条目,可用报告内 asset 名单核对。",
+        evidence: `tarpit=${tarpit.assets.length} entries=${tarpit.entryCount} real=assets/${identAssetName}`,
+      })
+    }
   }
 
   // Step 13: 重打包 + 签名
@@ -852,10 +886,11 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   for (const dex of apkContents.dexFiles) zipEntries.push({ ...dex, compressionMethod: 8 })
   // SO 文件(stored — 原始 APK 中 SO 通常 stored)
   for (const so of apkContents.soFiles) zipEntries.push({ ...so, compressionMethod: 0 })
-  // Assets(deflated;容器与加密 loader 条目除外——二者必须 stored:容器供运行时直读,
-  // loader 在 minSdk<26 落盘降级时按偏移直读;随机化后二者名称动态判断)
+  // Assets(deflated;容器/加密 loader/诱饵 tarpit 条目除外——三者必须 stored:
+  // 容器供运行时直读,loader 在 minSdk<26 落盘降级时按偏移直读,诱饵与真容器
+  // 同布局可以向 magic 扫描型证据收集呈现同一存储形态;三者名称动态判断)
   for (const asset of apkContents.assetFiles) {
-    const method = asset.name === `assets/${identAssetName}` || asset.name === `assets/${loaderAssetName}` ? 0 : 8
+    const method = asset.name === `assets/${identAssetName}` || asset.name === `assets/${loaderAssetName}` || tarpitNames.has(asset.name) ? 0 : 8
     zipEntries.push({ ...asset, compressionMethod: method })
   }
   // Manifest + resources.arsc + 其他
