@@ -590,6 +590,16 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   // ──────────────────────────────────────────────────────────────────────
   // Step 12: Native 壳 SO 生成(C 源 + CMake——需 NDK 编译)
   // ──────────────────────────────────────────────────────────────────────
+  // C 项逐构建结构随机化:randomNames 开启时按构建生成内部标识前缀与扰动种子
+  // (filler 函数 / 检测循环来源置换 / guard XOR key);关闭时确定性回退且如实标注。
+  const nativeIdent = config.enableRandomNames
+    ? (() => {
+        const raw = randomBytes(4).toString("hex")
+        const ident = `x${raw}` // 合法 C 标识符前缀(字母开头)
+        return ident.length > 9 ? ident.slice(0, 9) : ident
+      })()
+    : "ds"
+  const nativeNoise = config.enableRandomNames ? randomBytes(16) : undefined
   const nativeConfig: NativeShellConfig = {
     packageName,
     soName: randomSo,
@@ -599,6 +609,8 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
     enableAntiDebug: true,
     enableArtHook: config.enableMethodHollow,
     jniClassPath,
+    identPrefix: nativeIdent,
+    noiseSeed16: nativeNoise,
   }
   const nativeFiles = generateNativeShellFiles(nativeConfig)
   generatedFiles.push(...nativeFiles)
@@ -639,10 +651,19 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
         findings.push({
           severity: "info", confidence: "high", code: "NATIVE_TEXT_CRC_EMBEDDED",
           title: "Native 壳 text 段完整性自检已启用",
-          detail: `已对 ${textCrcPatched}/${soResult.soFiles.length} 个 ABI 的壳 SO 补丁嵌入可执行段 CRC32;运行时 ds_text_integrity_check 重算比对,检测 inline hook(Frida Interceptor 等改写 .text 的手段)。"无法核验"时如实不投票(fail-open 到其余检测源)。`,
+          detail: `已对 ${textCrcPatched}/${soResult.soFiles.length} 个 ABI 的壳 SO 补丁嵌入可执行段 CRC32;运行时 text 段自检例程重算比对,检测 inline hook(Frida Interceptor 等改写 .text 的手段)。"无法核验"时如实不投票(fail-open 到其余检测源)。`,
           recommendation: "无需处理;真机验收可用 device-test.sh 验证检测行为。",
-          evidence: `soName=${randomSo} patched=${textCrcPatched}`,
+          evidence: `soName=${randomSo} identPrefix=${nativeIdent} patched=${textCrcPatched}`,
         })
+        if (nativeNoise) {
+          findings.push({
+            severity: "info", confidence: "high", code: "NATIVE_STRUCT_RANDOMIZED",
+            title: "C 项逐构建 native 结构随机化已启用",
+            detail: `randomNames 开启 → 本构建 native 层结构随机化生效:内部标识前缀=${nativeIdent}、text_integrity filler 函数与常量表(逐构建扰动 .text 字节布局)、检测循环来源逐构建置换(四源聚合语义不变)、guard XOR key 逐构建随机。同一源代码的两次构建产生结构不同的 .so(防"产物逐构建同构"的自动化对齐);副作用仅限 JSC 变体差异,经 device-test.sh 回归。`,
+            recommendation: "无需处理;结构差异可用两次构建 .so 的 sha256 对拍验证。",
+            evidence: `soName=${randomSo} identPrefix=${nativeIdent}`,
+          })
+        }
       } else {
         findings.push({
           severity: "medium", confidence: "high", code: "NATIVE_TEXT_CRC_NOT_PATCHED",

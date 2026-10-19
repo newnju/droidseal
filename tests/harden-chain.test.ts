@@ -19,6 +19,7 @@ import {
   encryptLoaderDex,
 } from "../src/core/stub-encapsulate.ts"
 import { patchLoaderDexKeys } from "../src/core/loader-key-patch.ts"
+import { generateNativeShellFiles } from "../src/core/native-shell.ts"
 
 const CERT = "51a3ebd686f801ce3fa77273a524745a1675084979f496a24b9e0f7c0af79736"
 const loaderDex = () => new Uint8Array(readFileSync(path.join(import.meta.dir, "..", "runtime", "droidseal-loader.dex")))
@@ -226,6 +227,50 @@ describe("loader DEX opt-in 开关标记(B 项)", () => {
     const r = patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), CERT)
     expect(r.patchedFlags).toBe(false)
     expect(endsOfRun(r.dex, 0xc5, 16)).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe("C 项:逐构建 native 结构随机化", () => {
+  const mk = (seed?: Uint8Array, prefix?: string) => generateNativeShellFiles({
+    packageName: "com.t.app", soName: "libzqx.so", algorithm: "aes-256-gcm",
+    enableAntiFrida: true, enableAntiDump: true, enableAntiDebug: true,
+    enableArtHook: false, jniClassPath: "droidseal/runtime/DroidSealLoader",
+    keyPart2Hex: CERT, identPrefix: prefix, noiseSeed16: seed,
+  })
+  const pick = (files: Array<{ name: string; content: string }>, tail: string) =>
+    files.find((f) => f.name.endsWith(tail))!.content
+  const seed1 = randomBytes(16)
+  const seed2 = randomBytes(16)
+
+  test("同种子调用 → 同产物字节;异种子 → 结构性差异(filler 表/XOR key/置换)", () => {
+    const a = mk(seed1, "kxw")
+    const b = mk(seed1, "kxw")
+    expect(pick(a, "text_integrity.c")).toBe(pick(b, "text_integrity.c"))
+    expect(pick(a, "guard_vote.c")).toBe(pick(b, "guard_vote.c"))
+    const c = mk(seed2, "kxw")
+    const buf = (s: string) => Buffer.from(s)
+    expect(buf(pick(a, "text_integrity.c")).equals(buf(pick(c, "text_integrity.c")))).toBe(false)
+    expect(buf(pick(a, "guard_vote.c")).equals(buf(pick(c, "guard_vote.c")))).toBe(false)
+  })
+
+  test("语义不变量:DSTC 标记 / JNI 导出契约 / 四源全在 dispatch / 前缀落位", () => {
+    const a = mk(seed1, "kxw")
+    const ti = pick(a, "text_integrity.c")
+    expect(ti.includes("'D', 'S', 'T', 'C'")).toBe(true)
+    expect(ti.includes("kxw_text_integrity_check(void)")).toBe(true)
+    expect(ti.includes("extern uint32_t kxw_crc32")).toBe(true)
+    expect(ti.includes("kxw_filler0")).toBe(true) // seeded → filler 在场
+    const ti2 = pick(mk(undefined, undefined), "text_integrity.c")
+    expect(ti2.includes("ds_text_integrity_check(void)")).toBe(true) // 缺省前缀回退
+    expect(ti2.includes("filler")).toBe(false) // 无种子 → 无 filler(legacy 形态)
+    const gv = pick(a, "guard_vote.c")
+    expect(gv.includes("Java_droidseal_runtime_DroidSealLoader_nativeGuardVote")).toBe(true) // JNI 名不随机
+    for (const frag of ["parent_traced() ? 1 : 0", "probe_port(27042)", "maps_hit() ? 1 : 0", "text_integrity_check(); verdict |= (ti == 1) ? 1 : 0"]) {
+      expect(gv.replace(/kxw/g, "").includes(frag)).toBe(true)
+    }
+    // XOR key 来自 seed[0..7](种子确定性断言)
+    const k = seed1.subarray(0, 8).join(", ")
+    expect(gv.includes(`{ ${k} }`)).toBe(true)
   })
 })
 

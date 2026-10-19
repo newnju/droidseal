@@ -24,7 +24,7 @@ import { randomBytes, randomInt } from "node:crypto"
  * 生成 CRC32 计算的 C 代码。
  * 用于校验 libc.so 的 .text 段是否被 Frida hook 修改。
  */
-export function generateCrc32C(): string {
+export function generateCrc32C(prefix: string = "ds"): string {
   return `// DroidSeal CRC32 实现
 // 用于反 Frida 的 libc .text 段完整性校验
 // dpt-shell 特征技术
@@ -69,7 +69,7 @@ static const uint32_t CRC32_TABLE[256] = {
   0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D
 };
 
-uint32_t droidseal_crc32(const uint8_t *data, size_t length) {
+uint32_t ${prefix}_crc32(const uint8_t *data, size_t length) {
     uint32_t crc = 0xFFFFFFFF;
     for (size_t i = 0; i < length; i++) {
         crc = CRC32_TABLE[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
@@ -378,6 +378,12 @@ export interface NativeShellConfig {
   jniClassPath?: string | undefined
   /** VMP 里程碑 B:vm_interpreter.c + vm_bridge.c 随壳 SO 编译(由管线注入内容) */
   includeVm?: boolean
+  /** C 项逐构建结构随机化:内部 C 标识符前缀(valid C ident;默认 "ds" = 确定性回退)。
+   *  JNI 导出名不入前缀(Java 契约固定)。 */
+  identPrefix?: string
+  /** C 项逐构建结构随机化:filler 函数 + 检测循环置换 + guard XOR key 的种子;
+   *  构建期随机生成。缺省 = crypto 随机(即每次调用都不同)。 */
+  noiseSeed16?: Uint8Array
 }
 
 /**
@@ -449,23 +455,41 @@ ${jniName}(JNIEnv *env, jclass clazz) {
  *  - native fopen 读 /proc/self/maps 扫 frida/gum 特征(与 Java 读同一文件但走 libc 缓冲路径)。
  * 任一命中返回 1。所有失败按干净处理(不误伤);导出名与 DroidSealLoader.nativeGuardVote 对应。
  */
-export function generateGuardVoteC(jniClassPath: string): string {
+export function generateGuardVoteC(jniClassPath: string, prefix: string = "ds", noiseSeed16?: Uint8Array): string {
   const jniName = `Java_${jniClassPath.replace(/\//g, "_")}_nativeGuardVote`
   // 自混淆(构建期):敏感字符串按次构建随机 key 逐字节 XOR 编码,运行时经
-  // ds_dstr 解码到栈缓冲——strings/grep 不再能直接扫出 "frida"/"TracerPid:" 等
-  // 壳特征;key 逐构建随机,同一逻辑每次构建密文不同。控制流:三个检测源经
-  // dispatch loop 状态机轮询,静态读源看不出检测顺序与短路关系。
-  const xk = Array.from(randomBytes(8), (b) => b & 0xff)
+  // _dstr 解码到栈缓冲——strings/grep 不再能直接扫出 "frida"/"TracerPid:" 等
+  // 壳特征;key 逐构建随机,同一逻辑每次构建密文不同。控制流:四个检测源经
+  // dispatch loop 状态机轮询且逐构建随机置换(语义不变:全部源参与聚合,
+  // 命中即投 1;单步跟踪看不出 /** 顺序跨构建稳定与否 */)。
+  const xk = noiseSeed16
+    ? Array.from(noiseSeed16.subarray(0, 8), (b) => b & 0xff)
+    : Array.from(randomBytes(8), (b) => b & 0xff)
+  // 逐构建检测源置换:C 项结构随机化之一(perm 源 = seed[8..11] 或 crypto 随机)
+  const permBytes = noiseSeed16 ? noiseSeed16.subarray(8, 12) : randomBytes(4)
+  const idx = [0, 1, 2, 3]
+  for (let i = 3; i > 0; i--) {
+    const j = permBytes[i]! % (i + 1)
+    const t = idx[i]!; idx[i] = idx[j]!; idx[j] = t
+  }
   const strs = ["/proc/self/maps", "/proc/%d/status", "TracerPid:", "frida", "gum-js-loop", "linjector"]
   const enc = strs.map((s) => {
     const bytes = Array.from(new TextEncoder().encode(s))
     return bytes.map((b, i) => b ^ xk[i % xk.length]!)
   })
-  const dataArrs = enc.map((d, i) => `static const unsigned char ds_e${i}[${d.length}] = { ${d.join(", ")} };`).join("\n")
-  const ptrs = enc.map((_, i) => `ds_e${i}`).join(", ")
+  const dataArrs = enc.map((d, i) => `static const unsigned char ${prefix}_e${i}[${d.length}] = { ${d.join(", ")} };`).join("\n")
+  const ptrs = enc.map((_, i) => `${prefix}_e${i}`).join(", ")
   const lens = enc.map((d) => d.length)
+  // dispatch 语义顺序不变、来源排序置换:case k 执行 perm 后的第 k 个检测源
+  const srcCalls = [
+    `verdict |= ${prefix}_parent_traced() ? 1 : 0`,
+    `verdict |= (${prefix}_probe_port(27042) || ${prefix}_probe_port(27043)) ? 1 : 0`,
+    `verdict |= ${prefix}_maps_hit() ? 1 : 0`,
+    `{ int ti = ${prefix}_text_integrity_check(); verdict |= (ti == 1) ? 1 : 0; }`,
+  ]
+  const cases = idx.map((srcIdx, k) => `            case ${k}: ${srcCalls[srcIdx]}; break;`).join("\n")
   return `// DroidSeal native 反分析检测(构建期自动生成,勿手动修改)
-// 字符串逐构建 XOR 混淆(运行时解码);三检测源 dispatch 状态机轮询
+// 字符串逐构建 XOR 混淆(运行时解码);四检测源 dispatch 状态机轮询(来源排序逐构建置换)
 #include <jni.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -477,19 +501,19 @@ export function generateGuardVoteC(jniClassPath: string): string {
 #include <string.h>
 #include <stdio.h>
 
-static const unsigned char ds_k[8] = { ${xk.join(", ")} };
+static const unsigned char ${prefix}_k[8] = { ${xk.join(", ")} };
 ${dataArrs}
-static const unsigned char* const ds_e[6] = { ${ptrs} };
-static const int ds_len[6] = { ${lens.join(", ")} };
+static const unsigned char* const _e[6] = { ${ptrs} };
+static const int _len[6] = { ${lens.join(", ")} };
 
 /* 运行时解码第 idx 条字符串到 buf(调用方保证容量;XOR 可逆) */
-static void ds_dstr(int idx, char* buf) {
-    int n = ds_len[idx];
-    for (int i = 0; i < n; i++) buf[i] = (char)(ds_e[idx][i] ^ ds_k[i % 8]);
+static void ${prefix}_dstr(int idx, char* buf) {
+    int n = _len[idx];
+    for (int i = 0; i < n; i++) buf[i] = (char)(_e[idx][i] ^ _k[i % 8]);
     buf[n] = 0;
 }
 
-static int ds_probe_port(unsigned short port) {
+static int ${prefix}_probe_port(unsigned short port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return 0;
     struct sockaddr_in a;
@@ -502,18 +526,18 @@ static int ds_probe_port(unsigned short port) {
     return hit ? 1 : 0;
 }
 
-static int ds_maps_hit(void) {
+static int ${prefix}_maps_hit(void) {
     char path[64];
-    ds_dstr(0, path);
+    ${prefix}_dstr(0, path);
     FILE* f = fopen(path, "r");
     if (!f) return 0;
     char line[512];
     int hit = 0;
     while (fgets(line, sizeof(line), f)) {
         char pat[3][16];
-        ds_dstr(3, pat[0]);
-        ds_dstr(4, pat[1]);
-        ds_dstr(5, pat[2]);
+        ${prefix}_dstr(3, pat[0]);
+        ${prefix}_dstr(4, pat[1]);
+        ${prefix}_dstr(5, pat[2]);
         if (strstr(line, pat[0]) || strstr(line, pat[1]) || strstr(line, pat[2])) {
             hit = 1;
             break;
@@ -526,18 +550,18 @@ static int ds_maps_hit(void) {
 /* 子进程跨进程读父进程 /proc/<ppid>/status 的 TracerPid(与 Java 读 /proc/self/status
  * 路径异构;零副作用——不使用 PTRACE_TRACEME,避免污染自身 trace 状态)。
  * 任何失败按干净返回 0(不误伤)。 */
-static int ds_parent_traced(void) {
+static int ${prefix}_parent_traced(void) {
     pid_t ppid = getppid();
     if (ppid <= 0) return 0;
     char path[64];
     char fmt[32];
-    ds_dstr(1, fmt);
+    ${prefix}_dstr(1, fmt);
     snprintf(path, sizeof(path), fmt, (int) ppid);
     FILE* f = fopen(path, "r");
     if (!f) return 0;
     char line[256];
     char key[16];
-    ds_dstr(2, key);
+    ${prefix}_dstr(2, key);
     int hit = 0;
     while (fgets(line, sizeof(line), f)) {
         if (strncmp(line, key, strlen(key)) == 0) {
@@ -555,15 +579,12 @@ JNIEXPORT jint JNICALL
 ${jniName}(JNIEnv *env, jclass clazz) {
     /* dispatch 状态机:轮询四个检测源(顺序经状态变量交织,单步跟踪看不出
      * 优先级;任一命中即投 1,全部干净返回 0。"无法核验"的源不投票)。 */
-    extern int ds_text_integrity_check(void); /* text_integrity.c */
+    extern int ${prefix}_text_integrity_check(void); /* text_integrity.c */
     volatile int state = 0;
     int verdict = 0;
     while (state < 4) {
         switch (state) {
-            case 0: verdict |= ds_parent_traced() ? 1 : 0; break;
-            case 1: verdict |= (ds_probe_port(27042) || ds_probe_port(27043)) ? 1 : 0; break;
-            case 2: verdict |= ds_maps_hit() ? 1 : 0; break;
-            case 3: { int ti = ds_text_integrity_check(); verdict |= (ti == 1) ? 1 : 0; break; } /* -1 无法核验 → 不投票 */
+${cases}
             default: break;
         }
         if (verdict) break;
@@ -576,7 +597,40 @@ ${jniName}(JNIEnv *env, jclass clazz) {
 
 // ── text 段完整性自检(构建期补丁 + 运行时比对)────────────────────────────
 
-export function generateTextIntegrityC(): string {
+export function generateTextIntegrityC(prefix: string = "ds", noiseSeed16?: Uint8Array): string {
+  // C 项逐构建 filler:数量 1–3、每函数常量表 5 字(均源自 seed 或 crypto 随机);
+  // used + 静态符号表驻留,volatile 全局求和汇——运行时无可观行为,惩罚为零;
+  // 唯一效果 = .text 字节布局逐构建不同(段 CRC 构建期补丁,语义不变)。
+  let fillers = ""
+  let fillRefs: Array<string> = []
+  if (noiseSeed16) {
+    const count = 1 + (noiseSeed16[12]! % 3)
+    for (let k = 0; k < count; k++) {
+      const words: Array<string> = []
+      const wordCount = 3 + (noiseSeed16[13 + k]! % 3)
+      for (let w = 0; w < wordCount; w++) {
+        const off = 14 + (k * 5 + w * 2) % 12
+        const v = (noiseSeed16[off]! << 8) | noiseSeed16[off + 1]!
+        words.push(`0x${((v * 4099 + 0x30f31023) >>> 0).toString(16).padStart(8, "0")}`)
+      }
+      fillers += `__attribute__((used)) static unsigned int ${prefix}_filler${k}(void) {
+    static const unsigned int t[${words.length}] = { ${words.join(", ")} };
+    unsigned int v = 2166136261u;
+    for (unsigned int i = 0; i < ${words.length}; i++) v = (v ^ t[i]) * 16777619u;
+    return v;
+}
+`
+      fillRefs.push(`(void*)${prefix}_filler${k}`)
+    }
+  }
+  const fillerBlock = fillers
+    ? `/* C 项逐构建 filler(used 驻留):volatile 全局求和汇,运行时无可观行为;
+       常量表逐构建随机 → .text 布局逐构建不同(段 CRC 构建期补丁,语义不变)。 */
+static volatile unsigned int ${prefix}_filler_sink = 0;
+${fillers}/* 防止 dead-code elimination:used + 引用数组驻留符号表(需在定义之后引用) */
+__attribute__((used)) static void* const ${prefix}_fillers[${fillRefs.length}] = { ${fillRefs.join(", ")} };
+`
+    : ""
   return `// DroidSeal .text 段完整性自检(构建期自动生成,勿手动修改)
 // 原理:构建流水线在编译完成后,对本文件内 "DSTC" 标记块原位补丁,写入
 // 可执行 PT_LOAD 段的 CRC32(LE)。运行时经 dladdr 定位加载基址,解析自身
@@ -588,19 +642,18 @@ export function generateTextIntegrityC(): string {
 #include <dlfcn.h>
 #include <elf.h>
 
-extern uint32_t droidseal_crc32(const uint8_t* data, size_t length);
+extern uint32_t ${prefix}_crc32(const uint8_t* data, size_t length);
 
 /* 标记块位于 .rodata(只读非可执行段)——构建期补丁写值不影响被校验的可执行段 */
-static volatile const unsigned char ds_tic[12] = {
+static volatile const unsigned char ${prefix}_tic[12] = {
     'D', 'S', 'T', 'C', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
-
-int ds_text_integrity_check(void) {
+${fillerBlock}int ${prefix}_text_integrity_check(void) {
     Dl_info info;
-    if (dladdr((const void*)&ds_tic, &info) == 0 || info.dli_fbase == NULL) return -1;
-    if (memcmp((const void*)ds_tic, "DSTC", 4) != 0) return -1; /* 未补丁:如实不核验 */
+    if (dladdr((const void*)&${prefix}_tic, &info) == 0 || info.dli_fbase == NULL) return -1;
+    if (memcmp((const void*)${prefix}_tic, "DSTC", 4) != 0) return -1; /* 未补丁:如实不核验 */
     unsigned char tmp[4];
-    for (int i = 0; i < 4; i++) tmp[i] = ds_tic[4 + i];
+    for (int i = 0; i < 4; i++) tmp[i] = ${prefix}_tic[4 + i];
     uint32_t expected = 0;
     memcpy(&expected, tmp, 4); /* LE:与构建期补丁同序 */
     const unsigned char* base = (const unsigned char*)info.dli_fbase;
@@ -625,7 +678,7 @@ int ds_text_integrity_check(void) {
         if (p_type != PT_LOAD || (p_flags & PF_X) == 0) continue;
         if (found) return -1; /* 多可执行段:构建期未补丁,如实不核验 */
         if (p_filesz == 0 || p_filesz > (1ull << 30)) return -1;
-        actual = droidseal_crc32(base + p_vaddr, (size_t)p_filesz);
+        actual = ${prefix}_crc32(base + p_vaddr, (size_t)p_filesz);
         found = 1;
     }
     if (!found) return -1;
@@ -708,13 +761,16 @@ export function generateNativeShellFiles(config: NativeShellConfig): Array<{ nam
   const files: Array<{ name: string; content: string }> = []
   const dir = `native/${config.soName.replace("lib", "").replace(".so", "")}`
   const withKeyPart2 = Boolean(config.keyPart2Hex && config.jniClassPath)
+  // C 项逐构建结构随机化:prefix = 新鲜构建 → 随机;缺省 "ds" = 确定性回退。
+  // JNI 导出名固定(Java 契约);其余内部符号经实现方传入参数注入。
+  const prefix = config.identPrefix ?? "ds"
 
   // CRC32 实现
-  files.push({ name: `${dir}/crc32.c`, content: generateCrc32C() })
+  files.push({ name: `${dir}/crc32.c`, content: generateCrc32C(prefix) })
 
   // text 段完整性自检(构建期补丁 + 运行时比对;检测 inline hook——
-  // 改名 gadget 可绕 maps 扫描,绕不过段校验)
-  files.push({ name: `${dir}/text_integrity.c`, content: generateTextIntegrityC() })
+  // 改名 gadget 可绕 maps 扫描,绕不过段校验;filler 逐构建扰动 .text 布局)
+  files.push({ name: `${dir}/text_integrity.c`, content: generateTextIntegrityC(prefix, config.noiseSeed16) })
 
   // Split-Key part2 内嵌数组 + JNI 导出(异位存放:完整密钥不在任何单个 DEX 中)
   if (withKeyPart2) {
@@ -723,7 +779,7 @@ export function generateNativeShellFiles(config: NativeShellConfig): Array<{ nam
 
   // P1 异构检测投票 native 源(与 Java 源读取路径异构,参与 envVote 派生污染)
   if (withKeyPart2 && config.jniClassPath) {
-    files.push({ name: `${dir}/guard_vote.c`, content: generateGuardVoteC(config.jniClassPath) })
+    files.push({ name: `${dir}/guard_vote.c`, content: generateGuardVoteC(config.jniClassPath, prefix, config.noiseSeed16) })
   }
 
   // ART hook 主文件
