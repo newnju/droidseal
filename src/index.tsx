@@ -70,6 +70,8 @@ function usage(): string {
   --no-resource            禁用资源加密
   --no-string              禁用字符串加密
   --no-runtime             禁用运行时保护
+  --root-vote              B 项 opt-in:root/引诱信号入环境投票 + 巡逻环境复投票
+                           (默认关;开启即接受 root 设备上解密失败/销毁退出)
   --no-triple-entry        禁用三重入口
   --no-random-names        禁用随机包名/SO 名
   --exclude <pattern>      类排除规则(可多次指定)
@@ -332,6 +334,7 @@ if (resolved && resolved.inputPath) {
       enableSoEncryption: !hasFlag("--no-so"),
       enableResourceEncryption: !hasFlag("--no-resource"),
       enableRuntimeProtection: !hasFlag("--no-runtime"),
+      enableRootVoteSignals: hasFlag("--root-vote"),
       enableTripleEntry: profileArg === "balanced" ? !hasFlag("--no-triple-entry") : profile.triple,
       enableRandomNames: profileArg === "balanced" ? !hasFlag("--no-random-names") : profile.randomNames,
       classExclusionPatterns: excludePatterns,

@@ -28,6 +28,8 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 
 - **P0-C 分块窗口化(loader 明文移出 Java 堆)**:payload 容器逐条目解密后立即转 direct `ByteBuffer` 并清零 Java 堆明文数组(citable 补丁在 byte[] 阶段完成后同法处理;`InMemoryDexClassLoader` 改持 direct 缓冲;API<26 降级改 `FileChannel` 直写)。Java 堆扫描型 dump 不再可见任何完整明文 DEX;native 残留窗(零拷贝 ART 版本不可清零)与 `BootstrapStub` loader-asset 端如实披露为已知边界;`runtime/droidseal-loader.dex`/`droidseal-stub.dex` 重编译入库,harden-chain 20 项与 dex-artifacts/security-regression 12 项回归全绿。
 
+- **B 项 root-vote opt-in + 运行期锚点巡逻(`--root-vote`,默认关)**:环境投票新增第四源 `DroidSealGuard.detectRoot()`(su 二进制族 / Magisk 落盘 / Build.TAGS test-keys,受限挂载假阴性如实披露)——开发者显式 opt-in 后,root 设备派生出与构建期(`-e0`)不同的错钥 → 静默 fail-closed;巡逻线程(两条随机节流守护,45–180s 初检 / 20–90s 复检)新增 manifest 完整性锚点复算(init 快照比对,装载后 APK 替换即确定性处置,读取受阻跳过不误伤)与 opt-in 环境复投票(late-hook/中途换环境在 keyUsed 后触发延迟销毁)。构建期 `LOADER_OPT_FLAG_PATCH_MISSING`/`ROOT_VOTE_OPTIN_ENABLED` 双 finding 如实上报;发布物开关槽恒清(0x01/0x00 等长替换 0xC5×16),不留构建配置指纹。loader 重编译(18168→19436B)入 harnessed 回归 23 项全绿;真机 test-keys 配对轮:opt-in 开 = fail-closed 正确(5/5 反转断言),关 + 同 loader = 启动闭环 5/5 PASS(pid=2911)。
+
 ### Fixed
 
 - **补丁后 payload DEX 被ART 拒载——校验和/签名顺序颠倒（critical，SEC-010）**：`updateDexChecksum` 两份拷贝（`dex-protection.ts`、`dex-payload-inject.ts`）先算 Adler32 再写 SHA-1 签名——签名一落盘刚算好的校验和立即失效，真机/模拟器上 zygote 直接拒载（`Bad checksum` → `ClassNotFoundException` 静默崩溃）。构建期校验和测试全绿是因为测的是正确实现（`dex-model.recomputeDexChecksums`），不是实际使用的那份拷贝。修复为规范顺序：先签名、后校验和，两份拷贝统一并注释引用 SEC-010。

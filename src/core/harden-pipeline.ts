@@ -56,6 +56,10 @@ export interface HardenConfig {
   classExclusionPatterns: string[]
   runtimeConfig?: RuntimeProtectionConfig | undefined
   signingConfig?: import("./apk-repack.ts").SigningConfig | undefined
+  /** B 项 opt-in(默认 false):root/引诱信号(su 族/Magisk/test-keys)进入环境投票,
+   *  并同步启用巡逻复检的环境复投票(late-hook/中途换环境检测)。
+   *  开发者显式开启即接受"root 设备上解密失败/销毁退出"的语义。 */
+  enableRootVoteSignals?: boolean
   /** 默认 false(经典模式):结束清理 native/smali 等过程目录,只留最终 APK;true(测试学习模式)保留 */
   keepIntermediates?: boolean
 }
@@ -693,7 +697,30 @@ export async function runHardenPipeline(config: HardenConfig): Promise<HardenRes
   if (loaderDexRaw) {
     // 密钥两段:XOR 后 = AES-256 密钥(与 ShellApplication.KEY_PART1/KEY_PART2 严格一致)
     const keyParts = keyMaterial?.splitKey ?? splitKey(keyMaterial?.encryptionKey ?? createHash("sha256").update(apkSha256).digest())
-    const patchResult = patchLoaderDexKeys(loaderDexRaw, keyParts.part1, keyParts.part2, config.certSha256)
+    // B 项 opt-in:两个开关由 config.enableRootVoteSignals 一并驱动(root 入投票 +
+    // 巡逻复投票同期启用——一个语句的语义面,开就开整个增强集)
+    const optIn = config.enableRootVoteSignals === true
+      ? { rootSignals: true, patrolRevote: true }
+      : { rootSignals: false, patrolRevote: false }
+    const patchResult = patchLoaderDexKeys(loaderDexRaw, keyParts.part1, keyParts.part2, config.certSha256, optIn)
+    if (!patchResult.patchedFlags) {
+      findings.push({
+        severity: "medium", confidence: "high", code: "LOADER_OPT_FLAG_PATCH_MISSING",
+        title: "opt-in 开关标记未命中(环境投票保持默认关闭)",
+        detail: "0xC5×16 标记未在 loader DEX 中定位到——B 项 opt-in(root 信号/巡逻复投票)未生效;loader DEX 可能与补丁逻辑版本不匹配。运行时按关闭语义(fail-safe),无误伤。",
+        recommendation: "重新编译 runtime/java 生成一致的 loader DEX。",
+        evidence: `optIn.root=${optIn.rootSignals}`,
+      })
+    }
+    if (patchResult.patchedFlags && optIn.rootSignals) {
+      findings.push({
+        severity: "info", confidence: "high", code: "ROOT_VOTE_OPTIN_ENABLED",
+        title: "B 项 root/巡逻复投票 opt-in 已启用(0xC5 标记替换为 0x01)",
+        detail: "环境投票新增第四源(DroidSealGuard.detectRoot:su 族/Magisk/test-keys),巡逻线程同步执行环境复投票——late-hook/中途换环境在 keyUsed 后触发销毁退出。发布物不保留 0xC5 标记。root 常态用户设备将受此开关影响(开发者已 opt-in 接受)。",
+        recommendation: "确认目标用户群不含合法 root 场景;如需评估暴露度请运行 scripts/artifact-metrics.ts。",
+        evidence: `loaderSize=${patchResult.dex.length}`,
+      })
+    }
     if (!patchResult.patchedCert && config.certSha256) {
       findings.push({
         severity: "medium", confidence: "high", code: "LOADER_CERT_PATCH_MISSING",

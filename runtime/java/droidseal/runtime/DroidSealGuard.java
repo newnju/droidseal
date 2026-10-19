@@ -25,6 +25,29 @@ public final class DroidSealGuard {
         return false;
     }
 
+    /** B 项 opt-in:root/引诱信号探测(su 二进制族 / Magisk 落盘 / test-keys 构建)。
+     *  仅在环境投票 opt-in 开启(FLAGS[0]==0x01)时被调用——默认关闭,root 常态
+     *  用户设备不误伤。受限挂载的不可读路径 File.exists 可能假阴性——如实边界:
+     *  本源为概率性证据,与 native/其它源独立,命中即进入投票聚合。 */
+    public static boolean detectRoot() {
+        final String[] probes = {
+            "/system/bin/su", "/system/xbin/su", "/sbin/su", "/su/bin/su",
+            "/system/bin/.ext/.su", "/system/usr/we-need-root/su-backup",
+            "/data/local/xbin/su", "/data/local/bin/su", "/data/local/su",
+            "/system/app/Superuser.apk", "/sbin/magisk", "/cache/.disable_magfc",
+            "/cache/magisk.log", "/data/adb/magisk",
+        };
+        for (int i = 0; i < probes.length; i++) {
+            try {
+                if (new java.io.File(probes[i]).exists()) return true;
+            } catch (Throwable ignored) {}
+        }
+        try {
+            if (android.os.Build.TAGS != null && android.os.Build.TAGS.indexOf("test-keys") >= 0) return true;
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
     /** /proc/self/maps 扫描 Frida 注入特征。 */
     private static boolean detectFridaMaps() throws Exception {
         BufferedReader br = new BufferedReader(new FileReader("/proc/self/maps"), 8192);

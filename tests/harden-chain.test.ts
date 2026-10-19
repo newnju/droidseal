@@ -187,6 +187,48 @@ describe("loader DEX 密钥补丁", () => {
   })
 })
 
+describe("loader DEX opt-in 开关标记(B 项)", () => {
+  /** 定位 16B 同值字节串;找不到返回 -1 */
+  function endsOfRun(dex: Uint8Array, byte: number, len: number): number {
+    for (let i = 0; i <= dex.length - len; i++) {
+      let j = 0
+      while (j < len && dex[i + j] === byte) j++
+      if (j === len) return i
+    }
+    return -1
+  }
+
+  test("opt-in 启用:标记槽位替换为 0x01×16,0xC5×16 不残留", () => {
+    const dex = loaderDex()
+    const slot = endsOfRun(dex, 0xc5, 16)
+    expect(slot).toBeGreaterThanOrEqual(0) // 未补丁 loader 含 0xC5×16
+    const r = patchLoaderDexKeys(dex, randomBytes(32), randomBytes(32), CERT, { rootSignals: true, patrolRevote: true })
+    expect(r.patchedFlags).toBe(true)
+    // 同一槽位被替换为 0x01(其余区域本就含单字节 0xC5/0x01,断言限制在标记槽内)
+    let on16 = true
+    for (let j = 0; j < 16; j++) on16 = on16 && r.dex[slot + j] === 0x01
+    expect(on16).toBe(true)
+    expect(endsOfRun(r.dex, 0xc5, 16)).toBe(-1)
+  })
+
+  test("opt-in 关闭:标记槽位仍被替换(0x00×16),不留指纹", () => {
+    const dex = loaderDex()
+    const slot = endsOfRun(dex, 0xc5, 16)
+    const r = patchLoaderDexKeys(dex, randomBytes(32), randomBytes(32), CERT, { rootSignals: false, patrolRevote: false })
+    expect(r.patchedFlags).toBe(true)
+    let off16 = true
+    for (let j = 0; j < 16; j++) off16 = off16 && r.dex[slot + j] === 0x00
+    expect(off16).toBe(true)
+    expect(endsOfRun(r.dex, 0xc5, 16)).toBe(-1)
+  })
+
+  test("未传 optIn:标记保持 0xC5 原样(旧调用兼容)", () => {
+    const r = patchLoaderDexKeys(loaderDex(), randomBytes(32), randomBytes(32), CERT)
+    expect(r.patchedFlags).toBe(false)
+    expect(endsOfRun(r.dex, 0xc5, 16)).toBeGreaterThanOrEqual(0)
+  })
+})
+
 describe("loader DEX 自加密(HKDF(证书摘要))", () => {
   test("密文非 DEX magic 且长度 = 28 + 明文", () => {
     const dex = loaderDex()

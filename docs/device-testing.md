@@ -211,6 +211,33 @@ frida-inject 驻留主进程(无 frida-server,不暴露 27042 端口,不触发�
 
 历史口径"61 read calls"与本轮 18 的差异属 I/O 量差异(窗口与交互路径不同),以本轮提交证据为准;证据与机械转写:`benchmark/device-hook-20261018.{md,json}`(由 `E:/env/frida/hook-window.log` 心跳原文转写)。复现:`bun scripts/run-hook-experiment.ts <frida-inject>`(hook 脚本 `scripts/frida-active-hook.js` 已升级 Frida 17 模块实例 API——旧静态 `Module.getExportByName` 在 Frida 17 已移除,曾致一次静默挂载失败,如实记录)。
 
+## 实测记录(2026-10-19,API 26 x86_64 模拟器(ro.build.tags=test-keys),P0-C 分块窗口化回归 + B 项 root-vote 配对轮)
+
+三轮同环境(ds-a26)配对实测;`scripts/device-test.sh` 本轮在 Windows checkout 下曾因 CRLF 行尾无法执行(`git blob` 内本为 LF,autocrlf 转换所致;`.gitattributes` 已补 `*.sh text eol=lf` 根因修复)。
+
+### 轮 1:P0-C 分块窗口化产物回归(`out/aiex-fresh2`,loader 18168B 含 chunked 装载)
+
+| 判据 | 结果 |
+|---|---|
+| D1a | 设备 API 26 = 期望 26 |
+| D1 | install -r 成功 |
+| D2 | 进程存活 pid=2853(解密+壳启动闭环完成) |
+| D3 | 无完整性/GCM 失败标记 |
+| D6 | 卸载干净 |
+
+**5/5 PASS**——P0-C 逐条目解密→direct ByteBuffer→即刻清零的重构在真机解密+启动闭环无回归;设备侧明文窗口语义的量化(Java 堆 dump 对拍)仍属已知边界,另行定量。
+
+### 轮 2:B 项 root-vote opt-in 配对实验(fresh3/fresh4,同一模拟器)
+
+B 项实现:环境投票新增第四源 `DroidSealGuard.detectRoot()`(su 二进制族 / Magisk 落盘 / `ro.build.tags` test-keys,构建期 `--root-vote` opt-in);巡逻线程同步执行 manifest 锚点复算(initAnchor 快照比对)与 opt-in 环境复投票。镜像 test-keys ⇒ opt-in 产物在该环境**预期 fail-closed**:
+
+| 产物 | loader(含 opt-in 标记) | 设备结局 |
+|---|---|---|
+| `out/aiex-fresh3`(`--root-vote`,classes2.dex 19436B,0x01×16@9264) | 新 loader,root 入投票 | **fail-closed 正确**:install 成功,原始 Activity 未渲染/崩溃对话框挂起(D2 方向反转 PASS),D3 无 GCM 失败标记,D6 卸载干净——5/5 PASS |
+| `out/aiex-fresh4`(无 opt-in,classes2.dex 19436B,开关槽=0x00×16,C5 无残留) | 新 loader,root 不入投票 | 进程存活 pid=2911,解密+壳启动闭环完成——5/5 PASS |
+
+配对结论:root 信号确实折叠进密钥派生(HKDF info `-e<vote>`:构建期 e0 vs 设备端 e1 → 错钥 → 静默失败、无 dump 可见),同 loader 关闭态不受影响(新鲜对照四轮启动存活:2853/2911 皆闭环)。发布物不留 0xC5 特征(opt-in 关闭态也清理标记)。已知边界如实:磁盘布局/无盘带 su 路径 `File.exists` 可能假阴性;巡逻的锚点复算在 APK 读取受阻时跳过(不误伤);这些为概率性证据源,与确定性证据(签名失配)分层。
+
 ## 对抗审计(自动化闭环)
 
 真机在手后的对抗性验收:一条命令跑完"部署 → 对抗验证 → verdict 回写"环,

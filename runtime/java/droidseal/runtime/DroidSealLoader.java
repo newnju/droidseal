@@ -62,6 +62,19 @@ public final class DroidSealLoader {
     private static volatile boolean integrityVerified = false;
     // 标记 1:自校验失配(确定性重打包证据)——置位后 init 中止,密钥永不进入内存
     private static volatile boolean integrityFailed = false;
+    // B 项 opt-in 开关,构建期 patchLoaderOptFlags 等长替换(0xC5×16 标记):
+    //   FLAGS[0]=0x01 → root/引诱信号进入环境投票;FLAGS[1]=0x01 → 巡逻复检含环境复投票。
+    //   语义反转设计:未补丁(仍 0xC5)与补丁后 0x00 均为"关闭"——构建未启用/补丁
+    //   缺失不触发更激进的处置(fail-safe,不误伤)。
+    private static final byte[] OPT_IN_FLAGS = {
+        (byte) 0xC5, (byte) 0xC5, (byte) 0xC5, (byte) 0xC5,
+        (byte) 0xC5, (byte) 0xC5, (byte) 0xC5, (byte) 0xC5,
+        (byte) 0xC5, (byte) 0xC5, (byte) 0xC5, (byte) 0xC5,
+        (byte) 0xC5, (byte) 0xC5, (byte) 0xC5, (byte) 0xC5,
+    };
+    // P0-A 锚点巡逻快照:init 时计算一次(与逐条目派生同源),巡逻线程定期重算
+    // manifest SHA-256 与之比对——不一致 = 装载后 APK 被替换/篡改。
+    private static volatile byte[] initAnchor = null;
 
     /**
      * 运行时签名自校验:当前 APK 签名证书指纹与构建期嵌入值比对。
@@ -116,6 +129,14 @@ public final class DroidSealLoader {
                         Thread.sleep(45_000 + rnd.nextInt(135_000)); // 初检 45–180s
                         while (!disposed && !integrityFailed) {
                             doVerifyIntegrity(app);
+                            // B 项:manifest 锚点巡逻 + opt-in 环境复投票(各自独立源)
+                            patrolAnchor();
+                            if (OPT_IN_FLAGS[1] == 0x01 && keyUsed && voteEnvironment()) {
+                                // 复投票命中 = late-hook / 中途换环境,密钥已使用,
+                                // 按确定性证据处置(与 verifyIntegrity 失配同级)
+                                startDispose();
+                                break;
+                            }
                             Thread.sleep(20_000 + rnd.nextInt(70_000)); // 复检 20–90s
                         }
                     } catch (Throwable ignored) {
@@ -139,6 +160,7 @@ public final class DroidSealLoader {
 
     /** P1 冗余异构投票:Java 源(DroidSealGuard)+ native 源(C 独立实现)+ debuggable 标志,
      *  三源独立、读取路径异构——绕过单一源不影响判定,攻击者需同时攻破全部。
+     *  B 项:第四源 root/引诱信号 opt-in(FLAGS[0])加入聚合。
      *  异常按"未命中"处理(不误伤);SO 未加载(NDK 缺失回退)时 native 源自动缺席。 */
     private static boolean voteEnvironment() {
         boolean vote = false;
@@ -156,6 +178,11 @@ public final class DroidSealLoader {
                     && (appContext.getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
                 vote = true;
             }
+        } catch (Throwable ignored) {}
+        // 源 4(B 项 opt-in):root/引诱信号——FLAGS[0]=0x01 才启用;默认关闭,
+        // root 常态用户设备不误伤(开发者显式 opt-in 后接受"root 环境解密失败"语义)
+        try {
+            if (OPT_IN_FLAGS[0] == 0x01 && DroidSealGuard.detectRoot()) vote = true;
         } catch (Throwable ignored) {}
         return vote;
     }
@@ -240,6 +267,7 @@ public final class DroidSealLoader {
             // P0-A:重算完整性锚点(自身 APK 的 manifest SHA-256),参与逐条目密钥派生。
             // 构建期有锚而运行时重算失败 → 锚不匹配 → 密钥错 → GCM 静默失败(fail-closed)。
             byte[] anchor = computeIntegrityAnchor();
+            initAnchor = anchor; // B 项巡逻快照:装载后 APK 被替换 → 巡逻复算比对命出
             // P0-C 密钥分片化:master = part1 ^ part2 不再常驻内存——每条目解密时
             // 临时合成、派生完立即清零。任意时刻内存无完整 master,hook/dump 单点
             // 快照拿不到可复用的密钥材料(effPart1/part2 各自只有一半,单独无意义)。
@@ -538,6 +566,23 @@ public final class DroidSealLoader {
             }
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    /** B 项运行期锚点巡逻:定期重算自身 APK manifest SHA-256 与 init 快照(initAnchor)比对。
+     *  不一致 = 装载后 APK 被整体替换/篡改(与签名失配同级,确定性证据,
+     *  免 keyUsed 门控直接处置)。读取失败(null)→ 跳过本次巡逻,不误伤
+     *  (如实边界:APK 读取受阻时无法断言篡改,宁可漏报不可错杀)。 */
+    private static void patrolAnchor() {
+        try {
+            if (initAnchor == null || disposed || integrityFailed) return;
+            byte[] cur = computeIntegrityAnchor();
+            if (cur == null) return; // 读取失败:跳过,不误伤
+            if (!java.util.Arrays.equals(cur, initAnchor)) {
+                integrityFailed = true;
+                startDispose();
+            }
+        } catch (Throwable ignored) {
         }
     }
 

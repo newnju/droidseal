@@ -10,6 +10,10 @@ const MARKER_LEN = 32
 const MARK_PART1 = new Uint8Array(MARKER_LEN).fill(0xa5)
 const MARK_PART2 = new Uint8Array(MARKER_LEN).fill(0x5a)
 const MARK_CERT = new Uint8Array(MARKER_LEN).fill(0xc3) // 期望证书 SHA-256 原始摘要标记
+// B 项 opt-in 开关标记:16B 0xC5(DroidSealLoader.OPT_IN_FLAGS)——启用=全 0x01,
+// 关闭=全 0x00;语义反转(仅 0x01 开启),补丁缺失 / 未补丁不触发激进处置
+const MARK_FLAGS_LEN = 16
+const MARK_FLAGS = new Uint8Array(MARK_FLAGS_LEN).fill(0xc5)
 
 function findMarker(dex: Uint8Array, marker: Uint8Array): number {
   const mLen = marker.length
@@ -28,6 +32,19 @@ export interface LoaderKeyPatchResult {
   patchedPart2: boolean
   /** 证书指纹标记是否补丁(verifyIntegrity 依赖;false = 运行时跳过自校验) */
   patchedCert: boolean
+  /** B 项 opt-in 标记是否补丁(false = 0xC5×16 标记未命中,调用方应输出 finding;
+   *  未提供 optIn 参数时恒为 false 且标记保持原样) */
+  patchedFlags: boolean
+}
+
+/** B 项 opt-in 开关载荷:启用 → 全 0x01,关闭 → 全 0x00。
+ *  运行时语义反转:仅 0x01 视为开启——未补丁 loader(仍 0xC5)与补丁后关闭
+ *  (0x00)行为一致,补丁缺失不会触发更激进处置(fail-safe)。 */
+export interface LoaderOptInFlags {
+  /** root/引诱信号(su 族 / Magisk / test-keys)进入环境投票 */
+  rootSignals: boolean
+  /** 巡逻复检时执行环境复投票(late-hook / 中途换环境检测) */
+  patrolRevote: boolean
 }
 
 /**
@@ -35,7 +52,7 @@ export interface LoaderKeyPatchResult {
  * 任一标记未命中时返回 patched*=false(调用方应输出 finding;未打补丁的 loader
  * 运行时会因密钥错误解密失败并优雅降级,不会崩溃)。
  */
-export function patchLoaderDexKeys(loaderDex: Uint8Array, part1: Uint8Array, part2: Uint8Array, certSha256Hex?: string): LoaderKeyPatchResult {
+export function patchLoaderDexKeys(loaderDex: Uint8Array, part1: Uint8Array, part2: Uint8Array, certSha256Hex?: string, optIn?: LoaderOptInFlags): LoaderKeyPatchResult {
   if (part1.length !== MARKER_LEN || part2.length !== MARKER_LEN) {
     throw new Error(`密钥两段必须为 ${MARKER_LEN}B,实际 ${part1.length}B/${part2.length}B`)
   }
@@ -43,6 +60,7 @@ export function patchLoaderDexKeys(loaderDex: Uint8Array, part1: Uint8Array, par
   let patchedPart1 = false
   let patchedPart2 = false
   let patchedCert = false
+  let patchedFlags = false
 
   const off1 = findMarker(out, MARK_PART1)
   if (off1 >= 0) {
@@ -62,9 +80,19 @@ export function patchLoaderDexKeys(loaderDex: Uint8Array, part1: Uint8Array, par
       patchedCert = true
     }
   }
-
-  if (patchedPart1 || patchedPart2 || patchedCert) {
-    return { dex: recomputeDexChecksums(out), patchedPart1, patchedPart2, patchedCert }
+  // B 项 opt-in(0xC5×16 → 全 0x01 或全 0x00):只要传入 optIn 就补丁,
+  // 关闭态也替换为 0x00——发布物不保留 0xC5 标记,避免成为特征指纹
+  if (optIn) {
+    const offF = findMarker(out, MARK_FLAGS)
+    if (offF >= 0) {
+      const on = (optIn.rootSignals || optIn.patrolRevote) ? 0x01 : 0x00
+      out.fill(on, offF, offF + MARK_FLAGS_LEN)
+      patchedFlags = true
+    }
   }
-  return { dex: out, patchedPart1, patchedPart2, patchedCert }
+
+  if (patchedPart1 || patchedPart2 || patchedCert || patchedFlags) {
+    return { dex: recomputeDexChecksums(out), patchedPart1, patchedPart2, patchedCert, patchedFlags }
+  }
+  return { dex: out, patchedPart1, patchedPart2, patchedCert, patchedFlags }
 }
