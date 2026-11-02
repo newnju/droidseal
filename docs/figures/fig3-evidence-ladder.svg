@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1321.92pt" height="817.92pt" viewBox="0 0 1321.92 817.92" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-11-02T10:18:51.916348</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 817.92 
+L 1321.92 817.92 
+L 1321.92 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 72.576 694.872 
+L 251.424 694.872 
+Q 260.496 694.872 260.496 689.328 
+L 260.496 627.552 
+Q 260.496 622.008 251.424 622.008 
+L 72.576 622.008 
+Q 63.504 622.008 63.504 627.552 
+L 63.504 689.328 
+Q 63.504 694.872 72.576 694.872 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #ccfbf1; stroke: #0f766e; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 292.896 591.912 
+L 471.744 591.912 
+Q 480.816 591.912 480.816 586.368 
+L 480.816 524.592 
+Q 480.816 519.048 471.744 519.048 
+L 292.896 519.048 
+Q 283.824 519.048 283.824 524.592 
+L 283.824 586.368 
+Q 283.824 591.912 292.896 591.912 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #ccfbf1; stroke: #0f766e; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 513.216 488.952 
+L 692.064 488.952 
+Q 701.136 488.952 701.136 483.408 
+L 701.136 421.632 
+Q 701.136 416.088 692.064 416.088 
+L 513.216 416.088 
+Q 504.144 416.088 504.144 421.632 
+L 504.144 483.408 
+Q 504.144 488.952 513.216 488.952 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #ccfbf1; stroke: #0f766e; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 733.536 385.992 
+L 1041.984 385.992 
+Q 1051.056 385.992 1051.056 380.448 
+L 1051.056 279.072 
+Q 1051.056 273.528 1041.984 273.528 
+L 733.536 273.528 
+Q 724.464 273.528 724.464 279.072 
+L 724.464 380.448 
+Q 724.464 385.992 733.536 385.992 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #fef3c7; stroke: #b45309; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 902.016 227.592 
+L 1249.344 227.592 
+Q 1258.416 227.592 1258.416 222.048 
+L 1258.416 120.672 
+Q 1258.416 115.128 1249.344 115.128 
+L 902.016 115.128 
+Q 892.944 115.128 892.944 120.672 
+L 892.944 222.048 
+Q 892.944 227.592 902.016 227.592 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #ffffff; stroke: #0f766e; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 69.984 789.912 
+L 1251.936 789.912 
+Q 1258.416 789.912 1258.416 785.952 
+L 1258.416 752.688 
+Q 1258.416 748.728 1251.936 748.728 
+L 69.984 748.728 
+Q 63.504 748.728 63.504 752.688 
+L 63.504 785.952 
+Q 63.504 789.912 69.984 789.912 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #fef3c7; stroke: #b45309; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 17px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="51.84" y="55.973344" transform="rotate(-0 51.84 55.973344)">Figure 3. Evidence ladder: what each verification layer can and cannot prove</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #4b5563" x="51.84" y="79.318406" transform="rotate(-0 51.84 79.318406)">DroidSeal reports a capability only at the highest layer that has actually been exercised; build-time green is not a runtime claim.</text>
+   </g>
+   <g id="patch_8">
+    <path d="M 58.32 741.6 
+Q 58.32 464.4 58.32 188.318034 
+" clip-path="url(#p1faf5bc11a)" style="fill: none; stroke: #9ca3af; stroke-linecap: round"/>
+    <path d="M 56.72 191.518034 
+L 58.32 188.318034 
+L 59.92 191.518034 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #9ca3af; stroke: #9ca3af; stroke-linecap: round"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 95.904 650.916 
+C 99.856587 650.916 103.647818 649.956324 106.442719 648.248329 
+C 109.237621 646.540333 110.808 644.22347 110.808 641.808 
+C 110.808 639.39253 109.237621 637.075667 106.442719 635.367671 
+C 103.647818 633.659676 99.856587 632.7 95.904 632.7 
+C 91.951413 632.7 88.160182 633.659676 85.365281 635.367671 
+C 82.570379 637.075667 81 639.39253 81 641.808 
+C 81 644.22347 82.570379 646.540333 85.365281 648.248329 
+C 88.160182 649.956324 91.951413 650.916 95.904 650.916 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #0f766e; stroke: #0f766e; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 316.224 547.956 
+C 320.176587 547.956 323.967818 546.996324 326.762719 545.288329 
+C 329.557621 543.580333 331.128 541.26347 331.128 538.848 
+C 331.128 536.43253 329.557621 534.115667 326.762719 532.407671 
+C 323.967818 530.699676 320.176587 529.74 316.224 529.74 
+C 312.271413 529.74 308.480182 530.699676 305.685281 532.407671 
+C 302.890379 534.115667 301.32 536.43253 301.32 538.848 
+C 301.32 541.26347 302.890379 543.580333 305.685281 545.288329 
+C 308.480182 546.996324 312.271413 547.956 316.224 547.956 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #0f766e; stroke: #0f766e; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 536.544 444.996 
+C 540.496587 444.996 544.287818 444.036324 547.082719 442.328329 
+C 549.877621 440.620333 551.448 438.30347 551.448 435.888 
+C 551.448 433.47253 549.877621 431.155667 547.082719 429.447671 
+C 544.287818 427.739676 540.496587 426.78 536.544 426.78 
+C 532.591413 426.78 528.800182 427.739676 526.005281 429.447671 
+C 523.210379 431.155667 521.64 433.47253 521.64 435.888 
+C 521.64 438.30347 523.210379 440.620333 526.005281 442.328329 
+C 528.800182 444.036324 532.591413 444.996 536.544 444.996 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #0f766e; stroke: #0f766e; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 756.864 302.436 
+C 760.816587 302.436 764.607818 301.476324 767.402719 299.768329 
+C 770.197621 298.060333 771.768 295.74347 771.768 293.328 
+C 771.768 290.91253 770.197621 288.595667 767.402719 286.887671 
+C 764.607818 285.179676 760.816587 284.22 756.864 284.22 
+C 752.911413 284.22 749.120182 285.179676 746.325281 286.887671 
+C 743.530379 288.595667 741.96 290.91253 741.96 293.328 
+C 741.96 295.74347 743.530379 298.060333 746.325281 299.768329 
+C 749.120182 301.476324 752.911413 302.436 756.864 302.436 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #b45309; stroke: #b45309; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 259.2 654.48 
+Q 273.456 618.84 287.089159 584.757103 
+" clip-path="url(#p1faf5bc11a)" style="fill: none; stroke: #9ca3af; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 283.412391 588.025341 
+L 287.089159 584.757103 
+L 287.497689 589.65946 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #9ca3af; stroke: #9ca3af; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 479.52 551.52 
+Q 493.776 515.88 507.409159 481.797103 
+" clip-path="url(#p1faf5bc11a)" style="fill: none; stroke: #9ca3af; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 503.732391 485.065341 
+L 507.409159 481.797103 
+L 507.817689 486.69946 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #9ca3af; stroke: #9ca3af; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 699.84 448.56 
+Q 714.096 410.94 727.757724 374.888227 
+" clip-path="url(#p1faf5bc11a)" style="fill: none; stroke: #9ca3af; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 724.141309 378.223125 
+L 727.757724 374.888227 
+L 728.255794 379.782298 
+z
+" clip-path="url(#p1faf5bc11a)" style="fill: #9ca3af; stroke: #9ca3af; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 7.4px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(40.802555 509.209891) rotate(-90)">evidence strength / cost</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 7.4px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #4b5563" x="660.96" y="740.354555" transform="rotate(-0 660.96 740.354555)">verification stage</text>
+   </g>
+   <g id="text_5">
+    <text style="font-weight: 700; font-size: 7px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="95.904" y="643.626359" transform="rotate(-0 95.904 643.626359)">1</text>
+   </g>
+   <g id="text_6">
+    <text style="font-weight: 700; font-size: 8.3px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="129.6" y="643.964379" transform="rotate(-0 129.6 643.964379)">Unit + regression</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(82.944 670.347709)">bun test</text>
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(82.944 678.629596)">crypto layout · container invariants</text>
+   </g>
+   <g id="text_8">
+    <text style="font-weight: 700; font-size: 6.5px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #0f766e" x="243.648" y="686.26473" transform="rotate(-0 243.648 686.26473)">failure: block merge</text>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 7px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="316.224" y="540.666359" transform="rotate(-0 316.224 540.666359)">2</text>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 8.3px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="349.92" y="541.004379" transform="rotate(-0 349.92 541.004379)">Adversarial regression</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(303.264 567.387709)">SEC-XX trigger case</text>
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(303.264 575.669596)">red before fix · green after</text>
+   </g>
+   <g id="text_12">
+    <text style="font-weight: 700; font-size: 6.5px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #0f766e" x="463.968" y="583.30473" transform="rotate(-0 463.968 583.30473)">failure: reject fix</text>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 700; font-size: 7px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="536.544" y="437.706359" transform="rotate(-0 536.544 437.706359)">3</text>
+   </g>
+   <g id="text_14">
+    <text style="font-weight: 700; font-size: 8.3px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="570.24" y="438.044379" transform="rotate(-0 570.24 438.044379)">Artifact baseline</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(523.584 464.427709)">H1-H6 on the final APK</text>
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(523.584 472.709596)">structural contract</text>
+   </g>
+   <g id="text_16">
+    <text style="font-weight: 700; font-size: 6.5px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #0f766e" x="684.288" y="480.34473" transform="rotate(-0 684.288 480.34473)">failure: rollback step</text>
+   </g>
+   <g id="text_17">
+    <text style="font-weight: 700; font-size: 7px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="756.864" y="295.146359" transform="rotate(-0 756.864 295.146359)">4</text>
+   </g>
+   <g id="text_18">
+    <text style="font-weight: 700; font-size: 8.3px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="790.56" y="295.484379" transform="rotate(-0 790.56 295.484379)">Device acceptance</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(743.904 337.526766)">install · launch · logcat · relaunch · uninstall</text>
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(743.904 345.808652)">VMP-lite leaf assertion on API 26</text>
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; fill: #4b5563" transform="translate(743.904 354.090539)">device/emulator runtime is the only runtime evidence</text>
+   </g>
+   <g id="text_20">
+    <text style="font-weight: 700; font-size: 6.5px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #b45309" x="1034.208" y="377.38473" transform="rotate(-0 1034.208 377.38473)">failure: release block</text>
+   </g>
+   <g id="text_21">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #0f766e" x="912.384" y="134.046281" transform="rotate(-0 912.384 134.046281)">claim discipline</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="912.384" y="162.856652" transform="rotate(-0 912.384 162.856652)">no artifact  →  no capability claim</text>
+   </g>
+   <g id="text_23">
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="912.384" y="179.488652" transform="rotate(-0 912.384 179.488652)">no device    →  no runtime claim</text>
+   </g>
+   <g id="text_24">
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="912.384" y="196.120652" transform="rotate(-0 912.384 196.120652)">no benchmark →  no comparative claim</text>
+   </g>
+   <g id="text_25">
+    <text style="font-size: 6.9px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="912.384" y="212.752652" transform="rotate(-0 912.384 212.752652)">unknown      →  reported as a finding</text>
+   </g>
+   <g id="text_26">
+    <text style="font-weight: 700; font-size: 8.4px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #111827" x="80.352" y="771.502359" transform="rotate(-0 80.352 771.502359)">Build-time green ≠ runtime correct. Device acceptance is the only evidence for runtime behavior.</text>
+   </g>
+   <g id="text_27">
+    <text style="font-size: 6.8px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #4b5563" x="1189.728" y="771.086672" transform="rotate(-0 1189.728 771.086672)">reproducible inputs: benchmark/ · docs/security-ledger · docs/threat-model</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p1faf5bc11a">
+   <rect x="12.96" y="12.96" width="1296" height="792"/>
+  </clipPath>
+ </defs>
+</svg>
