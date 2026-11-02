@@ -1,0 +1,1023 @@
+// TUI 全量中英文文案(默认英文;右上角切换按钮在 en/zh 之间切换)
+import { createSignal } from "solid-js"
+import type { PipelineConfig } from "../core/types.ts"
+
+// 系统语言检测:简体/繁体中文 → zh,其余 → en
+function detectSystemLanguage(): "en" | "zh" {
+  const env = process.env.LANG ?? process.env.LC_ALL ?? process.env.LANGUAGE ?? ""
+  if (/^zh/i.test(env)) return "zh"
+  if (process.platform === "win32") {
+    try {
+      const result = Bun.spawnSync(["powershell", "-NoProfile", "-Command", "(Get-Culture).Name"], { stdout: "pipe" })
+      const name = result.stdout?.toString() ?? ""
+      if (/^zh/i.test(name)) return "zh"
+    } catch {
+      // 检测失败时回退英文
+    }
+  }
+  return "en"
+}
+
+export const [language, setLanguage] = createSignal<"en" | "zh">(detectSystemLanguage())
+
+const en = {
+  // 头部
+  headerTitle: "Android Release Seal",
+  headerLocalOnly: "local only",
+  headerReady: "ready",
+  headerProcessing: "processing",
+
+  // 侧栏
+  sidebarSuccess: "Success",
+  sidebarSkipped: "Skipped",
+  sidebarFailed: "Failed",
+  sidebarCurrentArtifact: "Current artifact",
+  sidebarLegend: "● success   − skipped (see reason)   × failed",
+  sidebarSkipNote: "Skipped is not failure; it counts as processed.",
+  sidebarNotGenerated: "Not generated yet",
+  sidebarOpenFolder: "▸ Open containing folder",
+  sidebarNoOverwrite: "Failure never overwrites · local only",
+
+  // 输入区
+  composerPlaceholder: "Type a message or /help · or drag a file here",
+  secretPlaceholder: "Type and confirm",
+  inputTitleNeed: "Need input",
+  inputTitleSecret: "Need secure input",
+  inputTitleComposer: "Type a command · chat with DroidSeal",
+  inputTitlePassive: "No input needed · use the actions above",
+
+  // 底部栏
+  bottomBar: "Interaction zoom {zoom}% · Ctrl± · secrets redacted",
+
+  // 欢迎页
+  welcomeTitle: "Welcome to DroidSeal",
+  welcomeDesc1:
+    "DroidSeal runs the Release build, R8/Manifest/APK audit, security baseline, zipalign, apksigner signing and verification entirely on this machine.",
+  welcomeDesc2:
+    "Not familiar with the flow? Choose “Guided”; every step explains its purpose and keeps jargon in the original form.",
+  welcomeDesc3:
+    "“Skipped” marks not-applicable, user choice, per-config, safety protection, or a missing prerequisite APK; skipping is not failure.",
+  welcomeDesc4: "All processing uses an isolated copy; failures roll back to the last valid APK.",
+
+  // 输入提示(被动提示行)
+  passiveRecovery: "No input needed · click a recovery action above, or press D / H / R",
+  passiveChoice: "No input needed · click an option above, or press the matching number key",
+  passiveReady: "Configuration ready · click “Start”, or press Enter",
+  passiveBusy: "Processing · no input needed right now",
+  passiveDone: "Pipeline finished · use the buttons above to start a new task or exit",
+  passiveFailureAdvance: "No input needed · click the rollback button, or press Enter to continue",
+  passiveGuided: "No input needed · click “Execute”/“Skip”, or press Enter / S",
+  passiveOneClick: "Running continuously · no input needed",
+
+  // 按钮
+  btnStart: "Start",
+  btnStartDetail: "Create the pipeline from the summary above",
+  btnRefill: "Refill",
+  btnRefillDetail: "Clear this in-memory configuration",
+  btnNewTask: "New task",
+  btnNewTaskDetail: "Start a new pipeline run",
+  btnExit: "Exit",
+  btnExitDetail: "Close DroidSeal",
+  btnRollbackAdvance: "Skip and roll back, continue",
+  btnRollbackAdvanceDetail: "The APK is restored to the state before the step",
+  btnExecute: "Execute step",
+  btnSkip: "Skip",
+  btnSkipDetail: "Mark as user choice · keep the current valid APK",
+  btnHome: "Back to home",
+  btnHomeDetail: "Clear progress and return to the home screen",
+  btnConfirmInput: "Confirm input",
+  btnUseDefault: "Use default",
+  btnContinueEmpty: "Leave empty and continue",
+  btnPleaseInput: "Please input first",
+  btnFillAndContinue: "Fill the current item and continue",
+  reuseStorePassword: "Reuse the keystore password",
+
+  // 跳过原因
+  skipNotApplicable: "Not applicable",
+  skipUserChoice: "User choice",
+  skipConfiguration: "Per config",
+  skipSafety: "Safety protection",
+  skipMissingInput: "Missing prerequisite APK",
+  skipReasonExplained: "Reason explained",
+
+  // 步骤标题
+  stepDoctor: "Environment check",
+  stepPrepare: "Prepare workspace",
+  stepKeystore: "Keystore",
+  stepSourceAudit: "Source security audit",
+  stepBuild: "Build Release APK",
+  stepApkAudit: "APK security audit",
+  stepProtect: "Local security baseline",
+  stepHarden: "Release normalization",
+  stepWebAssets: "Web JS release processing",
+  stepArscObfuscate: "Resource-name obfuscation",
+  stepAlign: "ZIP alignment",
+  stepSign: "APK signing",
+  stepVerify: "Final verification",
+  stepReport: "Generate report",
+
+  // 步骤描述
+  stepDescDoctor: "Checks the JDK, Android Build Tools and Gradle Wrapper required by this flow",
+  stepDescPrepare: "Validates the input and creates a working copy; the original files stay untouched",
+  stepDescKeystore: "Verifies an existing JKS/PKCS12 or creates a new keystore before signing, catching password/alias problems early",
+  stepDescSourceAudit: "Checks release, R8, Manifest and plaintext signing passwords",
+  stepDescBuild: "Builds the APK with the project's own Gradle Wrapper",
+  stepDescApkAudit: "Checks ZIP structure, Manifest, DEX, SO and metadata",
+  stepDescProtect: "Verifies R8, DEX, anti-debug and integrity evidence to determine what is safe before commercial hardening",
+  stepDescHarden: "Forces debuggable=false so the final artifact is a secure Release state",
+  stepDescWebAssets: "Optional: minifies hybrid-app JavaScript and removes source maps, rebuilding before signing",
+  stepDescArscObfuscate: "Optional lossy: renames resources.arsc resource names and flattens paths, rebuilding before signing",
+  stepDescAlign: "Produces a separate zipalign-aligned APK before signing",
+  stepDescSign: "Signs the APK with apksigner using in-memory passwords",
+  stepDescVerify: "Verifies zipalign, signing scheme, certificate and computes SHA-256",
+  stepDescReport: "Saves the final APK and generates JSON/Markdown, release evidence, SBOM and remediation material",
+
+  // 向导问题
+  wInputKindTitle: "Choose the input type",
+  wInputKindPrompt: "Where does this run start from?",
+  wInputKindDetail:
+    "When an APK is chosen, “Source security audit” and “Gradle build” are skipped as not applicable; choosing a project runs the source audit and the build.",
+  wChoiceApk: "Existing APK",
+  wChoiceApkDetail: "Start from a ready .apk without rebuilding",
+  wChoiceProject: "Android project",
+  wChoiceProjectDetail: "Audit the source first, then build with the Gradle Wrapper",
+  wInputPathTitleApk: "APK file path",
+  wInputPathTitleProject: "Android project path",
+  wInputPathPromptApk: "Enter the .apk file to process",
+  wInputPathPromptProject: "Enter the project root containing gradlew/gradlew.bat",
+  wInputPathDetail: "Absolute paths are supported; quoted paths copied from the file manager can be pasted directly.",
+  wInputPathPhApk: "C:\\work\\app-release.apk",
+  wInputPathPhProject: "C:\\work\\my-android-app",
+  wGradleTitle: "Gradle build task",
+  wGradlePrompt: "Enter the release build task to run (usually just press Enter)",
+  wGradleDetail: "Defaults to assembleRelease; multi-channel projects can use real task names like assembleDemoRelease. This is not the project name, APK name or output directory.",
+  wBuildModeTitle: "Build mode",
+  wBuildModePrompt: "Full build or quick rebuild?",
+  wBuildModeDetail:
+    "Full build suits first runs or dependency changes: npm install for dependencies, then gradlew clean before packaging. Quick rebuild is for code/resource-only changes: skips npm install and clean for speed. Only applies to Capacitor projects (auto cap sync of www and JDK-aware capacitor.build.gradle); plain Gradle projects are unaffected.",
+  wChoiceFull: "Full build",
+  wChoiceFullDetail: "npm install + cap sync + clean + package (first run or dependency changes)",
+  wChoiceQuick: "Quick rebuild",
+  wChoiceQuickDetail: "cap sync + package, skipping npm install and clean (faster)",
+  wBuiltApkTitle: "APK output path (optional)",
+  wBuiltApkPrompt: "If the project uses a custom output path, enter the built APK; otherwise just press Enter",
+  wBuiltApkDetail: "Must be a concrete .apk file; do not enter or drag a project directory. When empty, the newest generated APK is found automatically; relative paths are resolved against the project root.",
+  wBuiltApkPh: "app/build/outputs/apk/release/app-release.apk",
+  wOutputDirTitle: "Output directory (default provided)",
+  wOutputDirPrompt: "Where are the final APK and this run's reports saved?",
+  wOutputDirDetail:
+    "The default is shown and prefilled in the input; confirm or edit. The final APK is saved as {file}-sealed-signed.apk (or {file}-sealed-unsigned.apk if final verification fails), with a hidden .droidseal/runs record; the original APK is never overwritten.",
+  wAlignTitle: "APK alignment",
+  wAlignPrompt: "Run zipalign before signing?",
+  wAlignDetail: "Recommended. When not re-signing, DroidSeal protects the existing v2/v3 signature and safely skips zipalign when necessary.",
+  wChoiceAlignYes: "Run zipalign",
+  wChoiceAlignYesDetail: "Recommended: align before signing, verify at the end",
+  wChoiceAlignNo: "Skip zipalign",
+  wChoiceAlignNoDetail: "Final verification still checks the current APK's alignment",
+  wWebTitle: "Hybrid-app Web JavaScript processing (optional)",
+  wWebPrompt: "Minify assets/public and assets/www JavaScript with Terser before signing?",
+  wWebDetail:
+    "Recommended for Capacitor/Cordova release packages. Only the strictly whitelisted directories are processed and source maps are removed; ES modules get top-level mangling, plain scripts keep global names that may be called across files or from HTML. Output is written only after all scripts succeed and the ZIP is re-checked; when not re-signing, the existing signature is protected and this step is skipped. It only raises the reading barrier, not secrecy; real-device regression is still recommended.",
+  wChoiceWebYes: "Process Web JavaScript",
+  wChoiceWebYesDetail: "Recommended: conservative Terser minification and source-map removal",
+  wChoiceWebNo: "Keep Web assets unchanged",
+  wChoiceWebNoDetail: "Do not rewrite assets/public and assets/www",
+  wArscTitle: "Resource-name obfuscation (lossy · optional)",
+  wArscPrompt: "Rename resources.arsc resource names and flatten resource paths before signing?",
+  wArscDetail:
+    "Off by default. When enabled, a compatibility precheck runs first: all entry names are kept when getIdentifier is detected, and res/ paths referenced literally by DEX are kept; the rest are renamed, then realigned and re-signed. Real-device regression of dynamic skins and WebView-local resources is still recommended.",
+  wChoiceArscNo: "Keep resource names",
+  wChoiceArscNoDetail: "Default: leave resources.arsc unchanged",
+  wChoiceArscYes: "Obfuscate resource names",
+  wChoiceArscYesDetail: "Lossy: rename resource entries and flatten resource paths",
+  wSigningTitle: "Signing mode",
+  wSigningPrompt: "Choose the release signing mode",
+  wSigningDetail:
+    "Signing passwords live only in this process's memory; they are never written to config, command-line arguments or reports. No key? Choose “Generate a new key”; an existing release key? Choose “Use an existing key” (or renew the key under that option); no signing changes needed? Choose “Do not sign”.",
+  wChoiceExisting: "Use an existing key (release key ready)",
+  wChoiceExistingDetail: "Re-sign with an existing JKS/PKCS12; updating a published app requires the original release key.",
+  wChoiceRenew: "Use an existing key and renew it",
+  wChoiceRenewDetail:
+    "Generates a brand-new keystore at the chosen path and overwrites the original file; the new key differs from the old one, so APKs signed with it cannot update-install over apps signed with the old key. Use only when the release identity really must change or the old key leaked.",
+  wChoiceCreate: "Generate a new key (no release key yet)",
+  wChoiceCreateDetail:
+    "Creates a keystore for a not-yet-published app: after entering the certificate info, DroidSeal runs keytool to generate it. Back it up immediately after creation — losing the key means no further updates for the same app.",
+  wChoiceSkip: "Do not sign",
+  wChoiceSkipDetail: "Keeps and verifies the APK's existing signature; without a valid signature the APK cannot be formally released.",
+  wKeyPathTitleRenew: "New keystore path (overwrites the original file)",
+  wKeyPathTitleCreate: "New keystore path (customizable)",
+  wKeyPathTitleExisting: "Existing keystore path",
+  wKeyPathPromptRenew: "Enter the path of the new keystore; an existing file with the same name will be overwritten",
+  wKeyPathPromptCreate: "Enter where to save the new keystore (any location; back it up)",
+  wKeyPathPromptExisting: "Enter the existing JKS/PKCS12 file path",
+  wKeyPathDetailRenew:
+    "A brand-new keystore is generated at this path and overwrites any same-named file. ⚠ The new key differs from the old one, so APKs signed with it cannot update-install over apps signed with the old key. Back up the original keystore before continuing.",
+  wKeyPathDetailCreate:
+    "DroidSeal never overwrites an existing key file; save the new keystore somewhere reliable and backed up. .p12 uses PKCS12, .jks uses JKS. Choose any location.",
+  wKeyPathDetailExisting: "Use the official release key; debug keys (debug.keystore) are not suitable for distribution.",
+  wAliasTitleRenew: "New key alias",
+  wAliasTitlePlain: "Key alias",
+  wAliasPromptRenew: "Enter the key alias in the new keystore",
+  wAliasPromptPlain: "Enter the alias used for signing in the JKS/PKCS12",
+  wAliasDetailRenew: "The key alias of the new keystore (overwrites the key entry in the original file).",
+  wAliasDetailExisting: "The alias must point to a PrivateKeyEntry, not just a certificate entry. Double-check the alias — a wrong alias fails signing verification and returns to this step.",
+  wAliasDetailPlain: "The alias must point to a PrivateKeyEntry, not just a certificate entry.",
+  wStorePassTitleRenew: "New keystore password",
+  wStorePassTitlePlain: "Keystore password",
+  wStorePassPrompt: "Enter the keystore password",
+  wStorePassDetailRenew: "Password for the new keystore, usually at least 6 characters; back up the generated keystore immediately.",
+  wStorePassDetailCreate: "New keys usually require at least 6 characters.",
+  wStorePassDetailExisting: "Input is not echoed. Double-check the keystore password — a wrong password fails signing verification and returns to this step.",
+  wKeyPassTitleRenew: "New private key password",
+  wKeyPassTitlePlain: "Private key password",
+  wKeyPassPrompt: "Enter the private key password; pressing Enter means it matches the keystore password",
+  wKeyPassDetailRenew: "New PKCS12 must match the keystore password; JKS may use a separate one. Back up the generated keystore.",
+  wKeyPassDetailPlain: "New PKCS12 must match the keystore password; JKS may use a separate one.",
+  wKeyPassPh: "•••••••• (Enter reuses the previous item)",
+  wCnTitle: "Certificate name (CN)",
+  wCnPrompt: "Enter the certificate holder or product name",
+  wCnDetail: "CN is the Common Name in the certificate subject. Use the legal company name or a stable release identity.",
+  wCnPh: "Example Technology Co., Ltd.",
+  wOuTitle: "Organizational unit (OU, optional)",
+  wOuPrompt: "Enter the organizational unit, or press Enter",
+  wOuDetail: "e.g. Mobile Engineering.",
+  wOrgTitle: "Organization (O, optional)",
+  wOrgPrompt: "Enter the organization name, or press Enter",
+  wOrgDetail: "Should match the release identity.",
+  wLocTitle: "Locality (L, optional)",
+  wLocPrompt: "Enter the city, or press Enter",
+  wLocDetail: "An X.500 Distinguished Name field.",
+  wStateTitle: "State/province (ST, optional)",
+  wStatePrompt: "Enter the state or province, or press Enter",
+  wStateDetail: "An X.500 Distinguished Name field.",
+  wCountryTitle: "Country code (C)",
+  wCountryPrompt: "Enter the two-letter country/region code",
+  wCountryDetail: "e.g. CN, US; can be left empty.",
+  wValidityTitle: "Certificate validity",
+  wValidityPrompt: "Enter the number of valid days",
+  wValidityDetail: "The release certificate should cover the expected maintenance period; the default is about 25 years.",
+  wKeyAlgTitle: "Key algorithm",
+  wKeyAlgPrompt: "Choose the new signing key algorithm",
+  wKeyAlgDetail: "RSA has broad compatibility; EC keys are shorter but require confirming target-device and distribution-chain compatibility.",
+  wChoiceRsa: "RSA 4096",
+  wChoiceRsaDetail: "Recommended compatible option",
+  wChoiceEc: "EC P-256",
+  wChoiceEcDetail: "Shorter key and signature",
+
+  // 向导校验错误
+  errInputKind: "Choose “Existing APK” or “Android project”",
+  errInputPathEmpty: "The input path cannot be empty",
+  errGradleChars: "The Gradle task name may only contain letters, digits, _, :, . and -",
+  errGradleLooksName:
+    "“{value}” looks like an APK/project name, not a Gradle task; usually just press Enter to use assembleRelease",
+  errBuildMode: "Choose “Full build” or “Quick rebuild”",
+  errBuiltApkPath:
+    "The APK output path must point to a concrete .apk file; if you dragged a project directory, just press Enter here",
+  errOutputDirEmpty: "The output directory cannot be empty",
+  errAlign: "Choose whether to run alignment",
+  errWeb: "Choose whether to process Web JavaScript",
+  errArsc: "Choose whether to obfuscate resource names",
+  errSigningMode: "Choose a valid signing mode",
+  errKeyPathEmpty: "The keystore path cannot be empty",
+  errAliasEmpty: "The key alias cannot be empty",
+  errStorePassEmpty: "The keystore password cannot be empty",
+  errStorePassLen: "The new keystore password needs at least 6 characters",
+  errKeyPassLen: "The new private key password needs at least 6 characters",
+  errCnEmpty: "The certificate CN cannot be empty",
+  errCountry: "The country code must be empty or exactly two letters",
+  errValidity: "Validity must be an integer number of days between 365 and 36500",
+  errKeyAlg: "Choose RSA or EC",
+  errUnknownField: "Unknown wizard field: {id}",
+  errWizardIncomplete: "The wizard is not complete yet",
+  displaySecret: "••••••（received securely）",
+  displayEmpty: "（empty）",
+
+  // 向导摘要
+  sumMode: "Mode: {mode}",
+  sumOneClick: "one-click",
+  sumGuided: "guided",
+  sumInput: "Input: {kind} · {path}",
+  sumInputKindProject: "Android project",
+  sumInputKindApk: "APK",
+  sumBuild: "Build: {task} · {mode}",
+  sumBuildQuick: "quick rebuild",
+  sumBuildFull: "full build",
+  sumOutput: "Output: {dir}",
+  sumProtection:
+    "Protection: local safety baseline (strict evidence audit + R8 + Release normalization; never injects startup code into unknown APKs)",
+  sumAlign: "zipalign: {value}",
+  sumAlignYes: "run",
+  sumAlignNo: "skipped per config; still verified at the end",
+  sumWeb: "Web JavaScript: {value}",
+  sumWebYes: "Terser processing with source-map removal (before signing)",
+  sumWebNo: "not processed",
+  sumArsc: "Resource-name obfuscation: {value}",
+  sumArscYes: "run (lossy, new package before signing)",
+  sumArscNo: "not run",
+  sumSigning: "Signing: {value}",
+  sumSigningSkip: "not re-signed; existing signature verified",
+  sumSigningRenew: "renew key: overwrite-generate a brand-new keystore and sign (new key cannot update old installs)",
+  sumSigningExisting: "re-sign with the existing keystore",
+  sumSigningCreate: "create a new keystore and sign",
+  sumKeystore: "Keystore: {path}{note}",
+  sumOverwriteNote: "（will overwrite the original file）",
+  sumAlias: "Alias: {alias}",
+  sumPassword: "Password: ••••••（memory only）",
+
+  // 步骤指引(stepGuidance)
+  guidanceDoctor: "Only checks tool locations and versions; never modifies the APK or the system PATH.",
+  guidancePrepare: "APK input is copied to this run's directory first; later steps never overwrite the original file.",
+  guidanceSourceAudit:
+    "Reads Gradle and Manifest configuration (permission model, exported/deep-link components, meta-data secrets, network security config and backup rules); never auto-modifies source.",
+  guidanceBuild: "Runs {task}, then copies the generated APK into the workspace.",
+  guidanceApkAudit:
+    "Reads the APK's ZIP, Manifest (permissions, exported/deep-link components, compliance, meta-data secrets), DEX strings and SO hardening info; never modifies the APK.",
+  guidanceProtect:
+    "Runs the local safety baseline: verifies protection coverage from source/APK evidence; R8, Release normalization, optional resource obfuscation, alignment, signing and verification are implemented by their steps. Insufficient evidence only yields low-confidence hints; never injects startup code into unknown APKs.",
+  guidanceHardenSkip:
+    "Before alignment, forces android:debuggable=false in the binary Manifest; final verification confirms again. Because this run does not re-sign, residual entries are not stripped when a valid existing signature is detected, avoiding uninstallable APKs.",
+  guidanceHarden:
+    "Before alignment and signing, forces android:debuggable=false in the binary Manifest; final verification confirms again.",
+  guidanceWebAssetsOn:
+    "Explicit optional step: only processes JavaScript under assets/public and assets/www; ES modules get top-level mangling, plain scripts keep global names that may be called by other scripts or HTML. Output is atomically written only after all scripts succeed, and source maps are removed. Minification only raises the reading barrier, not secrecy.",
+  guidanceWebAssetsOff:
+    "Web JavaScript release processing is not enabled; this step is skipped per config without rewriting front-end assets in the APK.",
+  guidanceArscOn:
+    "Lossy optional step: parses resources.arsc and runs a strict compatibility precheck; when getIdentifier is present every entry name is kept, res/ paths referenced directly by DEX are kept, and only the rest are renamed. The new package is realigned and re-signed afterwards.",
+  guidanceArscOff: "Resource-name obfuscation is not enabled; this step is skipped per config without rewriting any resources.",
+  guidanceAlign: "zipalign must run before signing; when not re-signing, the existing v2/v3 signature is protected first.",
+  guidanceKeystoreSkip: "This run chooses not to re-sign, so no keystore is read.",
+  guidanceKeystore: "Only verifies the keystore, password and PrivateKeyEntry alias; never modifies the keystore.",
+  guidanceSignSkip: "This run chooses not to re-sign; the next step still verifies the APK's existing signature.",
+  guidanceSign: "apksigner generates a new signed copy without overwriting the input APK.",
+  guidanceVerify:
+    "Independently verifies zipalign, the APK signing scheme and the certificate (scheme coverage, validity, debug certificates and weak-key detection), and computes SHA-256.",
+  guidanceReport:
+    "Saves the final APK, JSON/Markdown, release evidence, CycloneDX SBOM, license verification list and a confidence-aware release gate; external controls are not falsely marked as done by static signals, and passwords/keystores never enter artifacts.",
+  guidanceApplicabilitySourceAudit:
+    "The input is an APK, so this step is marked “Skipped · not applicable”; the APK security audit still runs.",
+  guidanceApplicabilityBuild:
+    "The input is already an APK, so this step is marked “Skipped · not applicable” and is not rebuilt.",
+  guidStepSkippable:
+    "You may execute this step or skip it manually; skipping never changes the current valid APK and is marked “User choice” in the report.",
+  guidStepRequired: "This is a base step needed to build a valid artifact; it cannot be skipped manually.",
+
+  // 流水线消息
+  msgStepN: "Step {current}/{total}",
+  msgSkipped: "Skipped · {kind}：{summary}",
+  msgPipelineCreated: "Pipeline created",
+  msgRunId: "Run ID: {id}",
+  msgRecognizedApk: "I recognized an APK path",
+  msgRecognizedApkBody: "Choose “Existing APK” first, then paste this path.",
+  msgWelcomeStart: "I can start from here",
+  msgWelcomeStartBody: "Type “One-click”, “Guided” or “Doctor”, or click a button below.",
+  msgOneClickSelected: "One-click selected",
+  msgGuidedSelected: "Guided selected",
+  msgDoctorDone: "Doctor complete",
+  msgDoctorFailed: "Doctor failed",
+  msgRecheckDoctor: "Re-running the environment doctor",
+  msgToolsReady: "Tools ready, continuing automatically",
+  msgToolsReadyBody: "The doctor passed again; your signing config and progress are kept.",
+  msgBackHome: "Back to home",
+  msgBackHomeBody: "Start a new guided or one-click run.",
+
+  // 工具恢复
+  btnDownloadContinue: "Download & continue",
+  btnDownloadContinueDetail: "Accepts the official license · SHA-256 verified · auto-resumes",
+  btnInstallInstructions: "Install instructions",
+  btnInstallInstructionsDetail: "No config refill needed after manual install",
+  btnRecheckContinue: "Recheck & continue",
+  btnRecheckContinueDetail: "Resumes from the pause after the check passes",
+  recoveryDownloadHint:
+    "You can click “Download & continue”; clicking means you accept the corresponding official component license. DroidSeal downloads, verifies, installs and resumes automatically.",
+  recoveryManualHint: "Missing items must be fixed manually following the install instructions.",
+  recoveryRecheckHint: "You can also install manually, then click “Recheck & continue”; the signing config and step progress are kept.",
+  recoveryAuto: "Click “Download & continue” to accept the corresponding official component license; or view the instructions and install manually.",
+  recoveryManual: "View the install instructions and fix manually.",
+  msgToolSafety:
+    "All tools are launched as argument arrays, never through a shell; signing passwords pass via the child process environment and are redacted in output.",
+  msgToolsNeeded: "The selected flow needs missing tools",
+  msgMissingTools: "Missing: {names}",
+  msgCannotSkipStep: "Cannot skip this step",
+  msgSearchTools: "Searching JDK and Android SDK",
+  msgDoctorToolsFound: "Doctor found tools that can be installed",
+
+  // 帮助
+  helpTitle: "Help & security boundaries",
+  helpBody1: "/guided guided · /oneclick one-click · /doctor doctor · /restart home · /quit exit",
+  helpBody2: "Bottom-left interaction: Ctrl+Plus zoom in, Ctrl+Minus zoom out, Ctrl+0 reset.",
+  helpBody3: "When required tools are missing, the flow pauses; you can download and continue, or install manually and recheck.",
+  helpBody4: "Chat parsing runs entirely locally; no model service is contacted and no paths, APKs or signing info are uploaded.",
+  helpBody5:
+    "Built-in capabilities target legitimate app protection: strict evidence-based audit, R8, Release normalization, alignment, signing and verification run by default; resource-name obfuscation is a lossy optional gated by a compatibility precheck.",
+  helpBody6:
+    "For active hardening (DEX packing/VMP/anti-debug), integrate an authorized solution at the source level; DroidSeal also ships a self-developed, opt-in build-time anti-debug stub for source integration.",
+  helpBody7: "Unpacking, certificate-bypass, detection-evasion, memory tampering or unauthorized reverse-engineering automation are not provided.",
+
+  // 输入提示细节
+  inputPrefillNote: "A default is prefilled; confirm or edit",
+  inputEmptyOk: "This item may be left empty; continue",
+}
+
+const zh: Record<keyof typeof en, string> = {
+  headerTitle: "安卓发布封签",
+  headerLocalOnly: "仅本机",
+  headerReady: "就绪",
+  headerProcessing: "处理中",
+
+  sidebarSuccess: "成功",
+  sidebarSkipped: "跳过",
+  sidebarFailed: "失败",
+  sidebarCurrentArtifact: "当前有效产物",
+  sidebarLegend: "● 成功  − 跳过（见原因）  × 失败",
+  sidebarSkipNote: "跳过不一定是失败；已计入“已处理”。",
+  sidebarNotGenerated: "尚未生成",
+  sidebarOpenFolder: "▸ 打开所在目录",
+  sidebarNoOverwrite: "失败不覆盖 · 本地处理",
+
+  composerPlaceholder: "输入消息或 /help · 或拖动文件到此处",
+  secretPlaceholder: "请输入后确认",
+  inputTitleNeed: "需要输入",
+  inputTitleSecret: "需要安全输入",
+  inputTitleComposer: "可输入指令 · 和 DroidSeal 对话",
+  inputTitlePassive: "无需输入 · 使用上方操作",
+
+  bottomBar: "交互区 {zoom}% · Ctrl± · 敏感信息已脱敏",
+
+  welcomeTitle: "欢迎使用 DroidSeal",
+  welcomeDesc1: "DroidSeal 在本机完成 Release 构建、R8/Manifest/APK 审计、安全审计基线、zipalign、apksigner 签名与验证。",
+  welcomeDesc2: "不熟悉流程可选择“分步处理”；每一步都会说明用途，专业术语保持原名。",
+  welcomeDesc3: "“跳过”会标明是不适用、用户选择、按配置、安全保护或缺少前置 APK；跳过不一定是失败。",
+  welcomeDesc4: "所有处理使用独立副本，失败时回退到上一个有效 APK。",
+
+  passiveRecovery: "无需输入文字 · 请点击上方恢复方式，或按 D / H / R",
+  passiveChoice: "无需输入文字 · 请点击上方选项，或直接按对应数字键",
+  passiveReady: "配置已就绪 · 点击“开始处理”，或按 Enter",
+  passiveBusy: "正在处理 · 当前不需要输入",
+  passiveDone: "流程已结束 · 请使用上方按钮开始新任务或退出",
+  passiveFailureAdvance: "无需输入文字 · 点击回退按钮，或按 Enter 进入下一步",
+  passiveGuided: "无需输入文字 · 点击“执行此步”/“跳过”，或按 Enter / S",
+  passiveOneClick: "正在连续处理 · 当前不需要输入",
+
+  btnStart: "开始处理",
+  btnStartDetail: "按上方摘要创建流水线",
+  btnRefill: "重新填写",
+  btnRefillDetail: "清空本次内存配置",
+  btnNewTask: "开始新任务",
+  btnNewTaskDetail: "开始新的流水线运行",
+  btnExit: "退出",
+  btnExitDetail: "关闭并退出 DroidSeal",
+  btnRollbackAdvance: "跳过并回退，进入下一步",
+  btnRollbackAdvanceDetail: "当前 APK 已恢复为步骤开始前版本",
+  btnExecute: "执行此步",
+  btnSkip: "跳过",
+  btnSkipDetail: "标记为用户选择 · 保留当前有效 APK",
+  btnHome: "回到首页",
+  btnHomeDetail: "清空当前进度，返回首页",
+  btnConfirmInput: "确认输入",
+  btnUseDefault: "使用默认值",
+  btnContinueEmpty: "留空并继续",
+  btnPleaseInput: "请先输入",
+  btnFillAndContinue: "填写当前项后继续",
+  reuseStorePassword: "沿用签名库密码",
+
+  skipNotApplicable: "不适用",
+  skipUserChoice: "用户选择",
+  skipConfiguration: "按配置",
+  skipSafety: "安全保护",
+  skipMissingInput: "缺少前置 APK",
+  skipReasonExplained: "已说明原因",
+
+  stepDoctor: "环境诊断",
+  stepPrepare: "准备工作区",
+  stepKeystore: "签名库",
+  stepSourceAudit: "源码安全审计",
+  stepBuild: "构建 Release APK",
+  stepApkAudit: "APK 安全审计",
+  stepProtect: "本地安全防护",
+  stepHarden: "Release 归一化",
+  stepWebAssets: "Web JS 发布处理",
+  stepArscObfuscate: "资源名混淆",
+  stepAlign: "ZIP 对齐",
+  stepSign: "APK 签名",
+  stepVerify: "最终验证",
+  stepReport: "生成报告",
+
+  stepDescDoctor: "检查本次流程需要的 JDK、Android Build Tools 与 Gradle Wrapper",
+  stepDescPrepare: "检查输入并创建工作副本，原文件保持不变",
+  stepDescKeystore: "签名前先验证现有 JKS/PKCS12 或创建新签名库，尽早发现密码/别名问题",
+  stepDescSourceAudit: "检查 release、R8、Manifest 与明文签名密码",
+  stepDescBuild: "使用项目自己的 Gradle Wrapper 生成 APK",
+  stepDescApkAudit: "检查 ZIP 结构、Manifest、DEX、SO 与元数据",
+  stepDescProtect: "核验 R8、DEX、反调试与完整性证据，确定商业加固前可安全执行的边界",
+  stepDescHarden: "强制 debuggable=false，保证最终产物为安全 Release 状态",
+  stepDescWebAssets: "可选：压缩混淆混合应用 JavaScript 并移除 source map，签名前生成新包",
+  stepDescArscObfuscate: "可选有损：重命名 resources.arsc 资源名并扁平化资源路径，签名前生成新包",
+  stepDescAlign: "签名前用 zipalign 生成独立的对齐 APK",
+  stepDescSign: "使用 apksigner 和内存中的密码生成已签名 APK",
+  stepDescVerify: "验证 zipalign、签名方案、证书并计算 SHA-256",
+  stepDescReport: "保存最终 APK，并生成 JSON/Markdown、发布证据、SBOM 与修复资料",
+
+  wInputKindTitle: "选择输入类型",
+  wInputKindPrompt: "这次从哪里开始？",
+  wInputKindDetail: "选择 APK 时，“源码安全审计”和“Gradle 构建”会因不适用而正常跳过；选择项目时会执行源码审计和构建。",
+  wChoiceApk: "已有 APK",
+  wChoiceApkDetail: "从现成 .apk 开始，不重复构建",
+  wChoiceProject: "Android 项目",
+  wChoiceProjectDetail: "先审计源码，再用 Gradle Wrapper 构建",
+  wInputPathTitleApk: "APK 文件路径",
+  wInputPathTitleProject: "Android 项目路径",
+  wInputPathPromptApk: "请输入需要处理的 .apk 文件",
+  wInputPathPromptProject: "请输入包含 gradlew/gradlew.bat 的项目根目录",
+  wInputPathDetail: "支持绝对路径；从文件管理器复制的带引号路径也可以直接粘贴。",
+  wInputPathPhApk: "C:\\work\\app-release.apk",
+  wInputPathPhProject: "C:\\work\\my-android-app",
+  wGradleTitle: "Gradle 构建任务",
+  wGradlePrompt: "输入要执行的 release 构建任务（通常直接回车）",
+  wGradleDetail: "默认 assembleRelease；多渠道项目可填写 assembleDemoRelease 等实际任务名。这里不是项目名、APK 名或输出目录。",
+  wBuildModeTitle: "构建模式",
+  wBuildModePrompt: "这次是完整构建还是快速重建？",
+  wBuildModeDetail:
+    "完整构建适合首次或依赖有变：先 npm install 装依赖、再 gradlew clean 清理后出包。快速重建只改了代码/资源时用：跳过 npm install 与 clean，更快。仅对 Capacitor 项目生效（会自动 cap sync 同步 www 并按本机 JDK 适配 capacitor.build.gradle）；纯 Gradle 项目此项不影响。",
+  wChoiceFull: "完整构建",
+  wChoiceFullDetail: "npm install + cap sync + clean + 出包（首次或依赖有变）",
+  wChoiceQuick: "快速重建",
+  wChoiceQuickDetail: "cap sync + 出包，跳过 npm install 与 clean（更快）",
+  wBuiltApkTitle: "APK 输出路径（可留空）",
+  wBuiltApkPrompt: "若项目使用自定义输出路径，请填写构建后的 APK；否则直接回车",
+  wBuiltApkDetail: "必须是具体的 .apk 文件，不能填写或拖入项目目录。留空时会自动查找最新生成的 APK；相对路径以项目根目录为基准。",
+  wBuiltApkPh: "app/build/outputs/apk/release/app-release.apk",
+  wOutputDirTitle: "输出目录（已提供默认地址）",
+  wOutputDirPrompt: "最终 APK 和本次报告保存到哪个目录？",
+  wOutputDirDetail:
+    "默认地址会显示并预填在输入框中，可直接确认或修改。最终 APK 将保存为该目录下的 {file}-sealed-signed.apk（若最终签名未通过验证则为 {file}-sealed-unsigned.apk），并生成隐藏的 .droidseal/runs 运行记录；原始 APK 不会被覆盖。",
+  wAlignTitle: "APK 对齐",
+  wAlignPrompt: "签名前是否执行 zipalign？",
+  wAlignDetail: "推荐执行。若不重新签名，DroidSeal 会优先保护 APK 的现有 v2/v3 签名，必要时安全跳过 zipalign。",
+  wChoiceAlignYes: "执行 zipalign",
+  wChoiceAlignYesDetail: "推荐：签名前对齐，最终再验证",
+  wChoiceAlignNo: "不执行 zipalign",
+  wChoiceAlignNoDetail: "最终验证仍会检查当前 APK 的对齐状态",
+  wWebTitle: "混合应用 Web JavaScript 处理（可选）",
+  wWebPrompt: "签名前是否用 Terser 压缩混淆 assets/public 与 assets/www 中的 JavaScript？",
+  wWebDetail:
+    "推荐用于 Capacitor/Cordova 发布包。仅处理严格白名单目录并移除 source map；ES module 才混淆顶层名，普通脚本保留可能跨文件或被 HTML 调用的全局名。全部脚本成功并复核 ZIP 后才写出；若不重新签名则保护已有签名并跳过。只能提高阅读门槛，不等于源码保密，仍需真机回归。",
+  wChoiceWebYes: "处理 Web JavaScript",
+  wChoiceWebYesDetail: "推荐：Terser 保守压缩/混淆并移除 source map",
+  wChoiceWebNo: "保持 Web 资产不变",
+  wChoiceWebNoDetail: "不改写 assets/public 与 assets/www",
+  wArscTitle: "资源名混淆（有损·可选）",
+  wArscPrompt: "签名前是否重命名 resources.arsc 资源名并扁平化资源路径？",
+  wArscDetail:
+    "默认不执行。开启后先做兼容性预检：检测到 getIdentifier 时保留全部条目名，DEX 明文引用的 res/ 路径也会保留；其余资源才重命名并在之后重新对齐、签名。仍建议真机回归动态皮肤和 WebView 本地资源。",
+  wChoiceArscNo: "不混淆资源名",
+  wChoiceArscNoDetail: "默认：保持 resources.arsc 不变",
+  wChoiceArscYes: "混淆资源名",
+  wChoiceArscYesDetail: "有损：重命名资源条目名并扁平化资源路径",
+  wSigningTitle: "签名方式",
+  wSigningPrompt: "选择发布签名方式",
+  wSigningDetail:
+    "签名密码只保存在本次进程内存，不写入配置、命令行参数或报告。无密钥可选“生成新密钥”；已有发布密钥可选“使用现有密钥”（或在该选项下换新密钥）；无需改动签名可“不签名”。",
+  wChoiceExisting: "使用现有密钥（已有发布密钥）",
+  wChoiceExistingDetail: "复用已有 JKS/PKCS12 重新签名；更新已上架应用必须用原发布密钥。",
+  wChoiceRenew: "使用现有密钥并换新密钥",
+  wChoiceRenewDetail:
+    "在所选路径上生成全新密钥库并覆盖原文件；新密钥与旧密钥不同，用它签名的 APK 无法覆盖更新用旧密钥签名的应用安装，仅在确需更换发布主体或旧密钥泄露时使用。",
+  wChoiceCreate: "生成新密钥（尚无发布密钥）",
+  wChoiceCreateDetail:
+    "为尚未发布的新应用创建签名库：填写证书信息后由 DroidSeal 调用 keytool 生成。生成后务必立即备份——密钥一旦丢失将无法再为同一应用发布更新。",
+  wChoiceSkip: "不签名",
+  wChoiceSkipDetail: "保留并验证 APK 现有签名；若 APK 没有有效签名则无法正式发布。",
+  wKeyPathTitleRenew: "新密钥库路径（覆盖原文件）",
+  wKeyPathTitleCreate: "新签名库路径（可自定）",
+  wKeyPathTitleExisting: "现有签名库路径",
+  wKeyPathPromptRenew: "输入要生成的新密钥库路径；同名原文件将被覆盖",
+  wKeyPathPromptCreate: "输入新签名库保存路径（可自由选择位置，请妥善备份）",
+  wKeyPathPromptExisting: "输入现有 JKS/PKCS12 文件路径",
+  wKeyPathDetailRenew:
+    "将在此路径生成全新密钥库并覆盖同名原文件。⚠ 新密钥与旧密钥不同，用它签名的 APK 无法覆盖更新用旧密钥签名的应用安装。建议先备份原密钥库再继续。",
+  wKeyPathDetailCreate: "DroidSeal 绝不覆盖现有密钥文件；新密钥库请保存在可靠且已备份的位置。.p12 使用 PKCS12，.jks 使用 JKS。可在此自由选择文件保存位置。",
+  wKeyPathDetailExisting: "请使用正式发布密钥；调试密钥（debug.keystore）不适合分发。",
+  wAliasTitleRenew: "新密钥别名",
+  wAliasTitlePlain: "密钥别名",
+  wAliasPromptRenew: "输入新密钥库中的密钥别名",
+  wAliasPromptPlain: "输入 JKS/PKCS12 中用于签名的 alias",
+  wAliasDetailRenew: "新密钥库的密钥别名（将覆盖原文件中的密钥条目）。",
+  wAliasDetailExisting: "别名必须指向 PrivateKeyEntry，而不仅是证书条目。请仔细核对填写的密钥别名——用错别名会导致签名校验失败并回到本步骤重新填写。",
+  wAliasDetailPlain: "别名必须指向 PrivateKeyEntry，而不仅是证书条目。",
+  wStorePassTitleRenew: "新签名库密码",
+  wStorePassTitlePlain: "签名库密码",
+  wStorePassPrompt: "输入签名库密码",
+  wStorePassDetailRenew: "新建密钥库密码，通常要求至少 6 个字符；本次生成的密钥库请务必立即备份。",
+  wStorePassDetailCreate: "新建密钥通常要求至少 6 个字符。",
+  wStorePassDetailExisting: "输入不会回显。请仔细核对填写的签名库密码——密码错误会导致签名校验失败并回到本步骤重新填写。",
+  wKeyPassTitleRenew: "新私钥密码",
+  wKeyPassTitlePlain: "私钥密码",
+  wKeyPassPrompt: "输入私钥密码；直接回车表示与签名库密码相同",
+  wKeyPassDetailRenew: "新建 PKCS12 必须与签名库密码一致；JKS 可使用独立密码。生成的新密钥库请务必备份。",
+  wKeyPassDetailPlain: "新建 PKCS12 时必须与签名库密码一致；JKS 可使用独立密码。",
+  wKeyPassPh: "••••••••（回车沿用上一项）",
+  wCnTitle: "证书名称（CN）",
+  wCnPrompt: "输入证书持有者或产品名称",
+  wCnDetail: "CN 是证书主题中的 Common Name。建议填写公司法定名称或稳定的发布主体。",
+  wCnPh: "Example Technology Co., Ltd.",
+  wOuTitle: "组织部门（OU，可留空）",
+  wOuPrompt: "输入组织部门，或直接回车",
+  wOuDetail: "例如 Mobile Engineering。",
+  wOrgTitle: "组织（O，可留空）",
+  wOrgPrompt: "输入组织名称，或直接回车",
+  wOrgDetail: "建议与发布主体一致。",
+  wLocTitle: "城市（L，可留空）",
+  wLocPrompt: "输入城市，或直接回车",
+  wLocDetail: "X.500 Distinguished Name 字段。",
+  wStateTitle: "省/州（ST，可留空）",
+  wStatePrompt: "输入省或州，或直接回车",
+  wStateDetail: "X.500 Distinguished Name 字段。",
+  wCountryTitle: "国家代码（C）",
+  wCountryPrompt: "输入两个字母的国家/地区代码",
+  wCountryDetail: "例如 CN、US；也可以留空。",
+  wValidityTitle: "证书有效期",
+  wValidityPrompt: "输入有效天数",
+  wValidityDetail: "发布证书应覆盖应用预期维护周期；默认约 25 年。",
+  wKeyAlgTitle: "密钥算法",
+  wKeyAlgPrompt: "选择新签名密钥算法",
+  wKeyAlgDetail: "RSA 兼容范围广；EC 密钥更短，但需确认目标设备与分发链兼容。",
+  wChoiceRsa: "RSA 4096",
+  wChoiceRsaDetail: "推荐兼容选项",
+  wChoiceEc: "EC P-256",
+  wChoiceEcDetail: "更短密钥与签名",
+
+  errInputKind: "请选择“已有 APK”或“Android 项目”",
+  errInputPathEmpty: "输入路径不能为空",
+  errGradleChars: "Gradle 任务名只能包含字母、数字、_、:、. 和 -",
+  errGradleLooksName: "“{value}”看起来是 APK/项目名称，不是 Gradle 任务；这里通常直接回车使用 assembleRelease",
+  errBuildMode: "请选择“完整构建”或“快速重建”",
+  errBuiltApkPath: "APK 输出路径必须指向具体的 .apk 文件；若拖入的是整个项目目录，请在这里直接回车留空",
+  errOutputDirEmpty: "输出目录不能为空",
+  errAlign: "请选择是否执行对齐",
+  errWeb: "请选择是否处理 Web JavaScript",
+  errArsc: "请选择是否混淆资源名",
+  errSigningMode: "请选择有效的签名方式",
+  errKeyPathEmpty: "签名库路径不能为空",
+  errAliasEmpty: "密钥别名不能为空",
+  errStorePassEmpty: "签名库密码不能为空",
+  errStorePassLen: "新签名库密码至少需要 6 个字符",
+  errKeyPassLen: "新私钥密码至少需要 6 个字符",
+  errCnEmpty: "证书 CN 不能为空",
+  errCountry: "国家代码必须为空或恰好两个字母",
+  errValidity: "有效期必须是 365 到 36500 之间的整数天",
+  errKeyAlg: "请选择 RSA 或 EC",
+  errUnknownField: "未知向导字段：{id}",
+  errWizardIncomplete: "向导尚未完成",
+  displaySecret: "••••••（已安全接收）",
+  displayEmpty: "（留空）",
+
+  sumMode: "模式：{mode}",
+  sumOneClick: "一键处理",
+  sumGuided: "分步确认",
+  sumInput: "输入：{kind} · {path}",
+  sumInputKindProject: "Android 项目",
+  sumInputKindApk: "APK",
+  sumBuild: "构建：{task} · {mode}",
+  sumBuildQuick: "快速重建",
+  sumBuildFull: "完整构建",
+  sumOutput: "输出：{dir}",
+  sumProtection: "保护：本地安全档（严格证据审计 + R8 + Release 归一化；不对未知 APK 注入启动代码）",
+  sumAlign: "zipalign：{value}",
+  sumAlignYes: "执行",
+  sumAlignNo: "按配置不执行；最终仍验证",
+  sumWeb: "Web JavaScript：{value}",
+  sumWebYes: "Terser 处理并移除 source map（签名前）",
+  sumWebNo: "不处理",
+  sumArsc: "资源名混淆：{value}",
+  sumArscYes: "执行（有损，签名前生成新包）",
+  sumArscNo: "不执行",
+  sumSigning: "签名：{value}",
+  sumSigningSkip: "不重新签名；最终验证现有签名",
+  sumSigningRenew: "换新密钥：覆盖生成全新密钥库并签名（新密钥无法更新旧安装）",
+  sumSigningExisting: "使用现有签名库重新签名",
+  sumSigningCreate: "新建签名库并签名",
+  sumKeystore: "签名库：{path}{note}",
+  sumOverwriteNote: "（将覆盖原文件）",
+  sumAlias: "别名：{alias}",
+  sumPassword: "密码：••••••（仅内存）",
+
+  guidanceDoctor: "只检查工具位置和版本，不修改 APK 或系统 PATH。",
+  guidancePrepare: "APK 输入会先复制到本次运行目录；后续步骤不会覆盖原文件。",
+  guidanceSourceAudit:
+    "读取 Gradle 与 Manifest 配置（含权限模型、导出/深链组件、meta-data 密钥、网络安全配置与备份规则），不自动修改源码。",
+  guidanceBuild: "执行 {task}，再把生成的 APK 复制到工作区。",
+  guidanceApkAudit:
+    "读取 APK 的 ZIP、Manifest（权限、导出/深链组件、合规、meta-data 密钥）、DEX 字符串与 SO 加固信息，不修改 APK。",
+  guidanceProtect:
+    "执行本地安全档：结合源码/APK 证据核验保护覆盖；R8、Release 归一化、可选资源混淆、对齐、签名和验证由对应步骤落实。证据不足只作低置信度提示，不对未知 APK 注入启动代码。",
+  guidanceHardenSkip:
+    "在对齐前，把二进制 Manifest 的 android:debuggable 强制改为 false；最终验证会再次确认。当前不重新签名，因此检测到有效现有签名时不会剔除残留条目，避免产出无法安装的 APK。",
+  guidanceHarden: "在对齐和签名前，把二进制 Manifest 的 android:debuggable 强制改为 false；最终验证会再次确认。",
+  guidanceWebAssetsOn:
+    "显式可选步骤：仅处理 assets/public 与 assets/www 下的 JavaScript；ES module 才启用顶层 mangle，普通脚本保留可能被 HTML/其他脚本调用的全局名。全部脚本成功后才原子写出，并移除 source map。压缩混淆只提高阅读门槛，不等于保密。",
+  guidanceWebAssetsOff: "当前未开启 Web JavaScript 发布处理；本步骤按配置跳过，不改写 APK 内前端资产。",
+  guidanceArscOn:
+    "有损可选步骤：解析 resources.arsc 并做严格兼容性预检；出现 getIdentifier 时保留全部条目名，DEX 直接引用的资源路径也保留，其余项才重命名。生成新包后仍会重新对齐与签名。",
+  guidanceArscOff: "当前未开启资源名混淆，本步骤会按配置跳过，不改写任何资源。",
+  guidanceAlign: "zipalign 必须在签名前执行；未重签时会优先保护已有 v2/v3 签名。",
+  guidanceKeystoreSkip: "当前选择“不重新签名”，因此无需读取签名库。",
+  guidanceKeystore: "只验证签名库、密码和 PrivateKeyEntry 别名，不修改签名库。",
+  guidanceSignSkip: "当前选择“不重新签名”；下一步仍会验证 APK 的现有签名。",
+  guidanceSign: "apksigner 会生成新的已签名副本，不覆盖输入 APK。",
+  guidanceVerify:
+    "独立验证 zipalign、APK 签名方案与证书（含签名方案覆盖、证书有效期、调试证书与弱密钥检测），并计算 SHA-256。",
+  guidanceReport:
+    "保存最终 APK、JSON/Markdown、发布证据、CycloneDX SBOM、许可证待核验清单及置信度感知发布门禁；外部控制不会被静态信号误标为已完成，密码与 keystore 不会进入制品。",
+  guidanceApplicabilitySourceAudit: "输入是 APK，本步骤会标记为“跳过·不适用”；后续 APK 安全审计仍会执行。",
+  guidanceApplicabilityBuild: "输入已经是 APK，本步骤会标记为“跳过·不适用”，不会重复构建。",
+  guidStepSkippable: "可执行此步，也可手动跳过；手动跳过不会改动当前有效 APK，并会在报告中标记“用户选择”。",
+  guidStepRequired: "这是建立有效产物所需的基础步骤，不能手动跳过。",
+
+  msgStepN: "第 {current}/{total} 步",
+  msgSkipped: "已跳过 · {kind}：{summary}",
+  msgPipelineCreated: "流水线已创建",
+  msgRunId: "运行编号：{id}",
+  msgRecognizedApk: "已识别到 APK 路径",
+  msgRecognizedApkBody: "请先选择“已有 APK”，然后粘贴这一路径。",
+  msgWelcomeStart: "我可以从这里开始",
+  msgWelcomeStartBody: "输入“一键处理”“分步处理”或“环境诊断”，也可以点击下方按钮。",
+  msgOneClickSelected: "已选择一键处理",
+  msgGuidedSelected: "已选择分步处理",
+  msgDoctorDone: "环境诊断完成",
+  msgDoctorFailed: "环境诊断失败",
+  msgRecheckDoctor: "重新执行环境诊断",
+  msgToolsReady: "工具已就绪，自动继续",
+  msgToolsReadyBody: "环境诊断已经重新通过，签名配置和已有进度均已保留。",
+  msgBackHome: "已返回首页",
+  msgBackHomeBody: "可以开始新的分步或一键处理。",
+
+  btnDownloadContinue: "下载并继续",
+  btnDownloadContinueDetail: "同意官方许可 · SHA-256 校验 · 自动续跑",
+  btnInstallInstructions: "安装说明",
+  btnInstallInstructionsDetail: "手动安装后无需重新填写配置",
+  btnRecheckContinue: "已安装，重新检测",
+  btnRecheckContinueDetail: "检测通过后从暂停位置继续",
+  recoveryDownloadHint:
+    "可以点击“下载并继续”；点击表示同意对应官方组件许可，DroidSeal 会下载、校验、安装并自动续跑。",
+  recoveryManualHint: "当前缺失项需要按安装说明手动修复。",
+  recoveryRecheckHint: "也可以手动安装后点击“已安装，重新检测”，当前签名配置和步骤进度会保留。",
+  recoveryAuto: "点击“下载并继续”表示同意对应官方组件许可；也可以查看说明后手动安装。",
+  recoveryManual: "请查看安装说明并手动修复。",
+  msgToolSafety:
+    "所有工具都以参数数组直接启动，不经过 shell；签名密码通过子进程环境传递并在输出中脱敏。",
+  msgToolsNeeded: "所选流程需要补齐工具",
+  msgMissingTools: "缺少：{names}",
+  msgCannotSkipStep: "无法跳过该步骤",
+  msgSearchTools: "搜索 JDK 与 Android SDK",
+  msgDoctorToolsFound: "环境诊断发现可补齐的工具",
+
+  helpTitle: "帮助与安全边界",
+  helpBody1: "/guided 分步处理 · /oneclick 一键处理 · /doctor 环境诊断 · /restart 返回首页 · /quit 退出",
+  helpBody2: "左下交互区：Ctrl+加号放大、Ctrl+减号缩小、Ctrl+0 复位。",
+  helpBody3: "所选流程缺少必需工具时会暂停，可下载并继续，或手动安装后重新检测。",
+  helpBody4: "聊天解析完全在本机执行，不连接模型服务，也不会上传路径、APK 或签名信息。",
+  helpBody5: "内置能力面向合法应用防护：严格证据审计、R8、Release 归一化、对齐、签名与验证默认执行；资源名混淆是经兼容性预检的有损可选项。",
+  helpBody6: "如需主动加固（DEX 加壳/VMP/反调试），请在源码接入有授权的方案；DroidSeal 另提供自研、opt-in 的构建期反调试 stub 供源码集成。",
+  helpBody7: "不提供脱壳、绕过证书校验、规避检测、内存篡改或未授权逆向自动化。",
+
+  inputPrefillNote: "已预填默认值，可直接确认或修改",
+  inputEmptyOk: "此项允许留空，可直接继续",
+}
+
+export type I18nKey = keyof typeof en
+
+const dict = { en, zh } as const
+
+export function t(key: I18nKey): string {
+  return dict[language()][key]
+}
+
+// 步骤标题按 id 查翻译(侧栏/消息使用)
+const stepTitleKeys: Record<string, I18nKey> = {
+  doctor: "stepDoctor",
+  prepare: "stepPrepare",
+  keystore: "stepKeystore",
+  "source-audit": "stepSourceAudit",
+  build: "stepBuild",
+  "apk-audit": "stepApkAudit",
+  protect: "stepProtect",
+  harden: "stepHarden",
+  "web-assets": "stepWebAssets",
+  "arsc-obfuscate": "stepArscObfuscate",
+  align: "stepAlign",
+  sign: "stepSign",
+  verify: "stepVerify",
+  report: "stepReport",
+}
+
+export function tStep(stepId: string): string {
+  const key = stepTitleKeys[stepId]
+  return key ? t(key) : stepId
+}
+
+// 步骤描述按 id 查翻译
+const stepDescKeys: Record<string, I18nKey> = {
+  doctor: "stepDescDoctor",
+  prepare: "stepDescPrepare",
+  keystore: "stepDescKeystore",
+  "source-audit": "stepDescSourceAudit",
+  build: "stepDescBuild",
+  "apk-audit": "stepDescApkAudit",
+  protect: "stepDescProtect",
+  harden: "stepDescHarden",
+  "web-assets": "stepDescWebAssets",
+  "arsc-obfuscate": "stepDescArscObfuscate",
+  align: "stepDescAlign",
+  sign: "stepDescSign",
+  verify: "stepDescVerify",
+  report: "stepDescReport",
+}
+
+export function tStepDesc(stepId: string): string {
+  const key = stepDescKeys[stepId]
+  return key ? t(key) : stepId
+}
+
+// 步骤指引按 id + 配置查翻译(第 X 步消息体)
+export function tGuidance(stepId: string, config: PipelineConfig): string[] {
+  const common: Record<string, string> = {
+    doctor: t("guidanceDoctor"),
+    prepare: t("guidancePrepare"),
+    "source-audit": t("guidanceSourceAudit"),
+    build: t("guidanceBuild").replace("{task}", config.gradleTask),
+    "apk-audit": t("guidanceApkAudit"),
+    protect: t("guidanceProtect"),
+    harden: config.signing.mode === "skip" ? t("guidanceHardenSkip") : t("guidanceHarden"),
+    "web-assets": config.enableWebAssetMinification ? t("guidanceWebAssetsOn") : t("guidanceWebAssetsOff"),
+    "arsc-obfuscate": config.enableArscObfuscation ? t("guidanceArscOn") : t("guidanceArscOff"),
+    align: t("guidanceAlign"),
+    keystore: config.signing.mode === "skip" ? t("guidanceKeystoreSkip") : t("guidanceKeystore"),
+    sign: config.signing.mode === "skip" ? t("guidanceSignSkip") : t("guidanceSign"),
+    verify: t("guidanceVerify"),
+    report: t("guidanceReport"),
+  }
+  const applicability =
+    stepId === "source-audit" && config.inputKind === "apk"
+      ? t("guidanceApplicabilitySourceAudit")
+      : stepId === "build" && config.inputKind === "apk"
+        ? t("guidanceApplicabilityBuild")
+        : undefined
+  return applicability ? [common[stepId] ?? stepId, applicability] : [common[stepId] ?? stepId]
+}
+
+// 平台相关的示例路径占位符(Windows 用 C:\ 风格,其他用 /srv 中性路径)
+export function inputPathPlaceholder(kind: "apk" | "project"): string {
+  if (process.platform === "win32") return kind === "apk" ? "C:\\work\\app-release.apk" : "C:\\work\\my-android-app"
+  return kind === "apk" ? "/srv/work/app-release.apk" : "/srv/work/my-android-app"
+}
+
+export function keystorePathPlaceholder(): string {
+  return process.platform === "win32" ? "C:\\keys\\release.jks" : "/srv/keys/release.jks"
+}
+
+// 底层 pipeline 的 progress 消息翻译(中文 → 英文;未匹配时原样返回)
+const progressTranslations: Array<{ match: RegExp; to: (m: RegExpExecArray) => string }> = [
+  { match: /^搜索 PATH、JAVA_HOME 与 Android SDK$/, to: () => "Searching PATH, JAVA_HOME and the Android SDK" },
+  { match: /^复制输入 APK，原文件保持只读$/, to: () => "Copying the input APK; the original stays read-only" },
+  { match: /^检测到 Capacitor 项目：执行 Web 层（(.+?)）$/, to: (m) => `Capacitor project detected: running the Web layer (${m[1] === "完整构建" ? "full build" : "quick rebuild"})` },
+  { match: /^npm install：安装 Web 依赖$/, to: () => "npm install: installing Web dependencies" },
+  { match: /^npx cap sync android：同步 Web 资源与插件$/, to: () => "npx cap sync android: syncing Web resources and plugins" },
+  { match: /^gradlew clean：清理旧产物$/, to: () => "gradlew clean: clearing previous outputs" },
+  { match: /^检查 release 是否已启用 R8$/, to: () => "Checking whether R8 is enabled for release" },
+  { match: /^release 未开 R8：已用 init-script 覆盖强制启用（不改源码）$/, to: () => "R8 not enabled for release: forced on via an init-script override (source untouched)" },
+  { match: /^运行 assembleDebug：生成调试包（旁路产物，不参与签名\/加固）$/, to: () => "Running assembleDebug: building a debug package (bypass artifact, not signed/hardened)" },
+  { match: /^运行 assembleRelease：生成发布包$/, to: () => "Running assembleRelease: building the release package" },
+  { match: /^读取 APK ZIP 中央目录$/, to: () => "Reading the APK ZIP central directory" },
+  { match: /^直接解析 APK 二进制 Manifest \(AXML\)$/, to: () => "Parsing the APK binary Manifest (AXML) directly" },
+  { match: /^解析 APK 内 Network Security Config \(AXML\)$/, to: () => "Parsing the in-APK Network Security Config (AXML)" },
+  { match: /^使用 aapt 读取包名、版本与二进制 Manifest$/, to: () => "Reading package name, version and the binary Manifest with aapt" },
+  { match: /^检查混合应用 WebView 资源（CSP、剪贴板插件）$/, to: () => "Checking hybrid-app WebView resources (CSP, clipboard plugins)" },
+  { match: /^扫描 DEX 字符串池（密钥、弱加密、动态加载等启发式）$/, to: () => "Scanning the DEX string pool (secrets, weak crypto, dynamic-loading heuristics)" },
+  { match: /^扫描 assets\/res-raw 文本资源（硬编码密钥、私钥）$/, to: () => "Scanning assets/res-raw text resources (hardcoded secrets, private keys)" },
+  { match: /^检查 debuggable 与可无损剔除的残留条目$/, to: () => "Checking debuggable and residual entries removable without loss" },
+  { match: /^检查现有签名，避免归一化破坏无法重建的签名$/, to: () => "Checking the existing signature to avoid breaking an unrecreatable one" },
+  { match: /^强制 android:debuggable=false$/, to: () => "Forcing android:debuggable=false" },
+  { match: /^识别 assets\/public 与 assets\/www 中的 JavaScript$/, to: () => "Identifying JavaScript under assets/public and assets/www" },
+  { match: /^检查现有签名，避免 Web 资产改写破坏无法重建的签名$/, to: () => "Checking the existing signature to avoid breaking it by rewriting Web assets" },
+  { match: /^用 Terser 处理 (\d+) 个脚本并在内存中复核 ZIP$/, to: (m) => `Minifying ${m[1]} scripts with Terser and re-checking the ZIP in memory` },
+  { match: /^解析 resources\.arsc 并检测 getIdentifier 反射$/, to: () => "Parsing resources.arsc and detecting getIdentifier reflection" },
+  { match: /^检查现有签名，避免对齐破坏 v2\/v3 签名$/, to: () => "Checking the existing signature to avoid breaking v2/v3 by alignment" },
+  { match: /^按 4 字节边界对齐 APK，并对未压缩 SO 做页对齐$/, to: () => "Aligning the APK to 4-byte boundaries with page alignment for uncompressed SO" },
+  { match: /^验证签名库密码与别名$/, to: () => "Verifying the keystore password and alias" },
+  { match: /^已删除同名旧签名库以生成替换密钥（换新）$/, to: () => "Removed the same-named old keystore to generate a replacement key (renew)" },
+  { match: /^使用 apksigner 生成独立签名 APK$/, to: () => "Generating a separate signed APK with apksigner" },
+  { match: /^验证 ZIP 对齐$/, to: () => "Verifying ZIP alignment" },
+  { match: /^验证 APK 签名方案与证书$/, to: () => "Verifying the APK signing scheme and certificate" },
+  { match: /^计算 SHA-256$/, to: () => "Computing SHA-256" },
+  { match: /^确认最终 APK 的 debuggable 状态$/, to: () => "Confirming the final APK's debuggable state" },
+  // 工具安装/恢复(onProgress)
+  { match: /^连接官方源：.+$/, to: () => "Connecting to the official source" },
+  { match: /^下载 (.+)：(.+)$/, to: (m) => `Downloading ${m[1]}: ${m[2]}` },
+  { match: /^校验 SHA-256：.+$/, to: () => "Verifying SHA-256" },
+  { match: /^解压：.+$/, to: () => "Extracting archive" },
+  { match: /^准备下载并安装 Eclipse Temurin 21$/, to: () => "Preparing to download and install Eclipse Temurin 21" },
+  { match: /^读取 Android SDK 稳定软件包清单$/, to: () => "Reading the Android SDK stable package list" },
+  { match: /^准备下载并安装 Android Build Tools$/, to: () => "Preparing to download and install Android Build Tools" },
+  { match: /^生成 Gradle Wrapper（版本 (.+?)）$/, to: (m) => `Generating the Gradle Wrapper (version ${m[1]})` },
+  { match: /^下载 gradle-.+$/, to: () => "Downloading the Gradle distribution" },
+]
+
+export function translateProgress(message: string): string {
+  for (const entry of progressTranslations) {
+    const match = entry.match.exec(message)
+    if (match) return entry.to(match)
+  }
+  return message
+}
+
+// 步骤结果摘要翻译(中文 → 英文;未匹配时原样返回)
+const summaryTranslations: Array<{ match: RegExp; to: (m: RegExpExecArray) => string }> = [
+  { match: /^所选流程的必需工具均可用$/, to: () => "Required tools for the selected flow are available" },
+  { match: /^项目路径与事务工作区已准备$/, to: () => "Project path and transactional workspace prepared" },
+  { match: /^输入 APK 已复制到隔离工作区$/, to: () => "Input APK copied to an isolated workspace" },
+  { match: /^输入为 APK，源码安全审计不适用$/, to: () => "Input is an APK; source security audit not applicable" },
+  { match: /^源码审计完成:(\d+) 项发现$/, to: (m) => `Source audit complete: ${m[1]} findings` },
+  { match: /^输入已经是 APK，无需执行 Gradle 构建$/, to: () => "Input is already an APK; no Gradle build needed" },
+  { match: /^Release APK 构建完成/, to: () => "Release APK built and copied to an isolated workspace" },
+  { match: /^没有有效 APK，无法执行 APK 安全审计$/, to: () => "No valid APK; cannot run the APK security audit" },
+  { match: /^APK 审计完成:(\d+) 项发现$/, to: (m) => `APK audit complete: ${m[1]} findings` },
+  { match: /^没有有效 APK，无法执行应用保护$/, to: () => "No valid APK; cannot run app protection" },
+  { match: /^本地安全防护边界核验完成:(\d+) 项残留能力提示$/, to: (m) => `Local safety baseline verified: ${m[1]} residual-capability hints` },
+  { match: /^没有有效 APK，无法执行 Release 归一化$/, to: () => "No valid APK; cannot run Release normalization" },
+  { match: /^APK 已是安全 Release 状态，无需归一化$/, to: () => "APK is already a secure Release state; no normalization needed" },
+  { match: /^检测到需保护的现有签名，已跳过残留条目剔除$/, to: () => "Existing signature to protect detected; residual stripping skipped" },
+  { match: /^未改写 APK：无需归一化或剔除被安全放弃$/, to: () => "APK untouched: normalization not needed or stripping safely abandoned" },
+  { match: /^Release 归一化完成$/, to: () => "Release normalization complete" },
+  { match: /^按配置跳过 Web JavaScript 发布处理$/, to: () => "Web JavaScript release processing skipped per config" },
+  { match: /^没有有效 APK，无法执行 Web JavaScript 发布处理$/, to: () => "No valid APK; cannot run Web JavaScript release processing" },
+  { match: /^未发现可处理的混合应用 Web JavaScript$/, to: () => "No processable hybrid-app Web JavaScript found" },
+  { match: /^检测到需要保护或无法确认的现有签名，已保守跳过 Web JavaScript 发布处理$/, to: () => "Existing signature to protect or unverifiable; Web JavaScript processing conservatively skipped" },
+  { match: /^Web JavaScript 发布处理完成:(\d+) 个脚本，移除 (\d+) 个 source map$/, to: (m) => `Web JavaScript processing complete: ${m[1]} scripts, ${m[2]} source maps removed` },
+  { match: /^按配置跳过资源名混淆$/, to: () => "Resource-name obfuscation skipped per config" },
+  { match: /^没有有效 APK，无法执行资源名混淆$/, to: () => "No valid APK; cannot run resource-name obfuscation" },
+  { match: /^资源名混淆完成/, to: () => "Resource-name obfuscation complete" },
+  { match: /^用户选择不重新签名，无需签名库$/, to: () => "No re-signing chosen; no keystore needed" },
+  { match: /^签名库与别名验证通过$/, to: () => "Keystore and alias verified" },
+  { match: /^新发布签名库已创建$/, to: () => "New release keystore created" },
+  { match: /^签名库校验未通过，已跳过签名$/, to: () => "Keystore verification failed; signing skipped" },
+  { match: /^没有有效 APK，无法执行 apksigner$/, to: () => "No valid APK; cannot run apksigner" },
+  { match: /^APK 签名完成$/, to: () => "APK signed" },
+  { match: /^zipalign 对齐完成$/, to: () => "zipalign alignment complete" },
+  { match: /^未重新签名/, to: () => "Not re-signing" },
+  { match: /^最终验证通过/, to: () => "Final verification passed" },
+  { match: /^最终验证失败/, to: () => "Final verification failed" },
+  { match: /^报告已生成/, to: () => "Report generated" },
+]
+
+export function translateSummary(summary: string): string {
+  for (const entry of summaryTranslations) {
+    const match = entry.match.exec(summary)
+    if (match) return entry.to(match)
+  }
+  return summary
+}
+
+// 步骤结果 detail 明细行翻译(中文 → 英文;未匹配时原样返回)
+const detailTranslations: Array<{ match: RegExp; to: (m: RegExpExecArray) => string }> = [
+  { match: /^原文件：(.+)$/, to: (m) => `Original file: ${m[1]}` },
+  { match: /^工作副本：(.+)$/, to: (m) => `Working copy: ${m[1]}` },
+  { match: /^项目：(.+)$/, to: (m) => `Project: ${m[1]}` },
+  { match: /^运行目录：(.+)$/, to: (m) => `Run directory: ${m[1]}` },
+  { match: /^输入：(.+)$/, to: (m) => `Input: ${m[1]}` },
+  { match: /^输出：(.+)$/, to: (m) => `Output: ${m[1]}` },
+  { match: /^路径：(.+)$/, to: (m) => `Path: ${m[1]}` },
+  { match: /^类型：(.+)$/, to: (m) => `Type: ${m[1]}` },
+  { match: /^别名：(.+)$/, to: (m) => `Alias: ${m[1]}` },
+  { match: /^签名库：(.+)$/, to: (m) => `Keystore: ${m[1]}` },
+  { match: /^目标脚本：(\d+) 个；source map：(\d+) 个$/, to: (m) => `Target scripts: ${m[1]}; source maps: ${m[2]}` },
+  { match: /^签名库步骤失败：(.+)$/, to: (m) => `Keystore step failed: ${m[1]}` },
+  { match: /^所有后续步骤只产生新文件，不原地覆盖。$/, to: () => "All later steps only create new files and never overwrite in place." },
+  { match: /^后续构建产物会复制后再处理。$/, to: () => "Build outputs are copied before processing." },
+  { match: /^这是正常跳过，不是失败。后续仍会执行 APK 结构、Manifest、DEX 和 SO 审计。$/, to: () => "This is a normal skip, not a failure. The APK structure, Manifest, DEX and SO audits still run." },
+  { match: /^这是正常跳过，不是失败。流程会继续处理准备步骤创建的 APK 副本。$/, to: () => "This is a normal skip, not a failure. The flow continues with the APK copy from the prepare step." },
+  { match: /^签名将在对齐之后执行。$/, to: () => "Signing runs after alignment." },
+  { match: /^密码未写入命令参数或报告。$/, to: () => "The password is never written to arguments or reports." },
+  { match: /^前面的准备或构建步骤没有产生 APK；请先修复对应失败，再重新运行。$/, to: () => "The prepare or build step produced no APK; fix the failure first, then re-run." },
+  { match: /^前面的准备或构建步骤没有产生 APK；本步骤没有修改任何文件。$/, to: () => "The prepare or build step produced no APK; this step changed nothing." },
+  { match: /^前面的准备、构建或保护步骤没有产生 APK；本步骤没有生成签名文件。$/, to: () => "The prepare, build or protect step produced no APK; no signature file was generated." },
+  { match: /^前面的准备或构建步骤没有产生 APK；本步骤没有生成输出。$/, to: () => "The prepare or build step produced no APK; no output was generated." },
+  { match: /^请先按签名库步骤给出的原因修复密码、别名或路径，再重新执行。$/, to: () => "Fix the password, alias or path per the keystore step's reason, then re-run." },
+  { match: /^用户未开启该可选步骤；assets\/public 与 assets\/www 中的脚本和 source map 均保持不变。$/, to: () => "This optional step is off; scripts and source maps under assets/public and assets/www stay unchanged." },
+  { match: /^严格路径白名单内没有 \.js 文件；非混合 APK 或其他资产目录不会被猜测和改写。$/, to: () => "No .js files under the strict whitelist; non-hybrid APKs or other asset dirs are never guessed or rewritten." },
+  { match: /^二进制 Manifest 未声明 debuggable 或已为 false，且无可剔除的残留条目。最终验证仍会再次确认。$/, to: () => "The binary Manifest has no debuggable (or it is false) and no removable residuals; final verification confirms again." },
+  { match: /^这是安全保护，不是失败。APK 未声明 debuggable，只存在可选的残留条目。$/, to: () => "This is safety protection, not a failure. The APK has no debuggable and only optional residuals remain." },
+  { match: /^APK 未被改写。$/, to: () => "The APK was not rewritten." },
+  { match: /^对齐和签名将基于归一化后的 APK 执行。$/, to: () => "Alignment and signing run on the normalized APK." },
+  { match: /^后续对齐步骤会检测并保护输入 APK 的现有签名，最终验证会再次核对签名方案与证书。$/, to: () => "The alignment step detects and protects the input APK's existing signature; final verification re-checks the scheme and certificate." },
+  { match: /^用户未开启有损资源名混淆；resources\.arsc 未被改写，后续照常对齐与签名。$/, to: () => "Lossy resource-name obfuscation is off; resources.arsc is untouched and alignment/signing proceed as usual." },
+  { match: /^已回退/, to: () => "Rolled back to the valid APK from before this step" },
+]
+
+export function translateDetail(line: string): string {
+  for (const entry of detailTranslations) {
+    const match = entry.match.exec(line)
+    if (match) return entry.to(match)
+  }
+  return line
+}

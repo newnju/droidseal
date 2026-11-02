@@ -1,47 +1,52 @@
-# DroidSeal
+# DroidSeal · Android Release Seal
 
-> 商业加固前你能做的大多数内容。一键式端到端管线，超越初级安全水平。
+[English](README.md) | [中文](README.zh-CN.md)
 
-DroidSeal 是面向 Android 发布流程的**加固前处理 / 端到端管线工具**：在把 APK 交给商业加固服务之前，先用一套可复现的本地化步骤完成代码混淆、资源清理、签名一致性校验与发布包校验，减少加固后回滚与兼容性问题。
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/noontiger/droidseal/blob/main/LICENSE)
+[![npm](https://img.shields.io/npm/v/droidseal.svg?logo=npm)](https://www.npmjs.com/package/droidseal)
+[![PyPI](https://img.shields.io/pypi/v/droidseal.svg?logo=pypi)](https://pypi.org/project/droidseal)
 
-## 特性
+**Android Release Seal** helps you do most of what you can do before commercial hardening — environment diagnostics, source & APK audit, R8 obfuscation, zipalign, apksigner signing, and final verification. One command, end to end.
 
-- **九步端到端管线**：解包 → 资源清理 → 清单收敛 → R8 / ProGuard → 原生库处理 → zipalign → apksigner → 完整性校验 → 产物归档，覆盖从 APK 到可发布包的全过程。
-- **三种运行模式**：分步处理（可控、可断点续跑）、一键处理（端到端自动）、环境诊断（只检查工具链与配置，不改产物）。
-- **能力网格**：混淆策略、资源瘦身、签名管理、清单裁剪、原生库处理、发布校验。
-- **安全与隐私**：全部在本地完成，不对外上传源码或签名密钥；密钥仅用于本地签名，绝不离开本机。
+## What it does
 
-## 目录结构（GitHub Pages）
+- **Audit**: static audit of projects and APKs — permissions, targetSdk, signing schemes, hardcoded secrets, DEX/TLS heuristics, native library hardening, third-party dependencies, and a CycloneDX SBOM;
+- **Release**: runs `zipalign → apksigner sign → verify` in the official order, with automatic rollback on failure and independent artifacts per step;
+- **Outputs**: APK + SHA-256 + JSON/Markdown reports + a release gate + SBOM.
 
+<img width="960" alt="DroidSeal interface screenshot" src="droidseal-screenshot.png" />
+
+## Install
+
+| Channel | How |
+|---|---|
+| npm | `npm install --global droidseal` |
+| PyPI | `pip install droidseal` |
+| GitHub Releases | Download the Windows zip / Linux tar.gz directly |
+
+> **Windows note**: if SmartScreen blocks the exe when double-clicked, right-click → Properties → Unblock. The TUI needs a terminal: run `droidseal` in PowerShell, or double-click the bundled `droidseal-gui.cmd` launcher.
+
+## Usage
+
+```powershell
+droidseal              # Interactive TUI wizard (one-click / guided)
+droidseal doctor       # Non-interactive environment diagnostics
+droidseal --version
 ```
-.
-├── index.html        # 站点主页（交互式深色终端风）
-├── screenshot.png    # Hero 区产品截图
-├── LICENSE           # Apache-2.0
-└── README.md
-```
 
-## 本地预览
+## Platform & status
 
-```bash
-# 任选其一
-python -m http.server 8000
-# 或
-npx serve .
-```
+- **Platforms**: Windows x64 / Linux x64;
+- **Status**: 1.0.0 stable — the CLI, output layout, and report format are now stable.
 
-然后打开 http://localhost:8000
+## Security boundary
 
-## 部署到 GitHub Pages
+A defensive tool: by default it does not unpack, pack, inject hooks, or add anti-debug code; everything runs locally and never uploads your APK, paths, or signing information.
 
-1. 在 GitHub 新建仓库（如 `droidseal` 或 `droidseal.github.io`）。
-2. 推送本目录到 `main` 分支：
-   ```bash
-   git remote add origin git@github.com:<you>/droidseal.git
-   git push -u origin main
-   ```
-3. 仓库 **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: main → /(root)**，保存后等待数分钟即可访问。
+## License & brand
 
-## 许可证
+- Open-source license: [Apache License 2.0](https://github.com/noontiger/droidseal/blob/main/LICENSE)
+- Name & logo usage: [TRADEMARKS.md](https://github.com/noontiger/droidseal/blob/main/TRADEMARKS.md) (reviews, tutorials and sharing with attribution are welcome)
+- Third-party notices: [THIRD_PARTY_NOTICES.md](https://github.com/noontiger/droidseal/blob/main/THIRD_PARTY_NOTICES.md)
 
-[Apache-2.0](./LICENSE) © 2026 DroidSeal Contributors
+<img src="https://raw.githubusercontent.com/noontiger/droidseal/main/droidseal-logo.png" width="420" alt="DroidSeal" />
