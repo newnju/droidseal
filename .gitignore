@@ -1,11 +1,46 @@
-# Logs
-*.log
-npm-debug.log*
+node_modules/
+dist/
+.droidseal-build-*/
+coverage/
+.droidseal/
+verification-output/
+droidseal-output/
+droidseal-bundle/
 
-# OS
+dependencies/
+*.log
+*.tgz
+*.tmp
+*.bak
+
+.env
+.env.*
+!.env.example
+
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+
+*.apk
+*.aab
+!.github/fixtures/*.apk
+
 .DS_Store
 Thumbs.db
-
-# Editor
 .idea/
 .vscode/
+
+# PyPI 发布产物
+wheelhouse/
+*.whl
+droidseal/_bin/
+*.egg-info/
+build/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
