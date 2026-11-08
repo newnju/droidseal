@@ -25,10 +25,9 @@ Do not build 1.1.0 from a dirty tree, a development branch, or `HEAD`.
 Do not add features, evidence, or known issues from other versions to the 1.1.0
 notes.
 
-The current local `v1.1.0` tag predates the documentation in this worktree. If
-you accept these docs, commit them, recreate the **unpublished** local tag at
-the new release commit, and push that tag only once. Never force-move a tag that
-has already been published.
+The `v1.1.0` tag must point at the frozen release commit. If a release gate
+fails **before** any GitHub, npm or PyPI artifact is published, fix forward and
+recreate the tag once; after publication, never force-move the tag.
 
 ### Tag annotation
 

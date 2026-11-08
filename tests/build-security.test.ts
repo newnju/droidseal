@@ -21,7 +21,7 @@ describe("release bundle hardening", () => {
     const buildScript = await readFile(path.join(projectRoot, "scripts/build.ts"), "utf8")
     const launcher = await readFile(path.join(projectRoot, "bin/droidseal.cjs"), "utf8")
 
-    expect(packageJson.bin?.droidseal).toBe("./bin/droidseal.cjs")
+    expect(packageJson.bin?.droidseal).toBe("bin/droidseal.cjs")
     // 精确窄列发布:只发布确定的构建产物,不整目录发布(比含 "dist" 更严格)
     expect(packageJson.files).toContain("dist/droidseal.mjs")
     expect(packageJson.files).toContain("bin/droidseal.cjs")

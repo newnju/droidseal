@@ -13,7 +13,7 @@
     "url": "git+https://github.com/newnju/droidseal.git"
   },
   "bin": {
-    "droidseal": "./bin/droidseal.cjs"
+    "droidseal": "bin/droidseal.cjs"
   },
   "keywords": [
     "android",

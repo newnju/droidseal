@@ -119,7 +119,7 @@ const pythonLauncher = await readFile(path.join(root, "droidseal", "__init__.py"
 if (!pythonLauncher.includes(`__version__ = "${packageJson.version}"`)) {
   findings.push("droidseal/__init__.py __version__ 必须与 package.json version 保持一致")
 }
-if (packageJson.bin?.droidseal !== "./bin/droidseal.cjs") findings.push("npm 命令必须指向只负责校验和启动二进制的 bin/droidseal.cjs")
+if (packageJson.bin?.droidseal !== "bin/droidseal.cjs") findings.push("npm 命令必须指向只负责校验和启动二进制的 bin/droidseal.cjs")
 if (JSON.stringify(packageJson.files) !== JSON.stringify(expectedPackageFiles)) {
   findings.push("npm files 必须使用最小二进制发布白名单，禁止包含源码、脚本、路线图和内部文档")
 }
@@ -159,8 +159,12 @@ const canonicalRepositoryUrl = "git+https://github.com/newnju/droidseal.git"
 if (repositoryUrl !== canonicalRepositoryUrl) {
   findings.push("package.json repository 必须指向官方 droidseal 仓库")
 }
-if (!packageJson.scripts?.verify || packageJson.scripts?.prepack !== "bun run verify") {
-  findings.push("npm prepack 必须执行完整 verify 发布门禁")
+if (
+  !packageJson.scripts?.verify ||
+  packageJson.scripts?.prepack ||
+  packageJson.scripts?.prepublishOnly !== "bun run verify:release"
+) {
+  findings.push("npm 发布门禁必须使用 prepublishOnly=verify:release，且不得用 prepack 重建 dist")
 }
 
 const buildScript = await readFile(path.join(root, "scripts", "build.ts"), "utf8")
