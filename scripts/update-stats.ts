@@ -71,7 +71,7 @@ async function main(): Promise<void> {
   }
   // GitHub stars / forks
   try {
-    const repo = await getJson("https://api.github.com/repos/noontiger/droidseal")
+    const repo = await getJson("https://api.github.com/repos/newnju/droidseal")
     results.push({ name: "stars", label: "stars", value: (repo.stargazers_count as number) ?? 0, color: "#00a8cc" })
     results.push({ name: "forks", label: "forks", value: (repo.forks_count as number) ?? 0, color: "#7aa2ff" })
   } catch (error) {

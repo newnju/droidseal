@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use DroidSeal in academic work, please cite this software release."
+title: "DroidSeal"
+abstract: "A local-first Android release security pipeline: static audit, evidence-driven remediation, optional runtime hardening, official alignment and signing, and independent verification."
+type: software
+authors:
+  - name: "DroidSeal Contributors"
+version: "1.1.0"
+date-released: 2026-10-19
+license: Apache-2.0
+repository-code: "https://github.com/newnju/droidseal"
+url: "https://github.com/newnju/droidseal"
+keywords:
+  - android
+  - application-security
+  - static-analysis
+  - taint-analysis
+  - apk-hardening
+  - release-engineering
+  - sbom
+  - supply-chain-security

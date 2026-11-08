@@ -71,19 +71,26 @@ jobs:
           cat > release_body.md <<EOF
           ## DroidSeal $version
 
-          本地优先的 Android 发布安全流水线：审计 → 对齐 → 签名 → 验证 → 报告，数据不出本机。
+          **Ship an Android release you can defend.** Audit, optionally harden, sign and verify locally. Every release leaves SHA-256, reports, an SBOM and a release decision.
 
-          安装：
-          - npm：npm install --global droidseal
-          - PyPI：pip install droidseal
-          - Windows：解压 zip 后双击 droidseal-gui.cmd，或 PowerShell 运行 droidseal.exe
-          - Linux：解压 tar.gz 后运行 ./droidseal
-          - 源码构建（需 Bun 1.3+）：git clone https://github.com/noontiger/droidseal && cd droidseal && bun install --frozen-lockfile && bun run dev
+          Install:
+          - npm: npm install --global droidseal
+          - PyPI: pip install droidseal
+          - Windows: unzip, then run droidseal-gui.cmd or droidseal.exe
+          - Linux: extract the tar.gz, then run ./droidseal
+          - Source (Bun 1.3.14): git clone https://github.com/newnju/droidseal && cd droidseal && bun install --frozen-lockfile && bun run dev
 
-          提示：双击 exe 被 SmartScreen 拦截时右键 → 属性 → 解除锁定；TUI 需在终端中运行。
+          Release notes: https://github.com/newnju/droidseal/blob/v$version/docs/releases/v$version.md
 
-          校验：commit ${{ github.sha }} · SHA-256(Windows)：$winSha · SHA-256(Linux)：$linuxSha
+          Verification: commit ${{ github.sha }} · SHA-256 (Windows): $winSha · SHA-256 (Linux): $linuxSha
+
+          Windows SmartScreen may block the unsigned executable; verify the downloaded archive against SHA256SUMS before use. Run the TUI in a terminal.
           EOF
+      - name: Write checksums
+        run: |
+          cd artifacts
+          sha256sum release-windows/*.zip release-linux/*.tar.gz | awk '{ n=split($2, a, "/"); print $1 "  " a[n] }' > SHA256SUMS
+          cat SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
           name: DroidSeal ${{ github.ref_name }}
@@ -91,3 +98,4 @@ jobs:
           files: |
             artifacts/release-windows/*.zip
             artifacts/release-linux/*.tar.gz
+            artifacts/SHA256SUMS

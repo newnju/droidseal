@@ -1,16 +1,16 @@
 {
   "name": "droidseal",
   "version": "1.1.0",
-  "description": "Android Release Seal — a local-first Android release security pipeline: audit, harden, align, sign, verify.",
+  "description": "Android release security with an evidence trail: audit, optional hardening, align, sign, verify.",
   "type": "module",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/noontiger/droidseal#readme",
+  "homepage": "https://github.com/newnju/droidseal#readme",
   "bugs": {
-    "url": "https://github.com/noontiger/droidseal/issues"
+    "url": "https://github.com/newnju/droidseal/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/noontiger/droidseal.git"
+    "url": "git+https://github.com/newnju/droidseal.git"
   },
   "bin": {
     "droidseal": "./bin/droidseal.cjs"
@@ -24,6 +24,14 @@
     "zipalign",
     "release-engineering",
     "android-security",
+    "apk-hardening",
+    "static-analysis",
+    "taint-analysis",
+    "sast",
+    "sbom",
+    "supply-chain",
+    "devsecops",
+    "reverse-engineering",
     "tui",
     "bun",
     "typescript"
@@ -62,14 +70,14 @@
     "test": "bun test",
     "build": "bun run scripts/build.ts",
     "build:node": "bun run scripts/build-node.ts",
-    "prepublishOnly": "bun run verify",
-    "prepack": "bun run verify",
+    "prepublishOnly": "bun run verify:release",
     "bundle:toolchain": "bun run scripts/bundle-toolchain.ts",
     "smoke:device": "bun run scripts/device-smoke.ts",
     "release:check": "bun run scripts/release-check.ts",
     "py:wheel": "bun run scripts/py-wheel.ts",
     "sync:check": "bun run scripts/sync-check.ts",
-    "verify": "bun run check && bun test && bun run build && bun run build:node && bun run release:check"
+    "verify": "bun run check && bun test && bun run build && bun run build:node && bun run release:check",
+    "verify:release": "bun run check && bun test && bun run release:check"
   },
   "packageManager": "bun@1.3.14",
   "devDependencies": {

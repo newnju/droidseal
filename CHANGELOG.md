@@ -2,6 +2,10 @@
 
 DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Changelog；公开兼容性表面确定后，项目遵循语义化版本。
 
+> 1.1.0 的冻结发布说明：[English](docs/releases/v1.1.0.md) · [中文](docs/releases/v1.1.0.zh-CN.md)
+>
+> 计数口径：`379` 是 2026-09-26 能力轮的中间检测器计数；1.1.0 tag 的 `SOURCE_DETECTORS.length` 为 391（390 unique codes），发布说明以 391 为准。历史测试数字同理为当时快照。
+
 ## [1.1.0] - 2026-10-19
 
 ### Added (2026-09-26 能力与文档轮)
@@ -9,7 +13,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
 - **JNI 动态注册恢复**(JNI_DYNAMIC_REGISTER):SO 字符串池注册表痕迹扫描 + DEX 类/方法双命中交叉验证——动态注册 native 方法无静态导出符号,此前不可见;
 - **native 线性数据流**(NATIVE_DATAFLOW_SUSPECT):JNI 导出函数体 source→sink 共现检测,线性启发式(confidence: low)如实标注;
 - **混淆名归一**(对判层):GT 混淆方法名经方法体唯一 API 锚定恢复,歧义如实放弃——TaintBench 249 流口径 TP 130 → 136、宽松档 61 → 66;
-- **allowBackup 可执行修复**:审计 finding → AXML 原位翻转补丁(lipAllowBackupFalse,resId 0x01010280,长度保持);
+- **allowBackup 可执行修复**:审计 finding → AXML 原位翻转补丁(flipAllowBackupFalse,resId 0x01010280,长度保持);
 - **文档**:双语 README 新增「实测能力(基准数字)」节(全部随口径),模块数 30 → 139 修正;benchmark 报告与威胁模型补能力提升轮记录。
 
 ### Added
@@ -59,7 +63,7 @@ DroidSeal 的用户可见变化记录在本文件中。格式参考 Keep a Chang
   - README 双语新增「测试与验收」章节:三层验证(单元/产物基线/真机)与"构建期全绿 ≠ 运行时正确"边界。
 - 文档全面对齐当前实现：README 双语安全边界补「APK 加固模式例外」、P0-B 描述修正为 fork 读父进程 TracerPid、状态更新 1.0.1；SECURITY 双语版本状态由「0.x Alpha」更新为 1.0.1 stable。
 
-## [1.0.1] - 2026-08-21
+## [1.0.1] - 2026-10-17
 
 ### Added
 

@@ -2,6 +2,8 @@
 
 [中文](threat-model.zh-CN.md) | [English](threat-model.md)
 
+> **1.1.0 范围说明**：P2 `--keystore-bind` / `--challenge-url` 与 VMP-lite 不属于 1.1.0 的发布声明。冻结范围见 [1.1.0 发布说明](releases/v1.1.0.zh-CN.md)。
+
 本文档描述 DroidSeal 加固层(P0-A/B/C、P1、P2)的攻击面、防御机制与**如实标注的残余风险**。原则与整个项目一致:未实现的能力不声称,运行时行为无法构建期验证的如实标注。
 
 **适用范围**:仅 `harden` 流水线产物(显式 opt-in 的 release APK 加固)。审计/签名/验证流程不涉及运行时防御,不在本文档范围。
@@ -110,7 +112,7 @@
 - **native 线性数据流**(NATIVE_DATAFLOW_SUSPECT):JNI 导出函数体 source→sink 共现,**线性启发式、confidence: low**——仅人工核验线索,非指针分析,不作为判定依据;
 - **混淆名归一**(对判层):方法体唯一 API 锚定,歧义如实放弃——影响 bench 口径,不影响运行时行为。
 
-如实边界:三者均为检测/对判层增强;mProtected 在真机矩阵验收前恒 false,里程碑 B(RegisterNatives 桥)仅为构建期代码路径。
+如实边界:三者均为检测/对判层增强;vmProtected 在真机矩阵验收前恒 false,里程碑 B(RegisterNatives 桥)仅为构建期代码路径。
 
 ## 变更记录补充
 

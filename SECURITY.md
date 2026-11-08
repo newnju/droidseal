@@ -8,12 +8,12 @@ DroidSeal processes Android application artifacts, invokes external tools, and h
 
 | Version | Support status |
 | --- | --- |
-| Latest release | Supported |
-| Previous release | Best effort |
+| `1.1.0` (latest release) | Supported |
+| `1.0.1` (previous release) | Best effort |
 | Older versions | Not supported |
-| Development snapshots | No compatibility commitment |
+| Development snapshots (unreleased builds) | No compatibility commitment |
 
-The project is now at `1.1.0` stable — the CLI, output layout and report formats are stable. Security fixes are applied to the latest release first; the support scope will adjust as the project matures.
+`1.1.0` is the current release; the CLI, output layout and report formats are stable. Security fixes are applied to the latest release first; the support scope will adjust as the project matures.
 
 ## Reporting vulnerabilities privately
 
@@ -21,7 +21,7 @@ Do not report security vulnerabilities through public Issues, Discussions, Pull 
 
 Once the official repository enables Private Vulnerability Reporting, please use:
 
-<https://github.com/noontiger/droidseal/security/advisories/new>
+<https://github.com/newnju/droidseal/security/advisories/new>
 
 Until that private channel is enabled, first request a private contact through a verified GitHub account of a maintainer; do not send vulnerability details, attachments, or credentials until a secure channel is confirmed. The project currently publishes no security email address, so do not guess or use unconfirmed addresses.
 

@@ -2,6 +2,8 @@
 
 [中文](threat-model.zh-CN.md) | [English](threat-model.md)
 
+> **1.1.0 scope.** P2 `--keystore-bind` / `--challenge-url` and VMP-lite are not part of the 1.1.0 release claim. See the [1.1.0 release notes](releases/v1.1.0.md) for the frozen scope.
+
 This document describes the attack surface, defenses, and **honestly stated residual risks** of the DroidSeal hardening layer (P0-A/B/C, P1, P2). The principle matches the whole project: capabilities that are not implemented are not claimed; runtime behavior that cannot be verified at build time is labeled as such.
 
 **Scope**: hardened artifacts only (explicit opt-in release-APK hardening via the `harden` pipeline). The audit / signing / verification flows involve no runtime defenses and are out of scope.

@@ -26,12 +26,19 @@ await mkdir(binDirectory, { recursive: true })
 await cp(distDirectory, binDirectory, { recursive: true })
 console.log(`✓ 已同步 dist → droidseal/_bin(${REQUIRED.length} 关键资产 + ${REQUIRED_LIBS.length} 原生库校验通过)`)
 
+await rm(wheelOut, { recursive: true, force: true })
 await mkdir(wheelOut, { recursive: true })
 const result = Bun.spawnSync(["python", "-m", "pip", "wheel", ".", "--no-deps", "-w", wheelOut], {
   cwd: projectRoot,
 })
 if (result.exitCode !== 0) {
   throw new Error(`wheel 构建失败:\n${result.stderr.toString()}`)
+}
+const split = Bun.spawnSync(["python", path.join(projectRoot, "scripts", "split-py-wheel.py"), wheelOut], {
+  cwd: projectRoot,
+})
+if (split.exitCode !== 0) {
+  throw new Error(`wheel 平台拆分失败:\n${split.stderr.toString()}`)
 }
 const wheel = (await import("node:fs/promises")).readdir(wheelOut)
 for (const file of await wheel) {

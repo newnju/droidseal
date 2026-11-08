@@ -46,6 +46,6 @@ This policy does not limit rights granted under the Apache License 2.0 for Droid
 
 ## Contact
 
-For brand or trademark permission requests, contact the maintainers through the official repository at <https://github.com/noontiger/droidseal>. Permission is not granted until it is confirmed in writing by a maintainer.
+For brand or trademark permission requests, contact the maintainers through the official repository at <https://github.com/newnju/droidseal>. Permission is not granted until it is confirmed in writing by a maintainer.
 
 DroidSeal is not represented as a registered trademark. This policy is not a substitute for formal trademark clearance or legal advice.

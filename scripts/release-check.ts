@@ -92,6 +92,7 @@ for (const required of requiredFiles) {
 
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as {
   name?: string
+  version?: string
   description?: string
   license?: string
   bin?: Record<string, string>
@@ -110,10 +111,14 @@ const repositoryUrl = typeof packageJson.repository === "string"
   ? packageJson.repository
   : packageJson.repository?.url
 if (packageJson.name !== "droidseal") findings.push("package.json name 必须为 droidseal")
-if (packageJson.description !== "Android Release Seal — a local-first Android release security pipeline: audit, harden, align, sign, verify.") {
+if (packageJson.description !== "Android release security with an evidence trail: audit, optional hardening, align, sign, verify.") {
   findings.push("package.json description 必须使用统一英文短介绍")
 }
 if (packageJson.license !== "Apache-2.0") findings.push("package.json license 必须与 LICENSE 的 Apache-2.0 保持一致")
+const pythonLauncher = await readFile(path.join(root, "droidseal", "__init__.py"), "utf8")
+if (!pythonLauncher.includes(`__version__ = "${packageJson.version}"`)) {
+  findings.push("droidseal/__init__.py __version__ 必须与 package.json version 保持一致")
+}
 if (packageJson.bin?.droidseal !== "./bin/droidseal.cjs") findings.push("npm 命令必须指向只负责校验和启动二进制的 bin/droidseal.cjs")
 if (JSON.stringify(packageJson.files) !== JSON.stringify(expectedPackageFiles)) {
   findings.push("npm files 必须使用最小二进制发布白名单，禁止包含源码、脚本、路线图和内部文档")
@@ -150,7 +155,8 @@ for (const [name, version] of Object.entries({
   if (packageJson.devDependencies?.[name] !== version) findings.push(`构建依赖必须精确锁定：${name}@${version}`)
 }
 if (packageJson.overrides?.["brace-expansion"] !== "^2.1.4") findings.push("brace-expansion 安全覆盖必须锁定为 ^2.1.4（修复 GHSA-rgw5-rvv9-x895）")
-if (repositoryUrl !== "git+https://github.com/noontiger/droidseal.git") {
+const canonicalRepositoryUrl = "git+https://github.com/newnju/droidseal.git"
+if (repositoryUrl !== canonicalRepositoryUrl) {
   findings.push("package.json repository 必须指向官方 droidseal 仓库")
 }
 if (!packageJson.scripts?.verify || packageJson.scripts?.prepack !== "bun run verify") {

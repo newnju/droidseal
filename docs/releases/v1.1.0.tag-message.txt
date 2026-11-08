@@ -1,0 +1,9 @@
+DroidSeal 1.1.0 — Android release security with an evidence trail.
+
+Audit, optionally harden, sign, and verify an Android release locally.
+Every release run leaves SHA-256, reports, an SBOM and a release decision.
+
+Scope: 1.1.0 only.
+Evidence: 387/387 tests; reproducible benchmark harnesses; API 26 x86_64 emulator acceptance for the hardening path.
+Known limits: APK hardening is opt-in; limited device matrix; no VMP/white-box crypto.
+Release notes: https://github.com/newnju/droidseal/blob/v1.1.0/docs/releases/v1.1.0.md
