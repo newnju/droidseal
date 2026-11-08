@@ -2,7 +2,7 @@
 
 | Version | Date | Status | Notes |
 |---|---|---|---|
-| 1.1.0 | 2026-10-19 | Prepared | [English](v1.1.0.md) · [中文](v1.1.0.zh-CN.md) |
+| 1.1.0 | 2026-10-19 | Published (PyPI/GitHub); npm pending | [English](v1.1.0.md) · [中文](v1.1.0.zh-CN.md) |
 | 1.0.1 | 2026-10-17 | Published | See the [v1.0.1 GitHub Release](https://github.com/newnju/droidseal/releases/tag/v1.0.1) |
 
 The notes in this directory describe the feature and evidence set frozen at the
