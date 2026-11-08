@@ -3,33 +3,84 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>DroidSeal · 本地优先的 Android 安全发布流水线</title>
-<meta name="description" content="DroidSeal（安卓发布封签）：商业加固前你能做的大多数内容。本地优先、结果可验证的 14 步发布安全流水线。" />
+<title>DroidSeal · 本地优先的 Android 发布安全流水线</title>
+<meta name="description" content="DroidSeal（安卓发布封签）1.1.0：本地优先的 Android 发布安全流水线——静态审计、按需加固、官方工具签名与独立验证，留下可复核的证据链。" />
+<meta property="og:title" content="DroidSeal 1.1.0 · 安卓发布封签" />
+<meta property="og:description" content="在本地完成 Android 发布审计、按需加固、签名与验证。1.1.0 交付密钥化加固与可测量的证据链。" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://newnju.github.io/droidseal/" />
+<meta property="og:image" content="https://newnju.github.io/droidseal/droidseal-architecture.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
+  /* =========================================================
+     DroidSeal · design tokens
+     One hue family, one radius ladder, one type ladder,
+     one motion ladder — everything below references these.
+     ========================================================= */
   :root{
+    color-scheme:dark;
+
+    /* surfaces — cool neutral, same hue family as the blue-black base */
     --bg:#0B0E14;
     --bg-2:#0F131C;
-    --card:rgba(22,22,22,0.72);
-    --card-solid:#161616;
-    --border:#262626;
-    --border-soft:rgba(255,255,255,0.07);
-    --cyan:#00E5FF;
-    --cyan-dim:rgba(0,229,255,0.45);
+    --surface:rgba(23,27,36,.72);
+    --surface-solid:#171B24;
+    --surface-inset:#0C1017;
+    --surface-bar:#12161F;
+
+    /* lines */
+    --line:#252B36;
+    --line-2:rgba(121,201,231,.22);
+    --line-soft:rgba(255,255,255,.07);
+    --border:var(--line);            /* legacy alias, still used inline */
+    --border-soft:var(--line-soft);  /* legacy alias */
+
+    /* ink */
     --text:#FAFAFA;
-    --muted:#9A9AA2;
-    --muted-2:#6B6B73;
+    --muted:#A2AAB8;
+    --muted-2:#7E8794;
+
+    /* brand */
+    --cyan:#00E5FF;
+    --cyan-2:#7AA2FF;
+    --cyan-dim:rgba(0,229,255,.45);
+    --cyan-line:rgba(0,229,255,.62);
+    --violet:#7850FF;
+
+    /* radius ladder */
+    --r-xs:8px; --r-sm:10px; --r-md:12px; --r:14px; --r-lg:18px; --r-xl:24px; --r-pill:999px;
+
+    /* rhythm */
     --maxw:1140px;
-    --r:14px;
+    --gutter:28px;
+
+    /* type ladder */
+    --fs-2xs:11px; --fs-xs:12px; --fs-sm:13px; --fs-base:14px;
+    --fs-md:15px; --fs-lg:16px; --fs-xl:19px; --fs-2xl:20px; --fs-lead:17px;
+
+    /* motion ladder */
+    --t-1:.15s; --t-2:.25s; --t-3:.55s;
+    --e-out:cubic-bezier(.2,.7,.2,1);
+
+    /* runtime hooks — JS only overwrites these, CSS keeps the defaults */
+    --x:50vw; --y:50vh;
+
     --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;
     --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    --lift:0 2px 6px rgba(0,0,0,0.35),0 14px 28px -12px rgba(0,0,0,0.55),0 30px 60px -22px rgba(0,0,0,0.5);
-    --lift-cyan:0 6px 16px -8px rgba(0,0,0,0.5),0 18px 40px -14px rgba(0,0,0,0.55),0 0 30px -6px rgba(0,229,255,0.30);
+
+    --lift:0 2px 6px rgba(0,0,0,.35),0 14px 28px -12px rgba(0,0,0,.55),0 30px 60px -22px rgba(0,0,0,.5);
+    --lift-cyan:0 6px 16px -8px rgba(0,0,0,.5),0 18px 40px -14px rgba(0,0,0,.55),0 0 30px -6px rgba(0,229,255,.30);
   }
+
+  /* ---------- base ---------- */
   *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth}
+  html{
+    scroll-behavior:smooth;
+    scroll-padding-top:88px;                 /* fixed header owns the top 68px */
+    -webkit-tap-highlight-color:transparent;
+  }
   body{
     font-family:var(--sans);
     background:var(--bg);
@@ -37,16 +88,27 @@
     line-height:1.6;
     overflow-x:hidden;
     -webkit-font-smoothing:antialiased;
-    cursor:none;
+    -moz-osx-font-smoothing:grayscale;
+    text-rendering:optimizeLegibility;
   }
-  @media (pointer:coarse){ body{cursor:auto} #cursor-dot,#cursor-ring{display:none!important} }
+  /* the custom cursor is opt-in: JS adds .custom-cursor only on fine pointers */
+  html.custom-cursor,html.custom-cursor body{cursor:none}
+  html.custom-cursor :is(a,button,[data-cursor],.btn,.nav-toggle,.step,.mode,.cap){cursor:none}
+  @media (pointer:coarse){
+    html.custom-cursor,html.custom-cursor body,html.custom-cursor *{cursor:auto}
+    #cursor-dot,#cursor-ring{display:none!important}
+  }
   a{color:inherit;text-decoration:none}
-  img{max-width:100%;display:block}
+  img{max-width:100%;height:auto;display:block}
+  button,input,select,textarea{font:inherit;color:inherit}
+  ::selection{background:rgba(0,229,255,.28);color:#fff}
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:var(--r-xs)}
+  section[id]{scroll-margin-top:76px}
 
   /* ---------- background layers ---------- */
   #bg{position:fixed;inset:0;z-index:1;pointer-events:none}
   .aurora{
-    position:fixed;inset:-20% -20% -20% -20%;z-index:0;pointer-events:none;
+    position:fixed;inset:-20%;z-index:0;pointer-events:none;
     background:
       radial-gradient(40% 35% at 22% 18%, rgba(0,229,255,0.16), transparent 60%),
       radial-gradient(45% 40% at 82% 12%, rgba(80,120,255,0.12), transparent 60%),
@@ -61,77 +123,164 @@
       linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),
       linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);
     background-size:46px 46px;
-    mask-image:radial-gradient(circle at 50% 40%, #000 0%, transparent 75%);
     -webkit-mask-image:radial-gradient(circle at 50% 40%, #000 0%, transparent 75%);
+    mask-image:radial-gradient(circle at 50% 40%, #000 0%, transparent 75%);
   }
-  .grain{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .grain{
+    position:fixed;inset:0;z-index:3;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
 
   /* ---------- custom cursor ---------- */
-  #cursor-dot,#cursor-ring{position:fixed;top:0;left:0;z-index:9999;pointer-events:none;border-radius:50%;will-change:transform}
+  #cursor-dot,#cursor-ring{
+    position:fixed;top:0;left:0;z-index:9998;pointer-events:none;border-radius:50%;
+    will-change:transform;
+    transform:translate(var(--x,50vw),var(--y,50vh)) translate(-50%,-50%);
+  }
+  /* hidden unless JS successfully switches the custom cursor on */
+  #cursor-dot,#cursor-ring{display:none}
+  html.custom-cursor #cursor-dot,html.custom-cursor #cursor-ring{display:block}
   #cursor-dot{width:7px;height:7px;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
-  #cursor-ring{width:34px;height:34px;border:1.5px solid var(--cyan-dim);transition:width .2s ease,height .2s ease,border-color .2s ease,background .2s ease;margin:-17px 0 0 -17px}
-  #cursor-ring.hover{width:54px;height:54px;margin:-27px 0 0 -27px;border-color:var(--cyan);background:rgba(0,229,255,0.08)}
-  #cursor-ring.down{width:26px;height:26px;margin:-13px 0 0 -13px;border-color:#fff;background:rgba(255,255,255,0.12)}
+  #cursor-ring{
+    width:34px;height:34px;border:1.5px solid var(--cyan-dim);
+    transition:width var(--t-2) var(--e-out),height var(--t-2) var(--e-out),
+               border-color var(--t-2),background var(--t-2) var(--e-out);
+  }
+  #cursor-ring.hover{width:54px;height:54px;border-color:var(--cyan);background:rgba(0,229,255,0.08)}
+  #cursor-ring.down{width:26px;height:26px;border-color:#fff;background:rgba(255,255,255,0.12)}
 
   /* ---------- progress bar ---------- */
-  .progress{position:fixed;top:0;left:0;height:2px;width:0;z-index:9998;background:linear-gradient(90deg,var(--cyan),#7aa2ff);box-shadow:0 0 12px var(--cyan)}
+  .progress{
+    position:fixed;top:0;left:0;height:2px;width:0;z-index:9999;
+    background:linear-gradient(90deg,var(--cyan),var(--cyan-2));
+    box-shadow:0 0 12px var(--cyan);
+  }
 
   /* ---------- layout helpers ---------- */
-  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 clamp(40px,7vw,104px)}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding-inline:clamp(20px,6vw,104px)}
   section{position:relative;z-index:2}
-  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);border:1px solid var(--border);padding:6px 12px;border-radius:999px;background:rgba(0,229,255,0.04)}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:var(--mono);font-size:var(--fs-xs);letter-spacing:.14em;text-transform:uppercase;
+    color:var(--cyan);border:1px solid var(--line);padding:6px 12px;border-radius:var(--r-pill);
+    background:rgba(0,229,255,0.04);
+  }
   .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
-  h2.title{font-size:clamp(26px,3.4vw,40px);font-weight:700;letter-spacing:-.02em;margin:14px 0 10px}
-  .lead{color:var(--muted);max-width:640px;font-size:16px}
-  .section-pad{padding-top:46px;padding-bottom:46px}
+  h2.title{font-size:clamp(26px,3.4vw,40px);font-weight:700;letter-spacing:-.02em;margin:14px 0 10px;text-wrap:balance}
+  .lead{color:var(--muted);max-width:640px;font-size:var(--fs-lg);text-wrap:pretty}
+  .section-pad{padding-block:46px}
   #pipeline{padding-top:46px}
 
   /* ---------- header ---------- */
-  header{position:fixed;top:0;left:0;right:0;z-index:50;transition:background .3s,backdrop-filter .3s,border-color .3s;border-bottom:1px solid transparent}
-  header.scrolled{background:rgba(11,14,20,0.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--border-soft)}
+  header{
+    position:fixed;top:0;left:0;right:0;z-index:50;border-bottom:1px solid transparent;
+    transition:background var(--t-2),backdrop-filter var(--t-2),border-color var(--t-2);
+  }
+  header.scrolled{background:rgba(11,14,20,0.72);backdrop-filter:blur(14px);border-bottom-color:var(--line-soft)}
   .nav{display:flex;align-items:center;justify-content:space-between;height:68px}
-  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.01em}
-  .brand .logo{width:auto;height:28px;display:block;object-fit:contain}
-  .nav-links{display:flex;gap:28px;font-size:14px;color:var(--muted)}
-  .nav-links a{transition:color .2s,transform .2s;position:relative}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.01em}
+  .brand .logo,.logo{width:auto;height:28px;display:block;object-fit:contain}
+  .nav-links{display:flex;gap:28px;font-size:var(--fs-base);color:var(--muted)}
+  .nav-links a{position:relative;transition:color var(--t-2)}
+  .nav-links a::after{
+    content:"";position:absolute;left:0;bottom:-6px;height:1px;width:0;
+    background:var(--cyan);transition:width var(--t-2) var(--e-out);
+  }
   .nav-links a:hover{color:var(--cyan);text-shadow:0 0 14px rgba(0,229,255,0.55)}
-  .nav-links a::after{content:"";position:absolute;left:0;bottom:-6px;height:1px;width:0;background:var(--cyan);transition:width .25s}
   .nav-links a:hover::after{width:100%}
   .nav-actions{display:flex;align-items:center;gap:14px}
-  .nav-toggle{display:none;flex-direction:column;justify-content:center;gap:5px;width:42px;height:42px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border);cursor:none;transition:border-color .2s,box-shadow .25s}
+  .nav-lang{
+    font-size:var(--fs-sm);color:var(--cyan);border:1px solid var(--line);
+    padding:5px 10px;border-radius:var(--r-xs);transition:border-color var(--t-2),color var(--t-2),background var(--t-2);
+  }
+  .nav-lang:hover{border-color:var(--cyan-line);background:rgba(0,229,255,0.08);color:#fff}
+  .nav-toggle{
+    display:none;flex-direction:column;justify-content:center;gap:5px;
+    width:42px;height:42px;border-radius:var(--r-sm);cursor:pointer;
+    background:rgba(255,255,255,0.04);border:1px solid var(--line);
+    transition:border-color var(--t-2),box-shadow var(--t-2);
+  }
   .nav-toggle:hover{border-color:var(--cyan-dim);box-shadow:var(--lift-cyan)}
   .nav-toggle span{display:block;width:18px;height:2px;background:var(--text);border-radius:2px;transition:transform .3s,opacity .3s}
   .nav-toggle[aria-expanded="true"] span:nth-child(1){transform:translateY(7px) rotate(45deg)}
   .nav-toggle[aria-expanded="true"] span:nth-child(2){opacity:0}
   .nav-toggle[aria-expanded="true"] span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
-  .mobile-menu{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:2px;padding:10px 20px 16px;background:rgba(11,14,20,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);box-shadow:0 24px 60px rgba(0,0,0,0.55)}
+  .mobile-menu{
+    display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:2px;
+    padding:10px 20px 16px;background:rgba(11,14,20,0.97);backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line);box-shadow:0 24px 60px rgba(0,0,0,0.55);
+  }
   .mobile-menu.open{display:flex}
-  .mobile-menu a{padding:13px 12px;color:var(--text);font-size:16px;border-radius:10px;transition:background .2s,color .2s,transform .2s;text-decoration:none}
+  .mobile-menu a{
+    padding:13px 12px;color:var(--text);font-size:var(--fs-lg);border-radius:var(--r-sm);
+    transition:background var(--t-2),color var(--t-2),box-shadow var(--t-2);
+  }
   .mobile-menu a:hover{background:rgba(0,229,255,0.1);color:#fff;box-shadow:inset 0 0 0 1px rgba(0,229,255,0.4),0 8px 20px -8px rgba(0,229,255,0.35)}
-  .btn{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;padding:10px 18px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:transform .15s,box-shadow .25s,background .25s,border-color .25s;white-space:nowrap;box-shadow:0 4px 14px -4px rgba(0,0,0,0.45)}
-  .btn:hover{box-shadow:0 12px 26px -8px rgba(0,0,0,0.5),0 0 28px -6px rgba(0,229,255,0.5)}
-  .btn-primary{background:linear-gradient(135deg,var(--cyan),#7aa2ff);color:#04222a;border-color:rgba(0,229,255,0.55);box-shadow:0 6px 18px -6px rgba(0,229,255,0.55)}
-  .btn-primary:hover{box-shadow:0 14px 30px -8px rgba(0,0,0,0.45),0 0 32px -4px rgba(0,229,255,0.65);border-color:rgba(255,255,255,0.85)}
-  .btn-ghost{background:rgba(255,255,255,0.03);border-color:var(--border);color:var(--text);box-shadow:0 4px 14px -4px rgba(0,0,0,0.4)}
-  .btn-ghost:hover{border-color:var(--cyan);background:rgba(0,229,255,0.08);box-shadow:0 12px 26px -8px rgba(0,0,0,0.5),0 0 30px -6px rgba(0,229,255,0.55)}
+
+  /* ---------- buttons ---------- */
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:var(--fs-base);font-weight:600;padding:10px 18px;border-radius:var(--r-sm);
+    border:1px solid transparent;white-space:nowrap;cursor:pointer;
+    box-shadow:0 4px 14px -4px rgba(0,0,0,0.45);
+    transition:transform var(--t-1),box-shadow var(--t-2),background var(--t-2),border-color var(--t-2);
+  }
+  .btn:hover{transform:translateY(-1px);box-shadow:0 12px 26px -8px rgba(0,0,0,0.5),0 0 28px -6px rgba(0,229,255,0.5)}
+  .btn:active{transform:translateY(0)}
   .btn svg{width:16px;height:16px}
+  .btn-primary{
+    background:linear-gradient(135deg,var(--cyan),var(--cyan-2));color:#04222a;
+    border-color:rgba(0,229,255,0.55);box-shadow:0 6px 18px -6px rgba(0,229,255,0.55);
+  }
+  .btn-primary:hover{box-shadow:0 14px 30px -8px rgba(0,0,0,0.45),0 0 32px -4px rgba(0,229,255,0.65);border-color:rgba(255,255,255,0.85)}
+  .btn-ghost{background:rgba(255,255,255,0.03);border-color:var(--line);color:var(--text);box-shadow:0 4px 14px -4px rgba(0,0,0,0.4)}
+  .btn-ghost:hover{border-color:var(--cyan);background:rgba(0,229,255,0.08);box-shadow:0 12px 26px -8px rgba(0,0,0,0.5),0 0 30px -6px rgba(0,229,255,0.55)}
 
   /* ---------- hero ---------- */
   .hero{padding-top:150px;padding-bottom:0;text-align:center}
-  .hero h1{font-size:clamp(34px,5.4vw,62px);font-weight:800;letter-spacing:.03em;line-height:1.08;margin:22px auto 18px;max-width:15ch}
-  .hero h1 .grad{background:linear-gradient(120deg,var(--cyan),#7aa2ff 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .hero .sub{max-width:620px;margin:0 auto;color:var(--muted);font-size:17px}
+  .hero > .eyebrow{margin-top:28px}
+  .hero h1{
+    font-size:clamp(34px,5.4vw,62px);font-weight:800;letter-spacing:-.025em;line-height:1.08;
+    margin:22px auto 18px;max-width:18ch;text-wrap:balance;
+  }
+  :lang(zh) .hero h1,:lang(zh) h2.title{letter-spacing:0}
+  .hero h1 .grad{
+    background:linear-gradient(120deg,var(--cyan),var(--cyan-2) 70%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  @supports not ((-webkit-background-clip:text) or (background-clip:text)){
+    .hero h1 .grad{color:var(--cyan);background:none}
+  }
+  .hero .sub{max-width:620px;margin:0 auto;color:var(--muted);font-size:var(--fs-lead);text-wrap:pretty}
   .hero-cta{display:flex;gap:14px;justify-content:center;margin:30px 0 8px;flex-wrap:wrap}
+  .hero-shot-wrap{margin:54px auto 0;max-width:1120px}
+  .hero-shot{
+    width:100%;border-radius:var(--r-md);
+    border:1px solid var(--cyan-line);
+    box-shadow:0 0 0 1px rgba(0,229,255,.14),0 0 40px -14px rgba(0,229,255,.55),0 30px 80px -24px rgba(0,0,0,.7);
+  }
 
   /* terminal */
-  .terminal{max-width:680px;margin:46px auto 0;text-align:left;background:#0c0f16;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,0.5);font-family:var(--mono);font-size:13.5px;transition:transform .3s,box-shadow .3s}
-  .terminal:hover{box-shadow:0 38px 92px rgba(0,0,0,0.58),0 0 32px -8px rgba(0,229,255,0.22)}
-  .terminal .bar{display:flex;align-items:center;gap:7px;padding:11px 14px;background:#11151d;border-bottom:1px solid var(--border)}
+  .terminal{
+    max-width:680px;margin:46px auto 0;text-align:left;
+    background:var(--surface-inset);border:1px solid var(--line);border-radius:var(--r-md);
+    overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,0.5);
+    font-family:var(--mono);font-size:var(--fs-sm);
+    transition:box-shadow .3s,border-color .3s;
+  }
+  .terminal:hover{
+    border-color:var(--line-2);
+    box-shadow:0 38px 92px rgba(0,0,0,0.58),0 0 32px -8px rgba(0,229,255,0.22);
+  }
+  .terminal .bar{display:flex;align-items:center;gap:7px;padding:11px 14px;background:var(--surface-bar);border-bottom:1px solid var(--line)}
   .terminal .bar i{width:11px;height:11px;border-radius:50%;display:inline-block}
-  .terminal .bar .r{background:#ff5f56}.terminal .bar .y{background:#ffbd2e}.terminal .bar .g{background:#27c93f}
-  .terminal .bar .name{margin-left:8px;color:var(--muted-2);font-size:12px}
-  .terminal .body{padding:18px 18px 20px;min-height:188px;white-space:pre-wrap;word-break:break-word;line-height:1.7}
+  .terminal .bar .r{background:#ff5f56}
+  .terminal .bar .y{background:#ffbd2e}
+  .terminal .bar .g{background:#27c93f}
+  .terminal .body{
+    padding:18px 18px 20px;min-height:188px;
+    white-space:pre-wrap;word-break:break-word;line-height:1.7;
+  }
   .terminal .line{opacity:0;transform:translateY(4px);animation:ln .35s forwards}
   @keyframes ln{to{opacity:1;transform:none}}
   .terminal .c-prompt{color:var(--cyan)}
@@ -140,125 +289,299 @@
   .terminal .c-warn{color:#ffbd2e}
   .terminal .c-dim{color:var(--muted-2)}
   .terminal .c-cyan{color:var(--cyan)}
-  .caret{display:inline-block;width:8px;height:15px;background:var(--cyan);vertical-align:-2px;margin-left:2px;animation:blink 1s steps(1) infinite}
+  .caret{
+    display:inline-block;width:8px;height:15px;background:var(--cyan);
+    vertical-align:-2px;margin-left:2px;animation:blink 1s steps(1) infinite;
+  }
   @keyframes blink{50%{opacity:0}}
 
-  /* mode pills */
-  .pills{display:flex;gap:10px;justify-content:center;margin:22px 0 0;flex-wrap:wrap}
-  .pill{font-family:var(--mono);font-size:13px;padding:9px 16px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--muted);cursor:none;transition:all .2s;display:inline-flex;align-items:center;gap:8px;box-shadow:0 4px 14px -6px rgba(0,0,0,0.5)}
-  .pill .k{display:grid;place-items:center;width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,0.06);font-size:11px;color:var(--cyan)}
-  .pill:hover{color:var(--text);border-color:var(--cyan);box-shadow:var(--lift-cyan)}
-  .pill.active{background:rgba(0,229,255,0.1);border-color:var(--cyan);color:#fff;box-shadow:var(--lift-cyan)}
-
-  /* hero screenshot */
-  .hero-shot-wrap{margin:54px auto 0;max-width:1120px}
-  .hero-shot{width:100%;border-radius:8px;border:1.5px solid var(--cyan);
-    box-shadow:0 0 24px rgba(0,229,255,0.45),0 0 48px rgba(0,229,255,0.25),0 30px 80px rgba(0,0,0,0.55)}
+  /* ---------- card system ----------
+     one surface treatment, one hover response, shared by every card */
+  .step,.mode,.cap,.sec-item,.dash-card{
+    position:relative;overflow:hidden;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);
+    box-shadow:0 16px 38px -26px rgba(0,0,0,0.8);
+    transition:transform var(--t-2) var(--e-out),border-color var(--t-2),
+               box-shadow var(--t-2),background-color var(--t-2);
+  }
+  .step:hover,.mode:hover,.cap:hover,.sec-item:hover,.dash-card:hover{
+    transform:translateY(-3px);
+    border-color:var(--cyan-line);
+    box-shadow:var(--lift),var(--lift-cyan);
+  }
+  /* shared shine sweep */
+  .cap::after,.sec-item::after,.dash-card::after{
+    content:"";position:absolute;top:0;left:-80%;width:60%;height:100%;
+    background:linear-gradient(105deg,transparent,rgba(0,229,255,.16),transparent);
+    transform:skewX(-18deg);transition:left var(--t-3) var(--e-out);pointer-events:none;
+  }
+  .cap:hover::after,.sec-item:hover::after,.dash-card:hover::after{left:130%}
 
   /* ---------- pipeline grid ---------- */
-  .steps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(156px,1fr));gap:10px;margin-top:28px}
-  .step{position:relative;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:11px 12px;overflow:hidden;transition:transform .25s,border-color .25s,box-shadow .25s;box-shadow:0 16px 38px -26px rgba(0,0,0,0.8)}
-  .step::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 50% -10%,rgba(0,229,255,0.10),transparent 60%);opacity:0;transition:opacity .3s}
-  .step:hover{border-color:var(--cyan);box-shadow:var(--lift),var(--lift-cyan)}
+  .steps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--gutter);margin-top:var(--gutter)}
+  .step{padding:12px 13px}
+  .step::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(120% 80% at 50% -10%,rgba(0,229,255,0.10),transparent 60%);
+    opacity:0;transition:opacity .3s;
+  }
   .step:hover::before{opacity:1}
-  .step .num{font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:.08em}
-  .step h3{font-size:14.5px;margin:7px 0 5px;font-weight:600;line-height:1.3}
-  .step p{color:var(--muted);font-size:12px;line-height:1.45}
+  .step .num{font-family:var(--mono);font-size:var(--fs-xs);color:var(--cyan);letter-spacing:.08em}
+  .step h3{font-size:var(--fs-base);margin:7px 0 5px;font-weight:600;line-height:1.3}
+  .step p{color:var(--muted);font-size:var(--fs-sm);line-height:1.5}
 
   /* ---------- modes ---------- */
-  .modes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px}
-  .mode{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px;transition:transform .25s,border-color .25s,box-shadow .25s;box-shadow:0 18px 44px -28px rgba(0,0,0,0.85)}
-  .mode:hover{border-color:var(--cyan);box-shadow:var(--lift),var(--lift-cyan)}
-  .mode .ico{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;background:rgba(0,229,255,0.1);border:1px solid var(--cyan-dim);margin-bottom:16px}
+  .modes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gutter);margin-top:var(--gutter)}
+  .mode{padding:20px;border-radius:var(--r)}
+  .mode .ico{
+    width:44px;height:44px;border-radius:var(--r-sm);display:grid;place-items:center;
+    background:rgba(0,229,255,0.1);border:1px solid var(--cyan-dim);margin-bottom:16px;
+  }
   .mode .ico svg{width:22px;height:22px;stroke:var(--cyan)}
-  .mode h3{font-size:19px;margin-bottom:8px}
-  .mode .tag{font-family:var(--mono);font-size:12px;color:var(--cyan);margin-bottom:10px;display:block}
-  .mode p{color:var(--muted);font-size:14.5px}
+  .mode h3{font-size:var(--fs-xl);margin-bottom:8px}
+  .mode .tag{display:block;font-family:var(--mono);font-size:var(--fs-xs);color:var(--cyan);margin-bottom:10px}
+  .mode p{color:var(--muted);font-size:var(--fs-base)}
+
+  /* ---------- architecture figure ---------- */
+  .arch-figure{
+    margin:var(--gutter) 0 0;padding:clamp(10px,1.8vw,18px);
+    background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);
+    box-shadow:0 24px 60px -34px rgba(0,0,0,.9);
+  }
+  .arch-figure a{display:block}
+  .arch-figure img{display:block;width:100%;height:auto;border-radius:var(--r-sm)}
+  .arch-figure figcaption{margin-top:12px;color:#4b5563;font-size:var(--fs-sm);line-height:1.6}
+  .arch-figure figcaption b{color:#111827;font-weight:600}
+  .arch-hint{display:none}
+  .release-link{display:inline-block;margin-top:18px;font-family:var(--mono);font-size:var(--fs-sm);color:var(--cyan);border-bottom:1px solid var(--cyan-dim);padding-bottom:2px}
 
   /* ---------- capabilities ---------- */
-  .cap-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px}
-  .cap{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;transition:transform .25s,border-color .25s,box-shadow .25s;box-shadow:0 18px 44px -28px rgba(0,0,0,0.85)}
-  .cap:hover{border-color:var(--cyan);box-shadow:var(--lift),var(--lift-cyan)}
-  .cap .ico{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,0.04);border:1px solid var(--border);margin-bottom:14px}
+  .cap-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gutter);margin-top:var(--gutter)}
+  .cap{padding:16px}
+  .cap .ico{
+    width:40px;height:40px;border-radius:var(--r-sm);display:grid;place-items:center;
+    background:rgba(255,255,255,0.04);border:1px solid var(--line);margin-bottom:14px;
+    transition:background var(--t-2),border-color var(--t-2),transform var(--t-2),box-shadow var(--t-2);
+  }
+  .cap:hover .ico{
+    background:rgba(0,229,255,0.12);border-color:var(--cyan);
+    transform:scale(1.08);box-shadow:0 0 18px -4px rgba(0,229,255,.5);
+  }
   .cap .ico svg{width:20px;height:20px;stroke:var(--cyan)}
-  .cap h3{font-size:16px;margin-bottom:6px}
-  .cap p{color:var(--muted);font-size:14px}
+  .cap h3{font-size:var(--fs-lg);margin-bottom:6px}
+  .cap p{color:var(--muted);font-size:var(--fs-base)}
 
-  /* ---------- security ---------- */
-  .sec-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:24px;align-items:center;margin-top:28px}
+  /* ---------- security / innovation split ---------- */
+  .sec-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:var(--gutter);align-items:center;margin-top:var(--gutter)}
+  /* the security section centres its orb against a short list, but the innovation
+     column is a tall stack of stats — centre there would strand the left column */
+  #innovation .sec-grid{align-items:start}
   .sec-list{display:flex;flex-direction:column;gap:10px}
-  .sec-item{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;transition:transform .25s,border-color .25s,box-shadow .25s;box-shadow:0 16px 38px -26px rgba(0,0,0,0.8)}
-  .sec-item:hover{border-color:var(--cyan);box-shadow:var(--lift),var(--lift-cyan)}
-  .sec-item .ck{flex:none;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:rgba(0,229,255,0.1);border:1px solid var(--cyan-dim)}
+  .sec-item{display:flex;gap:14px;align-items:flex-start;padding:12px;border-radius:var(--r-md)}
+  .sec-item .ck{
+    flex:none;width:30px;height:30px;border-radius:var(--r-xs);display:grid;place-items:center;
+    background:rgba(0,229,255,0.1);border:1px solid var(--cyan-dim);
+  }
   .sec-item .ck svg{width:16px;height:16px;stroke:var(--cyan)}
-  .sec-item h4{font-size:15px;margin-bottom:3px}
-  .sec-item p{color:var(--muted);font-size:13.5px}
-  .sec-visual{aspect-ratio:1/1;border-radius:18px;border:1px solid var(--border);background:radial-gradient(circle at 50% 40%,rgba(0,229,255,0.12),transparent 60%),#0c0f16;display:grid;place-items:center;position:relative;overflow:hidden}
+  .sec-item h4{font-size:var(--fs-md);margin-bottom:3px}
+  .sec-item p{color:var(--muted);font-size:var(--fs-sm)}
+
+  /* stat blocks — previously rendered unstyled */
+  .stat{
+    position:relative;overflow:hidden;display:flex;align-items:baseline;gap:14px;
+    padding:13px 16px 13px 18px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);
+    box-shadow:0 16px 38px -26px rgba(0,0,0,0.8);
+    transition:border-color var(--t-2),box-shadow var(--t-2),transform var(--t-2) var(--e-out);
+  }
+  .stat::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+    background:linear-gradient(180deg,var(--cyan),rgba(0,229,255,0));
+  }
+  .stat:hover{border-color:var(--cyan-line);box-shadow:var(--lift),var(--lift-cyan);transform:translateY(-2px)}
+  .stat b{
+    flex:none;white-space:nowrap;
+    font-family:var(--mono);font-size:var(--fs-2xl);font-weight:700;line-height:1.15;
+    letter-spacing:-.02em;color:var(--cyan);
+  }
+  .stat span{color:var(--muted);font-size:var(--fs-sm);line-height:1.5}
+  /* the positioning prose that used to render as a bare paragraph */
+  .sec-list > p{
+    color:var(--muted);font-size:var(--fs-base);line-height:1.75;
+    padding:16px;border:1px solid var(--line);border-radius:var(--r-md);
+    background:var(--surface-inset);text-wrap:pretty;
+  }
+  .sec-list > p b{color:var(--text);font-weight:600}
+
+  /* the shield / orbit visual */
+  .sec-visual{
+    position:relative;width:min(340px,78vw);aspect-ratio:1;margin:0 auto;
+    display:grid;place-items:center;
+    border-radius:var(--r-lg);border:1px solid var(--line);overflow:hidden;
+    background:radial-gradient(circle at 50% 40%,rgba(0,229,255,0.12),transparent 60%),var(--surface-inset);
+    animation:secGlow 4s ease-in-out infinite;
+  }
+  @keyframes secGlow{
+    0%,100%{box-shadow:0 0 24px -6px rgba(0,229,255,.22)}
+    50%{box-shadow:0 0 44px -4px rgba(0,229,255,.45)}
+  }
   .sec-visual .ring{position:absolute;border:1px solid var(--cyan-dim);border-radius:50%}
   .sec-visual .ring.r1{width:60%;height:60%;animation:spin 18s linear infinite}
   .sec-visual .ring.r2{width:80%;height:80%;border-style:dashed;animation:spin 28s linear infinite reverse}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .sec-visual .core{width:96px;height:96px;border-radius:24px;display:grid;place-items:center;background:linear-gradient(135deg,rgba(0,229,255,0.22),rgba(120,80,255,0.14));border:1px solid var(--cyan-dim);box-shadow:0 0 50px rgba(0,229,255,0.3)}
-  .sec-visual .core svg{width:46px;height:46px;stroke:#fff}
+  .sec-scan{
+    position:absolute;inset:12%;border-radius:50%;
+    background:conic-gradient(from 0deg,rgba(0,229,255,.5),transparent 70%);
+    -webkit-mask:radial-gradient(circle,transparent 62%,#000 63%,#000 78%,transparent 79%);
+    mask:radial-gradient(circle,transparent 62%,#000 63%,#000 78%,transparent 79%);
+    animation:secScan 3.5s linear infinite;
+  }
+  @keyframes secScan{to{transform:rotate(360deg)}}
+  .core{
+    width:96px;height:96px;border-radius:var(--r-xl);display:grid;place-items:center;
+    background:linear-gradient(135deg,rgba(0,229,255,0.22),rgba(120,80,255,0.14));
+    border:1px solid var(--cyan-dim);box-shadow:0 0 50px rgba(0,229,255,0.3);
+  }
+  .core svg{width:46px;height:46px;stroke:#fff;filter:drop-shadow(0 0 12px rgba(0,229,255,.5))}
+
+  /* ---------- dashboard counters ---------- */
+  .dash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gutter)}
+  .dash-card{padding:26px;border-radius:var(--r)}
+  .dash-card::before{
+    content:"";position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  }
+  .dash-card b{
+    display:block;font-size:clamp(30px,3.6vw,38px);line-height:1.1;letter-spacing:-.02em;
+    background:linear-gradient(100deg,var(--cyan),var(--cyan-2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .dash-card span{display:block;margin-top:.35rem;font-size:var(--fs-sm);color:var(--muted)}
 
   /* ---------- final cta ---------- */
-  .cta-box{text-align:center;background:linear-gradient(180deg,rgba(0,229,255,0.06),rgba(0,229,255,0.01));border:1px solid var(--border);border-radius:22px;padding:64px 28px;position:relative;overflow:hidden;box-shadow:0 40px 90px -40px rgba(0,0,0,0.7),0 0 50px -28px rgba(0,229,255,0.25)}
-  .cta-box h2{font-size:clamp(26px,3.6vw,42px);font-weight:800;letter-spacing:-.02em}
+  .cta-box{
+    text-align:center;padding:64px 28px;position:relative;overflow:hidden;
+    background:linear-gradient(180deg,rgba(0,229,255,0.06),rgba(0,229,255,0.01));
+    border:1px solid var(--line);border-radius:var(--r-xl);
+    box-shadow:0 40px 90px -40px rgba(0,0,0,0.7),0 0 50px -28px rgba(0,229,255,0.25);
+  }
+  .cta-box h2{font-size:clamp(26px,3.6vw,42px);font-weight:800;letter-spacing:-.02em;text-wrap:balance}
   .cta-box p{color:var(--muted);margin:14px 0 26px}
-  .copy-row{display:inline-flex;align-items:center;gap:0;background:#0c0f16;border:1px solid var(--border);border-radius:10px;overflow:hidden;font-family:var(--mono);font-size:13px;margin:6px 0 24px}
-  .copy-row code{padding:12px 16px;color:var(--cyan)}
-  .copy-row button{border:none;border-left:1px solid var(--border);background:rgba(0,229,255,0.06);color:var(--text);padding:12px 16px;cursor:none;font-family:var(--mono);font-size:13px;transition:background .2s}
+  .copy-row{
+    display:inline-flex;align-items:center;gap:0;margin:6px 0 24px;
+    background:var(--surface-inset);border:1px solid var(--line);border-radius:var(--r-sm);
+    overflow:hidden;font-family:var(--mono);font-size:var(--fs-sm);
+  }
+  .copy-row code{padding:12px 16px;color:var(--cyan);overflow-x:auto;white-space:nowrap}
+  .copy-row button{
+    border:none;border-left:1px solid var(--line);
+    background:rgba(0,229,255,0.06);color:var(--text);padding:12px 16px;cursor:pointer;
+    font-family:var(--mono);font-size:var(--fs-sm);
+    transition:background var(--t-2),box-shadow var(--t-2);
+  }
   .copy-row button:hover{background:rgba(0,229,255,0.18);box-shadow:0 8px 20px -6px rgba(0,229,255,0.45)}
-  .ts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:40px}
-  .ts-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px}
-  .ts-item h3{font-size:15px;margin-bottom:6px;color:var(--text)}
-  .ts-item p{color:var(--muted);font-size:13.5px;line-height:1.6}
-  .ts-item code{color:var(--cyan);font-family:var(--mono);font-size:12.5px}
-  .ts-item a{color:var(--cyan);text-decoration:underline}
-  .cta-note{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:0 0 22px}
-  .cta-note code{color:var(--cyan);background:rgba(0,229,255,0.06);padding:2px 6px;border-radius:5px}
 
   /* ---------- footer ---------- */
-  footer{border-top:1px solid var(--border);padding:48px 0 36px;margin-top:40px;position:relative;z-index:2}
+  footer{
+    border-top:1px solid var(--line);padding:48px 0 36px;margin-top:28px;
+    position:relative;z-index:2;
+  }
   .foot{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
-  .foot .links{display:flex;gap:22px;color:var(--muted);font-size:14px}
-  .foot .links a{transition:color .2s,transform .2s}
+  .foot .links{display:flex;flex-wrap:wrap;gap:22px;color:var(--muted);font-size:var(--fs-base)}
+  .foot .links a{transition:color var(--t-2)}
   .foot .links a:hover{color:var(--cyan);text-shadow:0 0 12px rgba(0,229,255,0.5)}
-  .foot .copy{color:var(--muted-2);font-size:13px;font-family:var(--mono)}
+  .foot .copy{color:var(--muted-2);font-size:var(--fs-sm);font-family:var(--mono)}
 
   /* ---------- reveal ---------- */
-  [data-reveal]{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+  [data-reveal]{
+    opacity:0;transform:translateY(26px);
+    transition:opacity .7s var(--e-out),transform .7s var(--e-out);
+  }
   [data-reveal].in{opacity:1;transform:none}
-  .tilt{transform-style:preserve-3d;transition:transform .1s ease-out}
-  @media (hover:none){ [data-reveal]{opacity:1;transform:none} }
+  @media (hover:none){[data-reveal]{opacity:1;transform:none}}
+
+  /* ===== floating-card effects (poolside-inspired) =====
+     Hover: card lifts, border glows, inner icon/title slides down.
+     Tilt: on mousemove the card tilts toward the pointer (3D, perspective).
+     Disabled for touch / reduced-motion. ===== */
+  .float-card{
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  .float-card .float-layer{
+    position:relative;
+    transform-style:preserve-3d;
+    transition:transform var(--t-2) var(--e-out),color var(--t-2) var(--e-out);
+  }
+  .float-card:hover .float-layer{
+    transform:translateY(-2px) translateZ(24px);
+  }
+  .float-card:hover{
+    border-color:var(--cyan-line);
+    box-shadow:var(--lift),var(--lift-cyan);
+    background-color:var(--surface-solid);
+  }
+  .float-card .float-glow{
+    color:var(--cyan);
+    text-shadow:0 0 16px rgba(0,229,255,0.45);
+    transition:color var(--t-2) var(--e-out),text-shadow var(--t-2) var(--e-out);
+  }
 
   /* ---------- responsive ---------- */
   @media (max-width:900px){
     .modes-grid,.cap-grid{grid-template-columns:1fr 1fr}
     .sec-grid{grid-template-columns:1fr}
+    .dash-grid{grid-template-columns:1fr 1fr}
     .nav-links{display:none}
     .nav-toggle{display:flex}
     .copy-row{max-width:100%}
-    .copy-row code{overflow-x:auto;white-space:nowrap}
   }
-  @media (max-width:600px){
-    .modes-grid,.cap-grid{grid-template-columns:1fr}
-    .hero{padding-top:120px;padding-bottom:0}
-    .wrap{padding:0 20px}
+  @media (max-width:640px){
+    .hero{padding-top:120px}
     .hero h1{font-size:clamp(28px,8vw,40px)}
-    .hero .sub{font-size:15px}
+    .hero .sub{font-size:var(--fs-md)}
     .hero-cta{flex-direction:column;align-items:stretch;width:100%}
-    .hero-cta .btn{width:100%;justify-content:center}
-    .copy-row{width:100%;font-size:12px}
-    .copy-row code{flex:1;overflow-x:auto;white-space:nowrap;padding:11px 12px}
-    .terminal{margin:46px auto 0}
-    .terminal .body{padding:14px;min-height:auto;font-size:12.5px}
-    .section-pad{padding:46px 0}
+    .hero-cta .btn,.hero-cta .btn-primary,.hero-cta .btn-ghost{width:100%;justify-content:center;white-space:normal;text-align:center;line-height:1.35}
+    .terminal{margin-top:40px}
+    .terminal .body{padding:14px;min-height:auto;font-size:var(--fs-xs)}
+    .arch-figure a{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .arch-figure img{width:900px;max-width:none}
+    .arch-hint{display:block;margin:0 0 10px;color:#4b5563;font-size:var(--fs-sm);font-family:var(--mono)}
+    .modes-grid,.cap-grid{grid-template-columns:1fr}
+    /* 14 short step cards: two-up halves the scroll, and it falls back to one
+       column by itself below ~340px instead of needing another breakpoint */
+    .steps-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+    .dash-grid{grid-template-columns:1fr 1fr}
+    /* only the block axis: .wrap owns the inline padding on the same element */
+    .section-pad{padding-block:46px}
     .title{font-size:clamp(22px,6vw,30px)}
+    .copy-row{width:100%;font-size:var(--fs-xs)}
+    .copy-row code{flex:1;padding:11px 12px}
+    .stat b{font-size:var(--fs-lg)}
+    .foot{gap:16px}
+    /* nav items fight for width and the logo was being squeezed to half its
+       width: trim the decorative pieces and keep the CTA as an icon
+       (its label stays in the DOM, so screen readers still announce it) */
+    .brand .logo{height:22px}
+    .nav-actions{gap:10px}
+    .nav-actions .btn{font-size:0;gap:0;padding:9px 11px}
+    .nav-actions .btn svg{width:16px;height:16px}
+    .nav-lang{padding:5px 8px}
+  }
+  @media (max-width:400px){
+    .brand .logo{height:20px}
+    .nav-actions{gap:8px}
   }
   @media (prefers-reduced-motion:reduce){
-    *{animation:none!important;scroll-behavior:auto}
+    *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+    html{scroll-behavior:auto}
+    .aurora{transition:none}
+    #cursor-dot,#cursor-ring{display:none}
     [data-reveal]{opacity:1!important;transform:none!important}
+    .terminal .line{opacity:1!important;transform:none!important}
+    .sec-visual,.sec-visual .ring,.sec-scan,.caret{animation:none!important}
+    .float-card,.float-card .float-layer,.float-card:hover,.float-card:hover .float-layer,
+    .float-card .float-glow,.float-card:hover .float-glow{transform:none!important;transition:none!important}
   }
 </style>
 </head>
@@ -266,6 +589,12 @@
   <canvas id="bg"></canvas>
   <div class="aurora" id="aurora"></div>
   <div class="grain"></div>
+  <div class="float-bg" aria-hidden="true">
+    <div class="float-block fb-1"></div>
+    <div class="float-block fb-2"></div>
+    <div class="float-block fb-3"></div>
+    <div class="float-block fb-4"></div>
+  </div>
   <div id="cursor-dot"></div>
   <div id="cursor-ring"></div>
   <div class="progress" id="progress"></div>
@@ -277,13 +606,14 @@
       </a>
       <nav class="nav-links" aria-label="主导航">
         <a href="#pipeline">管线</a>
+        <a href="#architecture">架构</a>
         <a href="#modes">模式</a>
         <a href="#capabilities">能力</a>
         <a href="#security">安全</a>
       </nav>
       <div class="nav-actions">
-        <a href="index.html" data-cursor style="font-size:13px;color:var(--cyan);border:1px solid var(--border);padding:5px 10px;border-radius:8px;text-decoration:none">English</a>
-        <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" class="btn btn-primary" data-cursor>
+        <a href="index.html" class="nav-lang" data-cursor>English</a>
+        <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener" class="btn btn-primary" data-cursor>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .6l3.5 6.9 7.8 1.1-5.6 5.5 1.3 7.7L12 18.6 4.9 22.3l1.3-7.7L.6 9.1 8.5 8z"/></svg>
           Star on GitHub
         </a>
@@ -294,26 +624,27 @@
     </div>
     <div class="mobile-menu" id="mobileMenu">
       <a href="#pipeline">管线</a>
+      <a href="#architecture">架构</a>
       <a href="#modes">模式</a>
       <a href="#capabilities">能力</a>
       <a href="#security">安全</a>
-      <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener">GitHub ↗</a>
+      <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener">GitHub ↗</a>
     </div>
   </header>
 
   <main id="top">
     <!-- HERO -->
     <section class="hero wrap">
-      <span class="eyebrow" data-reveal><span class="dot"></span>安卓发布封签 · v1.0.0</span>
-      <h1 data-reveal><span class="grad">商业加固前</span>你能做的大多数内容</h1>
-      <p class="sub" data-reveal>DroidSeal（安卓发布封签）帮你完成商业加固前能做的大多数事——环境诊断、源码与 APK 审计、R8 混淆、zipalign 对齐、apksigner 签名与最终验证，商业加固前 · 一键端到端。</p>
+      <span class="eyebrow" data-reveal><span class="dot"></span>安卓发布封签 · v1.1.0</span>
+      <h1 data-reveal>发布一个<span class="grad">经得起审查的</span> Android 版本</h1>
+      <p class="sub" data-reveal>DroidSeal 是一条本地优先的发布安全流水线：静态审计、按需加固、用官方 Android 工具签名，再做独立验证。每次发布都会留下证据链——SHA-256、JSON/Markdown 报告、CycloneDX SBOM 与发布决策。</p>
       <div class="hero-cta" data-reveal>
         <a href="#cta" class="btn btn-primary" data-cursor>开始使用</a>
         <a href="#pipeline" class="btn btn-ghost" data-cursor>查看管线</a>
       </div>
 
       <div class="hero-shot-wrap" data-reveal>
-        <img class="hero-shot" src="./screenshot.png" alt="DroidSeal 终端运行截图" />
+        <img class="hero-shot" src="./screenshot.png" alt="DroidSeal 终端截图" />
       </div>
 
       <div class="terminal" data-reveal data-cursor>
@@ -328,77 +659,245 @@
       <h2 class="title" data-reveal>14 步流水线，端到端</h2>
       <p class="lead" data-reveal>从 APK 到签名产物，全程本机完成。每步生成独立制品，可审计、可回退，默认规则开箱即用。</p>
       <div class="steps-grid">
-        <article class="step" data-reveal data-cursor><div class="num">01</div><h3>环境诊断</h3><p>定位 JDK / Android SDK 等工具，标出所选流程的缺失项。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">02</div><h3>准备工作区</h3><p>验证输入、复制已有 APK，绝不原地修改。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">03</div><h3>签名库</h3><p>提前校验现有别名，或用 keytool 新建。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">04</div><h3>源码安全审计</h3><p>检查 R8 / 资源 / Manifest / 明文签名密码与源码启发式。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">05</div><h3>构建 Release APK</h3><p>执行项目自己的 Gradle Wrapper 并复制产物。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">06</div><h3>APK 安全审计</h3><p>解析 ZIP / DEX / ELF / AXML / ARSC；aapt 仅补充回退。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">07</div><h3>本地安全防护</h3><p>核验 R8、标准 DEX、反调试与完整性覆盖。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">08</div><h3>Release 归一化</h3><p>强制 debuggable=false，修改后验证，否则中止回退。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">09</div><h3>Web JS 发布处理</h3><p>可选 Terser 处理 assets/public、assets/www 脚本。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">10</div><h3>资源名混淆</h3><p>可选解析 resources.arsc，getIdentifier 命中时保留。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">11</div><h3>ZIP 对齐</h3><p>zipalign -p -f 4；保留有效现有签名时自动跳过。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">12</div><h3>APK 签名</h3><p>apksigner 输出新的签名 APK。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">13</div><h3>最终验证</h3><p>验证对齐、签名方案、证书并计算 SHA-256。</p></article>
-        <article class="step" data-reveal data-cursor><div class="num">14</div><h3>生成报告</h3><p>JSON / Markdown、SBOM、发布门禁与覆盖矩阵。</p></article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">01</div><h3 class="float-glow">环境诊断</h3><p>定位 JDK / Android SDK 等工具，标出所选流程的缺失项。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">02</div><h3 class="float-glow">准备工作区</h3><p>验证输入、复制已有 APK，绝不原地修改。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">03</div><h3 class="float-glow">签名库</h3><p>提前校验现有别名，或用 keytool 新建。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">04</div><h3 class="float-glow">源码安全审计</h3><p>检查 R8 / 资源 / Manifest / 明文签名密码与源码启发式。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">05</div><h3 class="float-glow">构建 Release APK</h3><p>执行项目自己的 Gradle Wrapper 并复制产物。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">06</div><h3 class="float-glow">APK 安全审计</h3><p>解析 ZIP / DEX / ELF / AXML / ARSC；aapt 仅补充回退。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">07</div><h3 class="float-glow">本地安全防护</h3><p>核验 R8 与标准 DEX；按需 APK 加固是独立模式。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">08</div><h3 class="float-glow">Release 归一化</h3><p>强制 debuggable=false，修改后验证，否则中止回退。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">09</div><h3 class="float-glow">Web JS 发布处理</h3><p>可选 Terser 处理 assets/public、assets/www 脚本。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">10</div><h3 class="float-glow">资源名混淆</h3><p>可选解析 resources.arsc，getIdentifier 命中时保留。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">11</div><h3 class="float-glow">ZIP 对齐</h3><p>zipalign -p -f 4；保留有效现有签名时自动跳过。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">12</div><h3 class="float-glow">APK 签名</h3><p>apksigner 输出新的签名 APK。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">13</div><h3 class="float-glow">最终验证</h3><p>验证对齐、签名方案、证书并计算 SHA-256。</p>
+  </div>
+</article>
+        <article class="step float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="num">14</div><h3 class="float-glow">生成报告</h3><p>JSON / Markdown、SBOM、发布门禁与证据链。</p>
+  </div>
+</article>
       </div>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section class="section-pad wrap" id="architecture">
+      <span class="eyebrow" data-reveal><span class="dot"></span>架构 · 1.1.0</span>
+      <h2 class="title" data-reveal>一条发布流水线，一个证据边界</h2>
+      <p class="lead" data-reveal>审计与发布都留在本地执行边界内；加固按需开启；每次运行都会写出证据包。设备验收仅覆盖文中声明的 API 26 x86_64 模拟器矩阵。</p>
+      <figure class="arch-figure" data-reveal>
+        <p class="arch-hint">横向滑动查看完整架构 →</p>
+        <a href="./droidseal-architecture.svg" target="_blank" rel="noopener">
+          <img src="./droidseal-architecture.png" alt="DroidSeal 1.1.0 架构：输入、审计、修复、按需加固、官方签名与验证，以及证据包" loading="lazy" decoding="async" />
+        </a>
+        <figcaption><b>图 1.</b> DroidSeal 1.1.0 发布架构。青色为自研组件，琥珀色为官方 Android 工具，紫色虚线为按需 APK 加固。每次发布都会写签名 APK、SHA-256、报告、SBOM 与发布决策。设备层仅覆盖文中声明的模拟器矩阵；小屏可横向滑动图形，或点击打开完整 SVG。</figcaption>
+      </figure>
     </section>
 
     <!-- MODES -->
     <section class="section-pad wrap" id="modes">
-      <span class="eyebrow" data-reveal><span class="dot"></span>三种入口</span>
-      <h2 class="title" data-reveal>三种入口，按需切换</h2>
-      <p class="lead" data-reveal>同一个引擎，三种节奏——分步学、一键跑，或先诊断环境再决定怎么加固。</p>
+      <span class="eyebrow" data-reveal><span class="dot"></span>四种入口</span>
+      <h2 class="title" data-reveal>四种入口，按需切换</h2>
+      <p class="lead" data-reveal>同一个引擎，四种节奏——分步学、一键跑、先诊断环境，或对 release APK 做运行时加固。</p>
       <div class="modes-grid">
-        <article class="mode" data-reveal data-cursor>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/></svg></div>
-          <span class="tag">[1] 分步 · /guided</span><h3>分步处理</h3>
+        <article class="mode float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/></svg></div>
+          <span class="tag">[1] 分步 · /guided</span><h3 class="float-glow">分步处理</h3>
           <p>每一步执行前再次显示用途与影响，可“执行此步”或跳过；失败自动回退到步骤开始前的 APK。</p>
-        </article>
-        <article class="mode" data-reveal data-cursor>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></div>
-          <span class="tag">[2] 一键 · /oneclick</span><h3>一键处理</h3>
+  </div>
+</article>
+        <article class="mode float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></div>
+          <span class="tag">[2] 一键 · /oneclick</span><h3 class="float-glow">一键处理</h3>
           <p>填写信息后 14 步连续执行，一般失败自动回退继续；缺工具则暂停等待下载或修复后自动续跑。</p>
-        </article>
-        <article class="mode" data-reveal data-cursor>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3a8 8 0 105.3 14.2M11 3v4M11 3h-4"/><circle cx="11" cy="14" r="2.5"/></svg></div>
-          <span class="tag">[3] 诊断 · /doctor</span><h3>环境诊断</h3>
+  </div>
+</article>
+        <article class="mode float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3a8 8 0 105.3 14.2M11 3v4M11 3h-4"/><circle cx="11" cy="14" r="2.5"/></svg></div>
+          <span class="tag">[3] 诊断 · /doctor</span><h3 class="float-glow">环境诊断</h3>
           <p>定位 JDK / Android SDK 等工具，缺失项列出并提供下载与说明；只检查不改包。</p>
-        </article>
+  </div>
+</article>
+        <article class="mode float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></div>
+          <span class="tag">[4] 加固 · opt-in</span><h3 class="float-glow">APK 加固</h3>
+          <p>对你自己的 release APK 做按需加固：DEX 载荷加密（AES-256-GCM，逐条目 HKDF 派生密钥）、随机化引导壳、方法抽取与惰性恢复、字符串加密，以及密钥化完整性与环境校验。TUI 加固向导逐步引导；每次构建输出如实 findings——真机安装仍是最终验收。</p>
+  </div>
+</article>
       </div>
     </section>
 
     <!-- CAPABILITIES -->
     <section class="section-pad wrap" id="capabilities">
       <span class="eyebrow" data-reveal><span class="dot"></span>能力</span>
-      <h2 class="title" data-reveal>能力网格</h2>
-      <p class="lead" data-reveal>不是黑盒工具，而是一套本地优先、可审计、可验证的发布前流水线。</p>
+      <h2 class="title" data-reveal>1.1.0 能力网格</h2>
+      <p class="lead" data-reveal>1.1.0 已交付——离线、可审计，并用可复现的评测方法测量。</p>
       <div class="cap-grid">
-        <article class="cap" data-reveal data-cursor>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
-          <h3>本地优先</h3><p>不连接模型服务，不上传 APK、文件路径或签名凭据。</p>
-        </article>
-        <article class="cap" data-reveal data-cursor>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 109-9"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/></svg></div>
-          <h3>结果可验证</h3><p>输出签名验证、SHA-256、JSON 与 Markdown 报告。</p>
-        </article>
-        <article class="cap" data-reveal data-cursor>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg></div>
-          <h3>步骤可回退</h3><p>每步独立制品，失败解释原因并恢复最近有效 APK。</p>
-        </article>
-        <article class="cap" data-reveal data-cursor>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
-          <h3>深度静态审计</h3><p>权限 / targetSdk / 签名 / 深链 / 硬编码密钥 / TLS 启发式。</p>
-        </article>
-        <article class="cap" data-reveal data-cursor>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
-          <h3>密钥脱敏</h3><p>明文密码只留路径与行号，值从不进入报告或命令。</p>
-        </article>
-        <article class="cap" data-reveal data-cursor>
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 9h7M8 13h7M8 17h4"/></svg></div>
-          <h3>证据优先</h3><p>报告区分已确认 / 高 / 中 / 低置信度，并产出 CycloneDX SBOM。</p>
-        </article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+          <h3 class="float-glow">本地优先</h3><p>不连接模型服务，不上传 APK、文件路径或签名凭据。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 109-9"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/></svg></div>
+          <h3 class="float-glow">结果可验证</h3><p>输出签名验证、SHA-256、JSON 与 Markdown 报告。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg></div>
+          <h3 class="float-glow">步骤可回退</h3><p>每步独立制品，失败解释原因并恢复最近有效 APK。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+          <h3 class="float-glow">深度静态审计</h3><p>权限 / targetSdk / 签名 / 密钥 / DEX / TLS / 原生 .so / 依赖。JNI 动态注册恢复与原生线性数据流都带明确置信度。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3 class="float-glow">密钥脱敏</h3><p>明文密码只留路径与行号，值从不进入报告或命令。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 9h7M8 13h7M8 17h4"/></svg></div>
+          <h3 class="float-glow">证据优先</h3><p>报告区分已确认 / 高 / 中 / 低置信度，并产出 CycloneDX SBOM。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3 class="float-glow">391 个检测条目</h3><p>390 个唯一代码覆盖十个维度——加密/网络/存储/组件/权限/输入输出/配置/生命周期/隐私合规/并发。内置 38 用例基准实测精度 76.9% / 召回 90.9%。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V7l-5-4z"/><path d="M14 3v4h5"/></svg></div>
+          <h3 class="float-glow">密钥化加固</h3><p>按需 DEX 载荷加密（AES-256-GCM，逐条目 HKDF 密钥）、随机化引导壳、方法抽取与惰性恢复、字符串加密，以及密钥化完整性与环境校验。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4M6 9l4 2-4 2M15 13h3"/></svg></div>
+          <h3 class="float-glow">设备验收</h3><p>已记录的 API 26 x86_64 模拟器运行覆盖安装、首次与二次启动、零 logcat 失败标记与干净卸载。真机安装仍是最终权威。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></div>
+          <h3 class="float-glow">基准驱动</h3><p>可复现评测输出 TP/FP/FN、精度与召回。1.1.0 覆盖 38 用例检测器基准、TaintBench（39 应用 / 249 流；端点 TP 171，流 TP 136）与 434 个良性应用。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 9h7M8 13h4"/><path d="M9 17l2 2 4-4"/></svg></div>
+          <h3 class="float-glow">可执行的修复</h3><p>把 allowBackup 发现转化为长度保持的原地 AXML 补丁（resId 0x01010280）；每条发现都带修复计划与证据。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M6 9l3 2-3 2M12 13h5"/></svg></div>
+          <h3 class="float-glow">TUI 加固向导</h3><p>标识符随机化、测试/学习模式与中间产物处理已接入向导与双语 i18n。</p>
+  </div>
+</article>
+      </div>
+    </section>
+
+    <!-- 创新点与定位 -->
+    <section class="section-pad wrap" id="innovation">
+      <span class="eyebrow" data-reveal><span class="dot"></span>创新点与定位</span>
+      <h2 class="title" data-reveal>实测证据，而非规则数量</h2>
+      <div class="dash-grid">
+        <div class="dash-card" data-reveal><b data-target="391">391</b><span>个检测条目</span></div>
+        <div class="dash-card" data-reveal><b data-target="390">390</b><span>个唯一检测代码</span></div>
+        <div class="dash-card" data-reveal><b data-target="387">387</b><span>项发布门禁测试</span></div>
+        <div class="dash-card" data-reveal><b>0</b><span>数据流误报 · 434 个良性应用</span></div>
+        <div class="dash-card" data-reveal><b data-target="5">5</b><span>层已交付加固</span></div>
+        <div class="dash-card" data-reveal><b>76.9% / 90.9%</b><span>精度 / 召回 · 38 用例基准</span></div>
+      </div>
+      <div class="sec-grid">
+        <div class="sec-list">
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>检测</h4><p>391 个检测条目（390 个唯一代码）覆盖十个维度；污点、行为与供应链分析一次完成。</p></div>
+          </div>
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>交叉验证</h4><p>置信度分级与交叉证据把已确认发现和启发式线索分开。1.1.0 的原生数据流结果按设计标注为 <code>confidence: low</code>。</p></div>
+          </div>
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>确认后报告</h4><p>每条发现都带证据路径与置信度；精度/召回连同测量口径一起公开。</p></div>
+          </div>
+        </div>
+        <div class="sec-list">
+          <div class="stat" data-reveal><b>387</b><span>项发布门禁测试——构建期全绿不等于运行时正确</span></div>
+          <div class="stat" data-reveal><b>4</b><span>级置信度——确认 · 高 · 中 · 低</span></div>
+          <div class="stat" data-reveal><b>76.9% / 90.9%</b><span>内置 38 用例基准精度 / 召回——有测量口径，不是万能声明</span></div>
+          <div class="stat" data-reveal><b>0</b><span>434 个良性应用上的数据流引擎误报（95% CI 上限 0.69%）</span></div>
+          <p data-reveal><b>定位</b>——安卓安全工具分两条赛道：<b>审计</b>（MobSF、AndroBugs、APKiD——只分析不改写）与<b>加固</b>（DexGuard / 360 加固保商业方案；Jiagu / nmmp / dpt-shell 开源方案）。DroidSeal 在一条全离线流水线里横跨两条。对比 MobSF：审计结论直接驱动同一工具链内的修复（审计 → remediation → R8 → 加固 → 重签 → 复验），而非停在报告。对比开源壳：<b>密钥化防御</b>把完整性与反分析状态折入密钥派生，篡改会派生错误密钥；这是设计属性，不声称所有商业壳都同样实现。对比商业方案：完全离线（代码不出本机）、行为可审计——如实代价：1.1.0 不含 VMP-lite 或完整 VMP / 白盒密码，无 SLA，项目尚早期。真机安装仍是最终验收。</p>
+        </div>
       </div>
     </section>
 
@@ -410,24 +909,33 @@
         <div class="sec-list">
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>本地优先执行</h4><p>APK 与签名凭据只在本机处理，不连接模型服务、不上传任何数据。</p></div>
+            <div><h4>01 · 本地优先执行</h4><p>APK 与签名凭据只在本机处理，不连接模型服务、不上传任何数据。</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>明确的边界</h4><p>默认不注入脱壳 / Hook / 反调试 / 运行时篡改代码；相关攻击只作为威胁模型。</p></div>
+            <div><h4>02 · 默认不加壳，加固显式开启</h4><p>默认的审计与发布流程不解包、不加壳、不注入 hook 或反调试代码。按需 APK 加固只改写你显式传入的 release APK——绝不处理未知输入。</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>密钥绝不落盘</h4><p>明文密码只在内存，不写入报告、命令参数、配置文件或终端聊天记录。</p></div>
+            <div><h4>03 · 如实报告，密钥化防御</h4><p>每次加固构建输出如实的 findings 报告——未实现或降级的能力一律标注，绝不虚报。加固 APK 中，manifest、环境投票与密钥分片折入逐条目密钥派生：篡改产生错误密钥，而不是可绕过的警告。</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>证据优先</h4><p>报告明确区分“已验证”与“仅建议”的控制项，不冒充服务端闭环。</p></div>
+            <div><h4>04 · 离线供应链快照</h4><p>已知漏洞检查基于本地快照——无外呼、无遥测。</p></div>
+          </div>
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>05 · 实测而非声称</h4><p>四层验证：387 / 387 项发布门禁测试、逐修复对抗回归套件（SEC-010/011/012 覆盖校验和顺序、抽取桩填充与 string_ids 顺序）、每次加固构建的产物验收基线，以及 API 26 x86_64 模拟器验收记录。构建期全绿 ≠ 运行时正确——真机安装是最终测试。</p></div>
+          </div>
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>06 · 已知边界</h4><p>加固提高逆向成本，但不让逆向变得不可能。minSdk &lt; 26 会回退到文件式 DexClassLoader。1.1.0 不含 VMP-lite、完整 VMP、白盒密码、动态恶意软件沙箱或 SLA；动态分析请用 MobSF / APKiD。</p></div>
           </div>
         </div>
         <div class="sec-visual" data-reveal aria-hidden="true">
           <div class="ring r1"></div>
           <div class="ring r2"></div>
+          <div class="sec-scan"></div>
           <div class="core"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
         </div>
       </div>
@@ -437,7 +945,7 @@
     <section class="section-pad wrap" id="cta">
       <div class="cta-box" data-reveal>
         <h2>三种方式，立即上手</h2>
-        <p>开源 · Apache-2.0 License · 本地优先 · Windows x64 / Linux x64（v1.0.0）</p>
+        <p>开源 · Apache-2.0 License · 本地优先 · Windows x64 / Linux x64（v1.1.0）</p>
         <div class="copy-row" data-cursor>
           <code id="installCmd">npm install --global droidseal</code>
           <button id="copyBtn">复制</button>
@@ -447,9 +955,10 @@
           <button id="copyPipBtn">复制</button>
         </div>
         <div class="hero-cta" data-cursor>
-          <a href="https://github.com/noontiger/droidseal/releases/latest" target="_blank" rel="noopener" class="btn btn-primary">GitHub Releases · Windows zip / Linux tar.gz</a>
-          <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" class="btn btn-ghost">查看 GitHub</a>
+          <a href="https://github.com/newnju/droidseal/releases/tag/v1.1.0" target="_blank" rel="noopener" class="btn btn-primary">GitHub Releases · 1.1.0 · Windows zip / Linux tar.gz</a>
+          <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener" class="btn btn-ghost">查看 GitHub</a>
         </div>
+        <a class="release-link" href="https://github.com/newnju/droidseal/blob/v1.1.0/docs/releases/v1.1.0.zh-CN.md" target="_blank" rel="noopener" data-cursor>阅读 1.1.0 发布说明 ↗</a>
       </div>
     </section>
 
@@ -462,12 +971,14 @@
       </a>
       <nav class="links" aria-label="页脚链接">
         <a href="#pipeline" data-cursor>管线</a>
+        <a href="#architecture" data-cursor>架构</a>
         <a href="#modes" data-cursor>模式</a>
         <a href="#capabilities" data-cursor>能力</a>
         <a href="#security" data-cursor>安全</a>
-        <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" data-cursor>GitHub</a>
+        <a href="https://github.com/newnju/droidseal/blob/v1.1.0/docs/releases/v1.1.0.zh-CN.md" target="_blank" rel="noopener" data-cursor>发布说明</a>
+        <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener" data-cursor>GitHub</a>
       </nav>
-      <span class="copy">Apache-2.0 License · v1.0.0 · © 2026 DroidSeal</span>
+      <span class="copy">Apache-2.0 License · v1.1.0 · © 2026 DroidSeal</span>
     </div>
   </footer>
 
@@ -478,14 +989,15 @@
   var isTouch = window.matchMedia('(pointer: coarse)').matches;
 
   /* ============ custom cursor ============ */
-  if(!isTouch){
+  if(!isTouch && !reduce){
+    document.documentElement.classList.add('custom-cursor');
     var dot = document.getElementById('cursor-dot');
     var ring = document.getElementById('cursor-ring');
     var mx = window.innerWidth/2, my = window.innerHeight/2, rx = mx, ry = my;
-    window.addEventListener('mousemove', function(e){ mx=e.clientX; my=e.clientY; dot.style.transform='translate('+mx+'px,'+my+'px) translate(-50%,-50%)'; });
+    window.addEventListener('mousemove', function(e){ mx=e.clientX; my=e.clientY; dot.style.setProperty('--x',mx+'px'); dot.style.setProperty('--y',my+'px'); });
     (function cloop(){
       rx += (mx-rx)*0.18; ry += (my-ry)*0.18;
-      ring.style.transform='translate('+rx+'px,'+ry+'px)';
+      ring.style.setProperty('--x',rx+'px'); ring.style.setProperty('--y',ry+'px');
       requestAnimationFrame(cloop);
     })();
     function bindHover(){
@@ -563,7 +1075,7 @@
     ['c-ok','[12] APK 签名 ............ ok'],
     ['c-ok','[13] 最终验证 ............ ok'],
     ['c-ok','[14] 生成报告 ............ ok'],
-    ['c-cyan','› 最终 APK 与审计报告已生成']
+    ['c-cyan','› 1.1.0 证据包已生成']
   ]};
   function typeTerminal(){
     if(!termBody) return;
@@ -726,6 +1238,50 @@
   resize();
   if(!reduce){ draw(); }
 })();
+</script>
+<script>
+// dashboard count-up：进入视口时数字从 0 滚动到 data-target（data-suffix 追加后缀）
+(function(){
+  var cards=document.querySelectorAll('.dash-card b[data-target]');
+  if(!cards.length||!('IntersectionObserver' in window)){return}
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(!e.isIntersecting) return;
+      var el=e.target,target=parseInt(el.dataset.target||'0',10),suffix=el.dataset.suffix||'';
+      io.unobserve(el);
+      var dur=1100,start=performance.now();
+      function step(now){
+        var p=Math.min(1,(now-start)/dur);
+        var eased=1-Math.pow(1-p,3);
+        el.textContent=Math.round(target*eased)+(p===1?suffix:'');
+        if(p<1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    });
+  },{threshold:.4});
+  cards.forEach(function(c){io.observe(c)});
+})();
+
+  /* ============ float-card tilt (poolside-inspired) ============ */
+  if(!isTouch && !reduce){
+    document.querySelectorAll('.float-card').forEach(function(card){
+      var layer = card.querySelector('.float-layer');
+      if(!layer) return;
+      card.addEventListener('mousemove', function(e){
+        var r = card.getBoundingClientRect();
+        var x = (e.clientX - r.left) / r.width - 0.5;
+        var y = (e.clientY - r.top) / r.height - 0.5;
+        var rx = y * -8;   /* rotateX: up/down */
+        var ry = x * 8;    /* rotateY: left/right */
+        card.style.transform = 'perspective(900px) rotateX(' + rx + 'deg) rotateY(' + ry + 'deg)';
+        layer.style.transform = 'translateY(-2px) translateZ(24px)';
+      });
+      card.addEventListener('mouseleave', function(){
+        card.style.transform = '';
+        layer.style.transform = '';
+      });
+    });
+  }
 </script>
 </body>
 </html>
