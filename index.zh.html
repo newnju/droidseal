@@ -3,8 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>DroidSeal · 本地优先的 Android 安全发布流水线</title>
-<meta name="description" content="DroidSeal（安卓发布封签）：商业加固前你能做的大多数内容。本地优先、结果可验证的 14 步发布安全流水线。" />
+<title>DroidSeal · 本地优先的 Android 发布安全流水线</title>
+<meta name="description" content="DroidSeal（安卓发布封签）1.1.0：本地优先的 Android 发布安全流水线——静态审计、按需加固、官方工具签名与独立验证，留下可复核的证据链。" />
+<meta property="og:title" content="DroidSeal 1.1.0 · 安卓发布封签" />
+<meta property="og:description" content="在本地完成 Android 发布审计、按需加固、签名与验证。1.1.0 交付密钥化加固与可测量的证据链。" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://newnju.github.io/droidseal/" />
+<meta property="og:image" content="https://newnju.github.io/droidseal/droidseal-architecture.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -337,6 +342,19 @@
   .mode .tag{display:block;font-family:var(--mono);font-size:var(--fs-xs);color:var(--cyan);margin-bottom:10px}
   .mode p{color:var(--muted);font-size:var(--fs-base)}
 
+  /* ---------- architecture figure ---------- */
+  .arch-figure{
+    margin:var(--gutter) 0 0;padding:clamp(10px,1.8vw,18px);
+    background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);
+    box-shadow:0 24px 60px -34px rgba(0,0,0,.9);
+  }
+  .arch-figure a{display:block}
+  .arch-figure img{display:block;width:100%;height:auto;border-radius:var(--r-sm)}
+  .arch-figure figcaption{margin-top:12px;color:#4b5563;font-size:var(--fs-sm);line-height:1.6}
+  .arch-figure figcaption b{color:#111827;font-weight:600}
+  .arch-hint{display:none}
+  .release-link{display:inline-block;margin-top:18px;font-family:var(--mono);font-size:var(--fs-sm);color:var(--cyan);border-bottom:1px solid var(--cyan-dim);padding-bottom:2px}
+
   /* ---------- capabilities ---------- */
   .cap-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gutter);margin-top:var(--gutter)}
   .cap{padding:16px}
@@ -469,7 +487,7 @@
     position:relative;z-index:2;
   }
   .foot{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
-  .foot .links{display:flex;gap:22px;color:var(--muted);font-size:var(--fs-base)}
+  .foot .links{display:flex;flex-wrap:wrap;gap:22px;color:var(--muted);font-size:var(--fs-base)}
   .foot .links a{transition:color var(--t-2)}
   .foot .links a:hover{color:var(--cyan);text-shadow:0 0 12px rgba(0,229,255,0.5)}
   .foot .copy{color:var(--muted-2);font-size:var(--fs-sm);font-family:var(--mono)}
@@ -523,9 +541,12 @@
     .hero h1{font-size:clamp(28px,8vw,40px)}
     .hero .sub{font-size:var(--fs-md)}
     .hero-cta{flex-direction:column;align-items:stretch;width:100%}
-    .hero-cta .btn,.hero-cta .btn-primary,.hero-cta .btn-ghost{width:100%;justify-content:center}
+    .hero-cta .btn,.hero-cta .btn-primary,.hero-cta .btn-ghost{width:100%;justify-content:center;white-space:normal;text-align:center;line-height:1.35}
     .terminal{margin-top:40px}
     .terminal .body{padding:14px;min-height:auto;font-size:var(--fs-xs)}
+    .arch-figure a{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .arch-figure img{width:900px;max-width:none}
+    .arch-hint{display:block;margin:0 0 10px;color:#4b5563;font-size:var(--fs-sm);font-family:var(--mono)}
     .modes-grid,.cap-grid{grid-template-columns:1fr}
     /* 14 short step cards: two-up halves the scroll, and it falls back to one
        column by itself below ~340px instead of needing another breakpoint */
@@ -538,7 +559,7 @@
     .copy-row code{flex:1;padding:11px 12px}
     .stat b{font-size:var(--fs-lg)}
     .foot{gap:16px}
-    /* four nav items fight for ~390px and the logo was being squeezed to half its
+    /* nav items fight for width and the logo was being squeezed to half its
        width: trim the decorative pieces and keep the CTA as an icon
        (its label stays in the DOM, so screen readers still announce it) */
     .brand .logo{height:22px}
@@ -585,13 +606,14 @@
       </a>
       <nav class="nav-links" aria-label="主导航">
         <a href="#pipeline">管线</a>
+        <a href="#architecture">架构</a>
         <a href="#modes">模式</a>
         <a href="#capabilities">能力</a>
         <a href="#security">安全</a>
       </nav>
       <div class="nav-actions">
         <a href="index.html" class="nav-lang" data-cursor>English</a>
-        <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" class="btn btn-primary" data-cursor>
+        <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener" class="btn btn-primary" data-cursor>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .6l3.5 6.9 7.8 1.1-5.6 5.5 1.3 7.7L12 18.6 4.9 22.3l1.3-7.7L.6 9.1 8.5 8z"/></svg>
           Star on GitHub
         </a>
@@ -602,19 +624,20 @@
     </div>
     <div class="mobile-menu" id="mobileMenu">
       <a href="#pipeline">管线</a>
+      <a href="#architecture">架构</a>
       <a href="#modes">模式</a>
       <a href="#capabilities">能力</a>
       <a href="#security">安全</a>
-      <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener">GitHub ↗</a>
+      <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener">GitHub ↗</a>
     </div>
   </header>
 
   <main id="top">
     <!-- HERO -->
     <section class="hero wrap">
-      <span class="eyebrow" data-reveal><span class="dot"></span>安卓发布封签 · v1.0.1</span>
-      <h1 data-reveal><span class="grad">商业加固前</span>你能做的大多数内容</h1>
-      <p class="sub" data-reveal>DroidSeal（安卓发布封签）帮你完成商业加固前能做的大多数事——环境诊断、源码与 APK 审计、R8 混淆、zipalign 对齐、apksigner 签名与最终验证，商业加固前 · 一键端到端。</p>
+      <span class="eyebrow" data-reveal><span class="dot"></span>安卓发布封签 · v1.1.0</span>
+      <h1 data-reveal>发布一个<span class="grad">经得起审查的</span> Android 版本</h1>
+      <p class="sub" data-reveal>DroidSeal 是一条本地优先的发布安全流水线：静态审计、按需加固、用官方 Android 工具签名，再做独立验证。每次发布都会留下证据链——SHA-256、JSON/Markdown 报告、CycloneDX SBOM 与发布决策。</p>
       <div class="hero-cta" data-reveal>
         <a href="#cta" class="btn btn-primary" data-cursor>开始使用</a>
         <a href="#pipeline" class="btn btn-ghost" data-cursor>查看管线</a>
@@ -668,7 +691,7 @@
 </article>
         <article class="step float-card" data-reveal data-cursor>
   <div class="float-layer">
-<div class="num">07</div><h3 class="float-glow">本地安全防护</h3><p>核验 R8、标准 DEX、反调试与完整性覆盖。</p>
+<div class="num">07</div><h3 class="float-glow">本地安全防护</h3><p>核验 R8 与标准 DEX；按需 APK 加固是独立模式。</p>
   </div>
 </article>
         <article class="step float-card" data-reveal data-cursor>
@@ -703,10 +726,24 @@
 </article>
         <article class="step float-card" data-reveal data-cursor>
   <div class="float-layer">
-<div class="num">14</div><h3 class="float-glow">生成报告</h3><p>JSON / Markdown、SBOM、发布门禁与覆盖矩阵。</p>
+<div class="num">14</div><h3 class="float-glow">生成报告</h3><p>JSON / Markdown、SBOM、发布门禁与证据链。</p>
   </div>
 </article>
       </div>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section class="section-pad wrap" id="architecture">
+      <span class="eyebrow" data-reveal><span class="dot"></span>架构 · 1.1.0</span>
+      <h2 class="title" data-reveal>一条发布流水线，一个证据边界</h2>
+      <p class="lead" data-reveal>审计与发布都留在本地执行边界内；加固按需开启；每次运行都会写出证据包。设备验收仅覆盖文中声明的 API 26 x86_64 模拟器矩阵。</p>
+      <figure class="arch-figure" data-reveal>
+        <p class="arch-hint">横向滑动查看完整架构 →</p>
+        <a href="./droidseal-architecture.svg" target="_blank" rel="noopener">
+          <img src="./droidseal-architecture.png" alt="DroidSeal 1.1.0 架构：输入、审计、修复、按需加固、官方签名与验证，以及证据包" loading="lazy" decoding="async" />
+        </a>
+        <figcaption><b>图 1.</b> DroidSeal 1.1.0 发布架构。青色为自研组件，琥珀色为官方 Android 工具，紫色虚线为按需 APK 加固。每次发布都会写签名 APK、SHA-256、报告、SBOM 与发布决策。设备层仅覆盖文中声明的模拟器矩阵；小屏可横向滑动图形，或点击打开完整 SVG。</figcaption>
+      </figure>
     </section>
 
     <!-- MODES -->
@@ -740,7 +777,7 @@
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></div>
           <span class="tag">[4] 加固 · opt-in</span><h3 class="float-glow">APK 加固</h3>
-          <p>对你自己的 release APK 做运行时加固：manifest 锚定密钥的 DEX 加密、环境门控派生、密钥分片化，可选服务端挑战与 Keystore 绑定。输出如实 findings——真机安装仍是最终验收。</p>
+          <p>对你自己的 release APK 做按需加固：DEX 载荷加密（AES-256-GCM，逐条目 HKDF 派生密钥）、随机化引导壳、方法抽取与惰性恢复、字符串加密，以及密钥化完整性与环境校验。TUI 加固向导逐步引导；每次构建输出如实 findings——真机安装仍是最终验收。</p>
   </div>
 </article>
       </div>
@@ -749,8 +786,8 @@
     <!-- CAPABILITIES -->
     <section class="section-pad wrap" id="capabilities">
       <span class="eyebrow" data-reveal><span class="dot"></span>能力</span>
-      <h2 class="title" data-reveal>能力网格</h2>
-      <p class="lead" data-reveal>不是黑盒工具，而是一套本地优先、可审计、可验证的发布前流水线。</p>
+      <h2 class="title" data-reveal>1.1.0 能力网格</h2>
+      <p class="lead" data-reveal>1.1.0 已交付——离线、可审计，并用可复现的评测方法测量。</p>
       <div class="cap-grid">
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
@@ -773,7 +810,7 @@
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
-          <h3 class="float-glow">深度静态审计</h3><p>权限 / targetSdk / 签名 / 深链 / 硬编码密钥 / TLS 启发式。</p>
+          <h3 class="float-glow">深度静态审计</h3><p>权限 / targetSdk / 签名 / 密钥 / DEX / TLS / 原生 .so / 依赖。JNI 动态注册恢复与原生线性数据流都带明确置信度。</p>
   </div>
 </article>
         <article class="cap float-card" data-reveal data-cursor>
@@ -791,25 +828,37 @@
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg></div>
-          <h3 class="float-glow">373 个源码检测器</h3><p>十个维度——加密/网络/存储/组件/权限/输入输出/配置/生命周期/隐私合规/并发——每个都经正/负精度用例门禁。</p>
+          <h3 class="float-glow">391 个检测条目</h3><p>390 个唯一代码覆盖十个维度——加密/网络/存储/组件/权限/输入输出/配置/生命周期/隐私合规/并发。内置 38 用例基准实测精度 76.9% / 召回 90.9%。</p>
   </div>
 </article>
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V7l-5-4z"/><path d="M14 3v4h5"/></svg></div>
-          <h3 class="float-glow">18+ 加固生成器</h3><p>加壳、VMP 指令化、控制流平坦化、反调试、完整性、死代码、原生混淆——全部源码接入、构建期生效。</p>
+          <h3 class="float-glow">密钥化加固</h3><p>按需 DEX 载荷加密（AES-256-GCM，逐条目 HKDF 密钥）、随机化引导壳、方法抽取与惰性恢复、字符串加密，以及密钥化完整性与环境校验。</p>
   </div>
 </article>
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4M6 9l4 2-4 2M15 13h3"/></svg></div>
-          <h3 class="float-glow">动态交叉验证</h3><p>adb 桥接提供 8 个运行期信号——设备矩阵/定向 logcat/UI 冒烟/崩溃·ANR——回附加到静态发现。</p>
+          <h3 class="float-glow">设备验收</h3><p>已记录的 API 26 x86_64 模拟器运行覆盖安装、首次与二次启动、零 logcat 失败标记与干净卸载。真机安装仍是最终权威。</p>
   </div>
 </article>
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></div>
-          <h3 class="float-glow">基准驱动</h3><p>30 用例评测器输出 TP/FP/FN、精度与召回——并支持外部 DroidBench/OWASP 目录。</p>
+          <h3 class="float-glow">基准驱动</h3><p>可复现评测输出 TP/FP/FN、精度与召回。1.1.0 覆盖 38 用例检测器基准、TaintBench（39 应用 / 249 流；端点 TP 171，流 TP 136）与 434 个良性应用。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 9h7M8 13h4"/><path d="M9 17l2 2 4-4"/></svg></div>
+          <h3 class="float-glow">可执行的修复</h3><p>把 allowBackup 发现转化为长度保持的原地 AXML 补丁（resId 0x01010280）；每条发现都带修复计划与证据。</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M6 9l3 2-3 2M12 13h5"/></svg></div>
+          <h3 class="float-glow">TUI 加固向导</h3><p>标识符随机化、测试/学习模式与中间产物处理已接入向导与双语 i18n。</p>
   </div>
 </article>
       </div>
@@ -818,35 +867,36 @@
     <!-- 创新点与定位 -->
     <section class="section-pad wrap" id="innovation">
       <span class="eyebrow" data-reveal><span class="dot"></span>创新点与定位</span>
-      <h2 class="title" data-reveal>确认后才报的精度语义，而非规则数量</h2>
+      <h2 class="title" data-reveal>实测证据，而非规则数量</h2>
       <div class="dash-grid">
-        <div class="dash-card" data-reveal><b data-target="373">373</b><span>个源码检测器</span></div>
-        <div class="dash-card" data-reveal><b data-target="19">19</b><span>项污点分析</span></div>
-        <div class="dash-card" data-reveal><b data-target="30">30</b><span>条行为规则</span></div>
-        <div class="dash-card" data-reveal><b data-target="30">30</b><span>条离线漏洞快照</span></div>
-        <div class="dash-card" data-reveal><b data-target="18" data-suffix="+">18+</b><span>个加固生成器</span></div>
-        <div class="dash-card" data-reveal><b data-target="8">8</b><span>个动态信号</span></div>
+        <div class="dash-card" data-reveal><b data-target="391">391</b><span>个检测条目</span></div>
+        <div class="dash-card" data-reveal><b data-target="390">390</b><span>个唯一检测代码</span></div>
+        <div class="dash-card" data-reveal><b data-target="387">387</b><span>项发布门禁测试</span></div>
+        <div class="dash-card" data-reveal><b>0</b><span>数据流误报 · 434 个良性应用</span></div>
+        <div class="dash-card" data-reveal><b data-target="5">5</b><span>层已交付加固</span></div>
+        <div class="dash-card" data-reveal><b>76.9% / 90.9%</b><span>精度 / 召回 · 38 用例基准</span></div>
       </div>
       <div class="sec-grid">
         <div class="sec-list">
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>检测</h4><p>373 个检测器扫十个维度；污点、行为与供应链分析一次完成。</p></div>
+            <div><h4>检测</h4><p>391 个检测条目（390 个唯一代码）覆盖十个维度；污点、行为与供应链分析一次完成。</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>交叉验证</h4><p>置信度分级与交叉证据把静态发现连接到动态 adb 信号——断言之前先核实。</p></div>
+            <div><h4>交叉验证</h4><p>置信度分级与交叉证据把已确认发现和启发式线索分开。1.1.0 的原生数据流结果按设计标注为 <code>confidence: low</code>。</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>确认后报告</h4><p>每个检测器都经正/负精度用例门禁——共 72 个——结果是确认的，不是噪音。</p></div>
+            <div><h4>确认后报告</h4><p>每条发现都带证据路径与置信度；精度/召回连同测量口径一起公开。</p></div>
           </div>
         </div>
         <div class="sec-list">
-          <div class="stat" data-reveal><b>72</b><span>个精度用例门禁——每个检测器确认后才报告</span></div>
+          <div class="stat" data-reveal><b>387</b><span>项发布门禁测试——构建期全绿不等于运行时正确</span></div>
           <div class="stat" data-reveal><b>4</b><span>级置信度——确认 · 高 · 中 · 低</span></div>
-          <div class="stat" data-reveal><b>60% / 88.2%</b><span>内置基准精度 / 召回——诚实数字，误报治理的公开路线</span></div>
-          <p data-reveal><b>定位</b>——安卓安全工具分两条赛道：<b>审计</b>（MobSF、AndroBugs、APKiD——只分析不改写）与<b>加固</b>（DexGuard / 360 加固保商业方案；Jiagu / nmmp / dpt-shell 开源方案）。DroidSeal 在一条全离线流水线里横跨两条——开源阵营没有第二个项目。对比 MobSF：审计结论直接驱动同一工具链内的修复（审计 → remediation → R8 → 加固 → 重签 → 复验），而非停在报告。对比开源壳：<b>密钥化防御</b>——完整性锚点与反分析投票折入密钥派生，挂 Frida 派生的就是错钥，而主流壳"检测→警告"被绕过零成本。对比商业方案：完全离线（代码不出本机）、行为可审计——如实代价：无 VMP / 白盒密码、无 SLA，项目尚早期。真机安装仍是最终验收。</p>
+          <div class="stat" data-reveal><b>76.9% / 90.9%</b><span>内置 38 用例基准精度 / 召回——有测量口径，不是万能声明</span></div>
+          <div class="stat" data-reveal><b>0</b><span>434 个良性应用上的数据流引擎误报（95% CI 上限 0.69%）</span></div>
+          <p data-reveal><b>定位</b>——安卓安全工具分两条赛道：<b>审计</b>（MobSF、AndroBugs、APKiD——只分析不改写）与<b>加固</b>（DexGuard / 360 加固保商业方案；Jiagu / nmmp / dpt-shell 开源方案）。DroidSeal 在一条全离线流水线里横跨两条。对比 MobSF：审计结论直接驱动同一工具链内的修复（审计 → remediation → R8 → 加固 → 重签 → 复验），而非停在报告。对比开源壳：<b>密钥化防御</b>把完整性与反分析状态折入密钥派生，篡改会派生错误密钥；这是设计属性，不声称所有商业壳都同样实现。对比商业方案：完全离线（代码不出本机）、行为可审计——如实代价：1.1.0 不含 VMP-lite 或完整 VMP / 白盒密码，无 SLA，项目尚早期。真机安装仍是最终验收。</p>
         </div>
       </div>
     </section>
@@ -863,11 +913,11 @@
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>02 · 默认源码构建，加固显式开启</h4><p>生成器默认在你的源码上构建期生效。APK 加固（DEX 加密 + 引导壳）只改写你携带加固开关显式传入的 APK——绝不改写未知输入。</p></div>
+            <div><h4>02 · 默认不加壳，加固显式开启</h4><p>默认的审计与发布流程不解包、不加壳、不注入 hook 或反调试代码。按需 APK 加固只改写你显式传入的 release APK——绝不处理未知输入。</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>03 · 如实报告，密钥化防御</h4><p>每次构建输出如实的 findings 报告——未实现的能力一律标注，绝不虚报。加固 APK 中，反分析状态折入密钥派生：篡改产生错误密钥，而非可绕过的警告。</p></div>
+            <div><h4>03 · 如实报告，密钥化防御</h4><p>每次加固构建输出如实的 findings 报告——未实现或降级的能力一律标注，绝不虚报。加固 APK 中，manifest、环境投票与密钥分片折入逐条目密钥派生：篡改产生错误密钥，而不是可绕过的警告。</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
@@ -875,7 +925,11 @@
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>05 · 实测而非声称</h4><p>四层验证:264 个单元测试、逐修复对抗回归套件(每个安全修复必须携带 SEC-XX 用例复现其触发条件——完整修复历史见公开<b>安全台账</b>)、每次加固构建的产物验收基线、真机验收套件。如实边界:构建期全绿 ≠ 运行时正确——真机安装是最终测试。</p></div>
+            <div><h4>05 · 实测而非声称</h4><p>四层验证：387 / 387 项发布门禁测试、逐修复对抗回归套件（SEC-010/011/012 覆盖校验和顺序、抽取桩填充与 string_ids 顺序）、每次加固构建的产物验收基线，以及 API 26 x86_64 模拟器验收记录。构建期全绿 ≠ 运行时正确——真机安装是最终测试。</p></div>
+          </div>
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>06 · 已知边界</h4><p>加固提高逆向成本，但不让逆向变得不可能。minSdk &lt; 26 会回退到文件式 DexClassLoader。1.1.0 不含 VMP-lite、完整 VMP、白盒密码、动态恶意软件沙箱或 SLA；动态分析请用 MobSF / APKiD。</p></div>
           </div>
         </div>
         <div class="sec-visual" data-reveal aria-hidden="true">
@@ -891,7 +945,7 @@
     <section class="section-pad wrap" id="cta">
       <div class="cta-box" data-reveal>
         <h2>三种方式，立即上手</h2>
-        <p>开源 · Apache-2.0 License · 本地优先 · Windows x64 / Linux x64（v1.0.1）</p>
+        <p>开源 · Apache-2.0 License · 本地优先 · Windows x64 / Linux x64（v1.1.0）</p>
         <div class="copy-row" data-cursor>
           <code id="installCmd">npm install --global droidseal</code>
           <button id="copyBtn">复制</button>
@@ -901,9 +955,10 @@
           <button id="copyPipBtn">复制</button>
         </div>
         <div class="hero-cta" data-cursor>
-          <a href="https://github.com/noontiger/droidseal/releases/latest" target="_blank" rel="noopener" class="btn btn-primary">GitHub Releases · Windows zip / Linux tar.gz</a>
-          <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" class="btn btn-ghost">查看 GitHub</a>
+          <a href="https://github.com/newnju/droidseal/releases/tag/v1.1.0" target="_blank" rel="noopener" class="btn btn-primary">GitHub Releases · 1.1.0 · Windows zip / Linux tar.gz</a>
+          <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener" class="btn btn-ghost">查看 GitHub</a>
         </div>
+        <a class="release-link" href="https://github.com/newnju/droidseal/blob/v1.1.0/docs/releases/v1.1.0.zh-CN.md" target="_blank" rel="noopener" data-cursor>阅读 1.1.0 发布说明 ↗</a>
       </div>
     </section>
 
@@ -916,12 +971,14 @@
       </a>
       <nav class="links" aria-label="页脚链接">
         <a href="#pipeline" data-cursor>管线</a>
+        <a href="#architecture" data-cursor>架构</a>
         <a href="#modes" data-cursor>模式</a>
         <a href="#capabilities" data-cursor>能力</a>
         <a href="#security" data-cursor>安全</a>
-        <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" data-cursor>GitHub</a>
+        <a href="https://github.com/newnju/droidseal/blob/v1.1.0/docs/releases/v1.1.0.zh-CN.md" target="_blank" rel="noopener" data-cursor>发布说明</a>
+        <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener" data-cursor>GitHub</a>
       </nav>
-      <span class="copy">Apache-2.0 License · v1.0.1 · © 2026 DroidSeal</span>
+      <span class="copy">Apache-2.0 License · v1.1.0 · © 2026 DroidSeal</span>
     </div>
   </footer>
 
@@ -1018,7 +1075,7 @@
     ['c-ok','[12] APK 签名 ............ ok'],
     ['c-ok','[13] 最终验证 ............ ok'],
     ['c-ok','[14] 生成报告 ............ ok'],
-    ['c-cyan','› 最终 APK 与审计报告已生成']
+    ['c-cyan','› 1.1.0 证据包已生成']
   ]};
   function typeTerminal(){
     if(!termBody) return;

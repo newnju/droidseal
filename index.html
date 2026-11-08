@@ -4,7 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>DroidSeal · Local-first Android Release Security Pipeline</title>
-<meta name="description" content="DroidSeal (Android Release Seal): most of what you can do before commercial hardening — a local-first, verifiable 14-step Android release security pipeline." />
+<meta name="description" content="DroidSeal (Android Release Seal) 1.1.0: local-first Android release security — audit, opt-in hardening, official signing and independent verification, with an evidence trail." />
+<meta property="og:title" content="DroidSeal 1.1.0 · Android Release Seal" />
+<meta property="og:description" content="Audit, optionally harden, sign and verify Android releases locally. 1.1.0 ships keyed hardening and a measurable evidence trail." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://newnju.github.io/droidseal/" />
+<meta property="og:image" content="https://newnju.github.io/droidseal/droidseal-architecture.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -337,6 +342,19 @@
   .mode .tag{display:block;font-family:var(--mono);font-size:var(--fs-xs);color:var(--cyan);margin-bottom:10px}
   .mode p{color:var(--muted);font-size:var(--fs-base)}
 
+  /* ---------- architecture figure ---------- */
+  .arch-figure{
+    margin:var(--gutter) 0 0;padding:clamp(10px,1.8vw,18px);
+    background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);
+    box-shadow:0 24px 60px -34px rgba(0,0,0,.9);
+  }
+  .arch-figure a{display:block}
+  .arch-figure img{display:block;width:100%;height:auto;border-radius:var(--r-sm)}
+  .arch-figure figcaption{margin-top:12px;color:#4b5563;font-size:var(--fs-sm);line-height:1.6}
+  .arch-figure figcaption b{color:#111827;font-weight:600}
+  .arch-hint{display:none}
+  .release-link{display:inline-block;margin-top:18px;font-family:var(--mono);font-size:var(--fs-sm);color:var(--cyan);border-bottom:1px solid var(--cyan-dim);padding-bottom:2px}
+
   /* ---------- capabilities ---------- */
   .cap-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gutter);margin-top:var(--gutter)}
   .cap{padding:16px}
@@ -469,7 +487,7 @@
     position:relative;z-index:2;
   }
   .foot{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
-  .foot .links{display:flex;gap:22px;color:var(--muted);font-size:var(--fs-base)}
+  .foot .links{display:flex;flex-wrap:wrap;gap:22px;color:var(--muted);font-size:var(--fs-base)}
   .foot .links a{transition:color var(--t-2)}
   .foot .links a:hover{color:var(--cyan);text-shadow:0 0 12px rgba(0,229,255,0.5)}
   .foot .copy{color:var(--muted-2);font-size:var(--fs-sm);font-family:var(--mono)}
@@ -523,9 +541,12 @@
     .hero h1{font-size:clamp(28px,8vw,40px)}
     .hero .sub{font-size:var(--fs-md)}
     .hero-cta{flex-direction:column;align-items:stretch;width:100%}
-    .hero-cta .btn,.hero-cta .btn-primary,.hero-cta .btn-ghost{width:100%;justify-content:center}
+    .hero-cta .btn,.hero-cta .btn-primary,.hero-cta .btn-ghost{width:100%;justify-content:center;white-space:normal;text-align:center;line-height:1.35}
     .terminal{margin-top:40px}
     .terminal .body{padding:14px;min-height:auto;font-size:var(--fs-xs)}
+    .arch-figure a{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .arch-figure img{width:900px;max-width:none}
+    .arch-hint{display:block;margin:0 0 10px;color:#4b5563;font-size:var(--fs-sm);font-family:var(--mono)}
     .modes-grid,.cap-grid{grid-template-columns:1fr}
     /* 14 short step cards: two-up halves the scroll, and it falls back to one
        column by itself below ~340px instead of needing another breakpoint */
@@ -538,7 +559,7 @@
     .copy-row code{flex:1;padding:11px 12px}
     .stat b{font-size:var(--fs-lg)}
     .foot{gap:16px}
-    /* four nav items fight for ~390px and the logo was being squeezed to half its
+    /* nav items fight for width and the logo was being squeezed to half its
        width: trim the decorative pieces and keep the CTA as an icon
        (its label stays in the DOM, so screen readers still announce it) */
     .brand .logo{height:22px}
@@ -585,13 +606,14 @@
       </a>
       <nav class="nav-links" aria-label="Main navigation">
         <a href="#pipeline">Pipeline</a>
+        <a href="#architecture">Architecture</a>
         <a href="#modes">Modes</a>
         <a href="#capabilities">Capabilities</a>
         <a href="#security">Security</a>
       </nav>
       <div class="nav-actions">
         <a href="index.zh.html" class="nav-lang" data-cursor>中文</a>
-        <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" class="btn btn-primary" data-cursor>
+        <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener" class="btn btn-primary" data-cursor>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .6l3.5 6.9 7.8 1.1-5.6 5.5 1.3 7.7L12 18.6 4.9 22.3l1.3-7.7L.6 9.1 8.5 8z"/></svg>
           Star on GitHub
         </a>
@@ -602,19 +624,20 @@
     </div>
     <div class="mobile-menu" id="mobileMenu">
       <a href="#pipeline">Pipeline</a>
+      <a href="#architecture">Architecture</a>
       <a href="#modes">Modes</a>
       <a href="#capabilities">Capabilities</a>
       <a href="#security">Security</a>
-      <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener">GitHub ↗</a>
+      <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener">GitHub ↗</a>
     </div>
   </header>
 
   <main id="top">
     <!-- HERO -->
     <section class="hero wrap">
-      <span class="eyebrow" data-reveal><span class="dot"></span>Android Release Seal · v1.0.1</span>
-      <h1 data-reveal>Most of what you can do <span class="grad">before commercial hardening</span></h1>
-      <p class="sub" data-reveal>DroidSeal covers most of what you can do before commercial hardening — environment diagnostics, source &amp; APK audit, R8 obfuscation, zipalign, apksigner signing, and final verification. One command, end-to-end release security.</p>
+      <span class="eyebrow" data-reveal><span class="dot"></span>Android Release Seal · v1.1.0</span>
+      <h1 data-reveal>Ship an Android release <span class="grad">you can defend.</span></h1>
+      <p class="sub" data-reveal>DroidSeal is a local-first release pipeline: audit the app, optionally harden the APK, sign it with the official Android tools, and verify the result. Every release run leaves an evidence trail — SHA-256, JSON/Markdown reports, a CycloneDX SBOM, and a release decision.</p>
       <div class="hero-cta" data-reveal>
         <a href="#cta" class="btn btn-primary" data-cursor>Get Started</a>
         <a href="#pipeline" class="btn btn-ghost" data-cursor>View Pipeline</a>
@@ -668,7 +691,7 @@
 </article>
         <article class="step float-card" data-reveal data-cursor>
   <div class="float-layer">
-<div class="num">07</div><h3 class="float-glow">Local hardening</h3><p>Verifies R8, standard DEX, anti-debug and integrity coverage.</p>
+<div class="num">07</div><h3 class="float-glow">Local hardening</h3><p>Checks R8 and standard DEX; opt-in APK hardening runs as a separate mode.</p>
   </div>
 </article>
         <article class="step float-card" data-reveal data-cursor>
@@ -703,10 +726,24 @@
 </article>
         <article class="step float-card" data-reveal data-cursor>
   <div class="float-layer">
-<div class="num">14</div><h3 class="float-glow">Report</h3><p>JSON / Markdown, SBOM, release gate and coverage matrix.</p>
+<div class="num">14</div><h3 class="float-glow">Report</h3><p>JSON / Markdown, SBOM, release gate and an evidence chain.</p>
   </div>
 </article>
       </div>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section class="section-pad wrap" id="architecture">
+      <span class="eyebrow" data-reveal><span class="dot"></span>Architecture · 1.1.0</span>
+      <h2 class="title" data-reveal>One release pipeline, one evidence boundary</h2>
+      <p class="lead" data-reveal>Audit and release stay inside a local execution boundary; hardening is opt-in; every run writes an evidence bundle. Device acceptance is limited to the stated API 26 x86_64 emulator matrix.</p>
+      <figure class="arch-figure" data-reveal>
+        <p class="arch-hint">Swipe horizontally to explore the full architecture →</p>
+        <a href="./droidseal-architecture.svg" target="_blank" rel="noopener">
+          <img src="./droidseal-architecture.png" alt="DroidSeal 1.1.0 architecture: inputs, audit, remediation, opt-in hardening, official signing and verification, and the evidence bundle" loading="lazy" decoding="async" />
+        </a>
+        <figcaption><b>Figure 1.</b> DroidSeal 1.1.0 release architecture. Teal boxes are self-developed components; amber boxes are official Android tools; the dashed purple path is opt-in APK hardening. Every release run writes a signed APK, SHA-256, reports, an SBOM and a release decision. The device layer covers the stated emulator matrix only. On small screens, swipe the figure or open the full SVG.</figcaption>
+      </figure>
     </section>
 
     <!-- MODES -->
@@ -740,7 +777,7 @@
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></div>
           <span class="tag">[4] HARDEN · opt-in</span><h3 class="float-glow">APK hardening</h3>
-          <p>Runtime-hardens your own release APK: DEX encryption with manifest-anchored keys, environment-gated derivation, key sharding, optional server challenge and Keystore binding. Emits honest findings — real-device install remains the final test.</p>
+          <p>Rewrites your own release APK with opt-in DEX payload encryption (AES-256-GCM, per-entry HKDF keys), a randomized bootstrap shell, method extraction with lazy restoration, string encryption, and keyed integrity/environment checks. A TUI wizard guides the flags; every build emits honest findings — real-device install remains the final test.</p>
   </div>
 </article>
       </div>
@@ -750,7 +787,7 @@
     <section class="section-pad wrap" id="capabilities">
       <span class="eyebrow" data-reveal><span class="dot"></span>Capabilities</span>
       <h2 class="title" data-reveal>Capability grid</h2>
-      <p class="lead" data-reveal>Not a black box — a local-first, auditable, verifiable pre-release pipeline.</p>
+      <p class="lead" data-reveal>Shipped in 1.1.0 — offline, auditable, and measured against reproducible harnesses.</p>
       <div class="cap-grid">
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
@@ -773,7 +810,7 @@
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
-          <h3 class="float-glow">Deep static audit</h3><p>Permissions / targetSdk / signing / deep links / hardcoded secrets / TLS heuristics.</p>
+          <h3 class="float-glow">Deep static audit</h3><p>Permissions / targetSdk / signing / secrets / DEX / TLS / native .so / dependencies. JNI dynamic-register recovery and linear native dataflow carry explicit confidence.</p>
   </div>
 </article>
         <article class="cap float-card" data-reveal data-cursor>
@@ -791,25 +828,37 @@
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg></div>
-          <h3 class="float-glow">373 source detectors</h3><p>Ten dimensions — crypto, network, storage, components, permissions, I/O, config, lifecycle, privacy, concurrency — each gated by positive/negative precision cases.</p>
+          <h3 class="float-glow">391 detector entries</h3><p>390 unique codes across ten dimensions — crypto, network, storage, components, permissions, I/O, config, lifecycle, privacy, concurrency. Measured at 76.9% precision / 90.9% recall on the 38-case built-in bench.</p>
   </div>
 </article>
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V7l-5-4z"/><path d="M14 3v4h5"/></svg></div>
-          <h3 class="float-glow">18+ hardening generators</h3><p>Packer, VMP instruction encoding, control-flow flattening, anti-debug, integrity, dead code, native obfuscation — all source-included and build-time.</p>
+          <h3 class="float-glow">Keyed hardening</h3><p>Opt-in DEX payload encryption (AES-256-GCM, per-entry HKDF keys), randomized bootstrap shell, method extraction with lazy restoration, string encryption, and keyed integrity/environment checks.</p>
   </div>
 </article>
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4M6 9l4 2-4 2M15 13h3"/></svg></div>
-          <h3 class="float-glow">Dynamic cross-check</h3><p>ADB bridge adds 8 runtime signals — device matrix, filtered logcat, UI smoke, crash/ANR — attached back to static findings.</p>
+          <h3 class="float-glow">Device acceptance</h3><p>A recorded API 26 x86_64 emulator run covers install, first and second launch, zero logcat failure markers and clean uninstall. Real-device install remains authoritative.</p>
   </div>
 </article>
         <article class="cap float-card" data-reveal data-cursor>
   <div class="float-layer">
 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></div>
-          <h3 class="float-glow">Benchmark-driven</h3><p>A 30-case evaluator reports TP/FP/FN, precision and recall — and accepts external DroidBench/OWASP directories.</p>
+          <h3 class="float-glow">Benchmark-driven</h3><p>Reproducible harnesses report TP/FP/FN, precision and recall. 1.1.0 covers a 38-case detector bench, TaintBench (39 apps / 249 flows; endpoint TP 171, flow TP 136) and 434 benign apps.</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 9h7M8 13h4"/><path d="M9 17l2 2 4-4"/></svg></div>
+          <h3 class="float-glow">Actionable remediation</h3><p>Turns an allowBackup finding into a length-preserving in-place AXML patch (resId 0x01010280); findings carry a fix plan and evidence.</p>
+  </div>
+</article>
+        <article class="cap float-card" data-reveal data-cursor>
+  <div class="float-layer">
+<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M6 9l3 2-3 2M12 13h5"/></svg></div>
+          <h3 class="float-glow">TUI hardening wizard</h3><p>Identifier randomization, test/learning modes and intermediate-artifact handling are wired through the wizard and bilingual i18n.</p>
   </div>
 </article>
       </div>
@@ -818,35 +867,36 @@
     <!-- INNOVATION -->
     <section class="section-pad wrap" id="innovation">
       <span class="eyebrow" data-reveal><span class="dot"></span>Innovation &amp; Positioning</span>
-      <h2 class="title" data-reveal>Confirmed-before-reported precision, not rule count</h2>
+      <h2 class="title" data-reveal>Measured evidence, not rule count</h2>
       <div class="dash-grid">
-        <div class="dash-card" data-reveal><b data-target="373">373</b><span>source detectors</span></div>
-        <div class="dash-card" data-reveal><b data-target="19">19</b><span>taint analyses</span></div>
-        <div class="dash-card" data-reveal><b data-target="30">30</b><span>behavior rules</span></div>
-        <div class="dash-card" data-reveal><b data-target="30">30</b><span>offline CVE snapshot</span></div>
-        <div class="dash-card" data-reveal><b data-target="18" data-suffix="+">18+</b><span>hardening generators</span></div>
-        <div class="dash-card" data-reveal><b data-target="8">8</b><span>dynamic signals</span></div>
+        <div class="dash-card" data-reveal><b data-target="391">391</b><span>detector entries</span></div>
+        <div class="dash-card" data-reveal><b data-target="390">390</b><span>unique detector codes</span></div>
+        <div class="dash-card" data-reveal><b data-target="387">387</b><span>release-gate tests</span></div>
+        <div class="dash-card" data-reveal><b>0</b><span>dataflow FP · 434 benign apps</span></div>
+        <div class="dash-card" data-reveal><b data-target="5">5</b><span>shipped hardening layers</span></div>
+        <div class="dash-card" data-reveal><b>76.9% / 90.9%</b><span>precision / recall · 38-case bench</span></div>
       </div>
       <div class="sec-grid">
         <div class="sec-list">
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>Detect</h4><p>373 detectors sweep ten dimensions; taint, behavior and supply-chain analyses run in one pass.</p></div>
+            <div><h4>Detect</h4><p>391 detector entries (390 unique codes) sweep ten dimensions; taint, behavior and supply-chain analyses run in one pass.</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>Cross-verify</h4><p>Confidence tiers and cross-evidence connect static findings to dynamic ADB signals before anything is claimed.</p></div>
+            <div><h4>Cross-verify</h4><p>Confidence tiers and cross-evidence separate confirmed findings from heuristics. The 1.1.0 native dataflow result is labelled <code>confidence: low</code> by design.</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>Confirm &amp; report</h4><p>Every detector is gated by positive/negative precision cases — 72 in all — so results are confirmed, not noise.</p></div>
+            <div><h4>Confirm &amp; report</h4><p>Every finding is reported with its evidence path and confidence; precision and recall are published with their measurement criteria.</p></div>
           </div>
         </div>
         <div class="sec-list">
-          <div class="stat" data-reveal><b>72</b><span>precision gate cases — every detector confirmed before reported</span></div>
+          <div class="stat" data-reveal><b>387</b><span>release-gate tests — build-time green is not runtime proof</span></div>
           <div class="stat" data-reveal><b>4</b><span>confidence tiers — confirmed · high · medium · low</span></div>
-          <div class="stat" data-reveal><b>60% / 88.2%</b><span>built-in benchmark precision / recall — honest numbers, an open roadmap for false-positive reduction</span></div>
-          <p data-reveal><b>Positioning</b> — Android security tooling splits into an <b>audit</b> track (MobSF, AndroBugs, APKiD — analyze, never rewrite) and a <b>hardening</b> track (DexGuard / 360 Jiagu commercial; Jiagu / nmmp / dpt-shell open source). DroidSeal spans both in one offline pipeline — no other open-source project does. vs. MobSF: audit findings drive fixes in the same toolchain (audit → remediation → R8 → hardening → re-sign → re-verify) instead of stopping at the report. vs. open-source shells: <b>keyed defenses</b> — integrity anchors and anti-analysis votes fold into key derivation, so attaching Frida derives wrong keys while mainstream shells' detect-and-warn is bypassed at zero cost. vs. commercial: fully offline (code never leaves your machine) and auditable — honest trade-offs: no VMP / white-box crypto, no SLA, and the project is early. Real-device install remains the final acceptance test.</p>
+          <div class="stat" data-reveal><b>76.9% / 90.9%</b><span>precision / recall on the 38-case built-in bench — criteria-bound, not a universal claim</span></div>
+          <div class="stat" data-reveal><b>0</b><span>dataflow-engine false positives across 434 benign apps (95% CI upper 0.69%)</span></div>
+          <p data-reveal><b>Positioning</b> — Android security tooling splits into an <b>audit</b> track (MobSF, AndroBugs, APKiD — analyze, never rewrite) and a <b>hardening</b> track (DexGuard / 360 Jiagu commercial; Jiagu / nmmp / dpt-shell open source). DroidSeal spans both in one offline pipeline. vs. MobSF: audit findings drive fixes in the same toolchain (audit → remediation → R8 → hardening → re-sign → re-verify) instead of stopping at the report. vs. open-source shells: <b>keyed defenses</b> fold integrity and anti-analysis state into key derivation, so tampering derives wrong keys; this is a design property, not a claim that every commercial shell behaves the same. vs. commercial: fully offline (code never leaves your machine) and auditable — honest trade-offs: no VMP-lite or full VMP / white-box crypto in 1.1.0, no SLA, and the project is early. Real-device install remains the final acceptance test.</p>
         </div>
       </div>
     </section>
@@ -863,11 +913,11 @@
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>02 · Source build by default, hardening as explicit opt-in</h4><p>Generators act at build time on your source by default. APK hardening (DEX encryption + bootstrap shell) only rewrites the APK you explicitly pass in with the hardening flags — never any unknown input.</p></div>
+            <div><h4>02 · No packing by default, hardening as explicit opt-in</h4><p>Default audit and release flows do not unpack, pack, or inject hooks or anti-debug code. Opt-in APK hardening only rewrites the release APK you explicitly supply — never any unknown input.</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>03 · Honest findings, keyed defenses</h4><p>Every build emits an honest findings report — anything not implemented is labeled, never claimed. In hardened APKs, anti-analysis state folds into key derivation: tampering produces wrong keys, not warnings.</p></div>
+            <div><h4>03 · Honest findings, keyed defenses</h4><p>Every hardening build emits an honest findings report — anything unimplemented or degraded is labelled, never claimed. In hardened APKs, the manifest, environment votes and key shard fold into per-entry key derivation: tampering produces wrong keys, not bypassable warnings.</p></div>
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
@@ -875,7 +925,11 @@
           </div>
           <div class="sec-item" data-reveal>
             <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-            <div><h4>05 · Verified, not claimed</h4><p>Four verification layers: 264 unit tests, a per-fix adversarial regression suite (every security fix ships a SEC-XX test reproducing its trigger condition — full fix history in the public <b>security ledger</b>), an artifact acceptance baseline for every harden build, and a device acceptance suite. Honest boundary: build-time green ≠ runtime correct — real-device install is the final test.</p></div>
+            <div><h4>05 · Verified, not claimed</h4><p>Four verification layers: 387 / 387 release-gate tests, a per-fix adversarial regression suite (SEC-010/011/012 cover checksum ordering, extraction-stub padding and string_ids ordering), an artifact acceptance baseline for every harden build, and an API 26 x86_64 emulator acceptance record. Build-time green ≠ runtime correct — real-device install is the final test.</p></div>
+          </div>
+          <div class="sec-item" data-reveal>
+            <span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <div><h4>06 · Known limits</h4><p>Hardening raises reverse-engineering cost; it does not make it impossible. minSdk &lt; 26 falls back to a file-backed DexClassLoader. 1.1.0 has no VMP-lite, full VMP, white-box crypto, dynamic malware sandbox or SLA; use MobSF / APKiD for dynamic triage.</p></div>
           </div>
         </div>
         <div class="sec-visual" data-reveal aria-hidden="true">
@@ -891,7 +945,7 @@
     <section class="section-pad wrap" id="cta">
       <div class="cta-box" data-reveal>
         <h2>Three ways to get started</h2>
-        <p>Open source · Apache-2.0 License · Local-first · Windows x64 / Linux x64 (v1.0.1)</p>
+        <p>Open source · Apache-2.0 License · Local-first · Windows x64 / Linux x64 (v1.1.0)</p>
         <div class="copy-row" data-cursor>
           <code id="installCmd">npm install --global droidseal</code>
           <button id="copyBtn">Copy</button>
@@ -901,9 +955,10 @@
           <button id="copyPipBtn">Copy</button>
         </div>
         <div class="hero-cta" data-cursor>
-          <a href="https://github.com/noontiger/droidseal/releases/latest" target="_blank" rel="noopener" class="btn btn-primary">GitHub Releases · Windows zip / Linux tar.gz</a>
-          <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" class="btn btn-ghost">View GitHub</a>
+          <a href="https://github.com/newnju/droidseal/releases/tag/v1.1.0" target="_blank" rel="noopener" class="btn btn-primary">GitHub Releases · 1.1.0 · Windows zip / Linux tar.gz</a>
+          <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener" class="btn btn-ghost">View GitHub</a>
         </div>
+        <a class="release-link" href="https://github.com/newnju/droidseal/blob/v1.1.0/docs/releases/v1.1.0.md" target="_blank" rel="noopener" data-cursor>Read the 1.1.0 release notes ↗</a>
       </div>
     </section>
 
@@ -916,12 +971,14 @@
       </a>
       <nav class="links" aria-label="Footer links">
         <a href="#pipeline" data-cursor>Pipeline</a>
+        <a href="#architecture" data-cursor>Architecture</a>
         <a href="#modes" data-cursor>Modes</a>
         <a href="#capabilities" data-cursor>Capabilities</a>
         <a href="#security" data-cursor>Security</a>
-        <a href="https://github.com/noontiger/droidseal" target="_blank" rel="noopener" data-cursor>GitHub</a>
+        <a href="https://github.com/newnju/droidseal/blob/v1.1.0/docs/releases/v1.1.0.md" target="_blank" rel="noopener" data-cursor>Release notes</a>
+        <a href="https://github.com/newnju/droidseal" target="_blank" rel="noopener" data-cursor>GitHub</a>
       </nav>
-      <span class="copy">Apache-2.0 License · v1.0.1 · © 2026 DroidSeal</span>
+      <span class="copy">Apache-2.0 License · v1.1.0 · © 2026 DroidSeal</span>
     </div>
   </footer>
 
@@ -1018,7 +1075,7 @@
     ['c-ok','[12] APK signing ............ ok'],
     ['c-ok','[13] Final verification ..... ok'],
     ['c-ok','[14] Report ................ ok'],
-    ['c-cyan','› Final APK and audit report generated']
+    ['c-cyan','› 1.1.0 evidence bundle generated']
   ]};
   function typeTerminal(){
     if(!termBody) return;
